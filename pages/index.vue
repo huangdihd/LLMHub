@@ -238,8 +238,10 @@ async function loadKeyStats() {
   try {
     const data = await $fetch('/api/hub/keys')
     apiKeys.value = (data as any).keys || []
-  } catch { apiKeys.value = [] }
-  finally { refreshingKeys.value = false }
+  } catch (e: any) {
+    if (e?.statusCode === 401) return navigateTo('/login')
+    apiKeys.value = []
+  } finally { refreshingKeys.value = false }
 }
 
 function copyUrl(url: string) {
@@ -308,7 +310,8 @@ onMounted(async () => {
 
     await loadModels()
     loadKeyStats() // non-blocking
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.statusCode === 401) return navigateTo('/login')
     console.error('Failed to load dashboard metrics:', error)
   } finally {
     loading.value = false

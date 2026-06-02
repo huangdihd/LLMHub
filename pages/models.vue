@@ -115,8 +115,13 @@ onMounted(async () => {
 })
 
 async function loadModels() {
-  const data = await $fetch('/api/hub/models')
-  models.value = (data as any).models || []
+  try {
+    const data = await $fetch('/api/hub/models')
+    models.value = (data as any).models || []
+  } catch (e: any) {
+    if (e?.statusCode === 401) return navigateTo('/login')
+    throw e
+  }
 }
 
 async function loadAll() {
@@ -132,7 +137,8 @@ async function loadAll() {
       nameMap[p.name] = p.display_name || p.name
     }
     providerDisplayNames.value = nameMap
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.statusCode === 401) return navigateTo('/login')
     console.error('Failed to load models:', error)
   } finally {
     loading.value = false

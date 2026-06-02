@@ -158,7 +158,8 @@ async function loadProviders() {
   try {
     const data = await $fetch('/api/hub/providers')
     providers.value = data.providers
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.statusCode === 401) return navigateTo('/login')
     console.error('Failed to load providers:', error)
   } finally {
     loading.value = false
@@ -240,7 +241,8 @@ async function saveProvider() {
 
     closeModal()
     await loadProviders()
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.statusCode === 401) return navigateTo('/login')
     console.error('Failed to save provider:', error)
     alert('Failed to save provider')
   } finally {
@@ -258,7 +260,8 @@ async function deleteProvider(name: string) {
       method: 'DELETE'
     })
     await loadProviders()
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.statusCode === 401) return navigateTo('/login')
     console.error('Failed to delete provider:', error)
     alert('Failed to delete provider')
   }

@@ -18,7 +18,6 @@ export default defineEventHandler(async (event) => {
     const adapter = resolved?.adapter
 
     if (request.stream && adapter) {
-      trackUsage(event, 0).catch(() => {})
       const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
 
       setResponseHeaders(event, {
@@ -80,6 +79,9 @@ export default defineEventHandler(async (event) => {
 
               if (unifiedChunk.type === 'done') {
                 doneSent = true
+                // Track token usage from the final chunk
+                const u = (unifiedChunk as any).usage
+                if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
                 const serializedChunk = serializer!.serializeStreamChunk(unifiedChunk)
                 event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
                 event.node.res.write('data: [DONE]\n\n')

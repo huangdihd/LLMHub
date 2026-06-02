@@ -28,7 +28,6 @@ export default defineEventHandler(async (event) => {
     }
 
     if (request.stream && adapter) {
-      trackUsage(event, 0).catch(() => {})
       const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
 
       try {
@@ -179,6 +178,10 @@ export default defineEventHandler(async (event) => {
           } else if (unifiedChunk.type === 'done') {
             if (streamDone) return  // skip duplicate done
             streamDone = true
+
+            // Track token usage from the final chunk
+            const u = (unifiedChunk as any).usage
+            if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
 
             // Flush any remaining buffered thinking
             if (thinkingBuffer.length > 0 && !thinkingFlushed) {

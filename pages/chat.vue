@@ -124,7 +124,13 @@ async function loadModels() {
     const res = await fetch('/api/openai/models', {
       headers: { 'Authorization': `Bearer ${apiKey.value}` }
     })
-    if (!res.ok) { models.value = []; return }
+    if (!res.ok) {
+      models.value = []
+      if (res.status === 401 || res.status === 403) {
+        console.warn('Invalid API key')
+      }
+      return
+    }
     const data = await res.json()
     models.value = (data.data || []).map((m: any) => ({ id: m.id }))
   } catch {

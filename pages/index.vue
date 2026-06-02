@@ -281,8 +281,8 @@ async function refreshModels() {
 
 onMounted(async () => {
   const origin = window.location.origin
-  openaiBaseUrl.value = `${origin}/api/v1/openai`
-  claudeBaseUrl.value = `${origin}/api/v1/claude`
+openaiBaseUrl.value = `${origin}/api/openai`
+claudeBaseUrl.value = `${origin}/api/claude`
   try {
     const [providersData, statsData] = await Promise.all([
       $fetch('/api/hub/providers'),

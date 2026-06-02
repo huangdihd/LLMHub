@@ -253,7 +253,9 @@ async function sendMessage() {
             try {
               const chunk = JSON.parse(data)
               if (chunk.error) {
-                messages.value[assistantIndex].content = `Error: ${chunk.error.message || chunk.error}`
+                const errObj = chunk.error
+                const msg = errObj?.error?.message || errObj?.message || (typeof errObj === 'string' ? errObj : JSON.stringify(errObj))
+                messages.value[assistantIndex].content = `Error: ${msg}`
                 break
               }
               const content = parseStreamContent(chunk)

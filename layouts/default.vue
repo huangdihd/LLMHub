@@ -11,6 +11,7 @@
           </div>
           <div class="flex items-center space-x-2">
             <UButton to="/" variant="ghost" color="gray">Home</UButton>
+            <UButton to="/models" variant="ghost" color="gray">Models</UButton>
             <UButton to="/providers" variant="ghost" color="gray">Providers</UButton>
             <UButton to="/chat" variant="ghost" color="gray">Chat</UButton>
             <ClientOnly>

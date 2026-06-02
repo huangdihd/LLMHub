@@ -42,16 +42,6 @@
             <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ provider.connection.api_key ? '••••••••••••••••' : 'Not set' }}</span>
           </div>
         </div>
-
-        <div>
-          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Models</h4>
-          <div class="flex flex-wrap gap-2">
-            <UBadge v-for="model in provider.models" :key="model.id" color="blue" variant="soft">
-              {{ provider.name }}/{{ model.id }}
-            </UBadge>
-            <span v-if="!provider.models?.length" class="text-sm text-gray-500 italic">No models configured/fetched</span>
-          </div>
-        </div>
       </UCard>
     </div>
 

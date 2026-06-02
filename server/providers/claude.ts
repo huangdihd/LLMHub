@@ -312,6 +312,9 @@ export class ClaudeAdapter implements ProviderAdapter {
 
   fromProviderStreamChunk(chunk: any, state: any = {}): LLMStreamChunk {
     if (chunk.type === 'message_stop') {
+      if (chunk.usage) {
+        return { type: 'done', usage: { promptTokens: chunk.usage.input_tokens || 0, completionTokens: chunk.usage.output_tokens || 0 } }
+      }
       return { type: 'done' }
     }
 
@@ -350,7 +353,8 @@ export class ClaudeAdapter implements ProviderAdapter {
       if (chunk.delta?.stop_reason) {
         return {
           type: 'done',
-          finishReason: chunk.delta.stop_reason === 'tool_use' ? 'tool_calls' : 'stop'
+          finishReason: chunk.delta.stop_reason === 'tool_use' ? 'tool_calls' : 'stop',
+          usage: chunk.usage ? { promptTokens: chunk.usage.input_tokens || 0, completionTokens: chunk.usage.output_tokens || 0 } : undefined
         }
       }
     }

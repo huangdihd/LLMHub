@@ -2,24 +2,41 @@
   <UContainer class="py-6 max-w-4xl">
     <UCard class="flex flex-col h-[calc(100vh-8rem)]" :ui="{ body: { base: 'flex-1 overflow-hidden flex flex-col', padding: 'p-0 sm:p-0' } }">
       <template #header>
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <USelectMenu
-            v-model="selectedModel"
-            :options="models"
-            value-attribute="id"
-            option-attribute="id"
-            placeholder="Select a model"
-            class="w-full sm:w-64"
-          />
-          <div class="flex items-center gap-4 w-full sm:w-auto">
-            <USelectMenu
-              v-model="selectedEndpoint"
-              :options="endpoints"
-              value-attribute="value"
-              option-attribute="label"
-              class="flex-1 sm:w-64"
+        <div class="space-y-3">
+          <!-- API Key -->
+          <div class="flex items-center gap-2">
+            <UInput
+              v-model="apiKey"
+              type="password"
+              placeholder="Enter API Key"
+              icon="i-heroicons-key"
+              class="flex-1"
+              size="sm"
+              @update:model-value="onApiKeyChange"
             />
-            <UCheckbox v-model="useStream" label="Stream" />
+            <UBadge v-if="apiKey" color="green" variant="soft" size="sm">Set</UBadge>
+            <UBadge v-else color="gray" variant="soft" size="sm">Required</UBadge>
+          </div>
+          <!-- Model + Endpoint -->
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <USelectMenu
+              v-model="selectedModel"
+              :options="models"
+              value-attribute="id"
+              option-attribute="id"
+              placeholder="Select a model"
+              class="w-full sm:w-64"
+            />
+            <div class="flex items-center gap-4 w-full sm:w-auto">
+              <USelectMenu
+                v-model="selectedEndpoint"
+                :options="endpoints"
+                value-attribute="value"
+                option-attribute="label"
+                class="flex-1 sm:w-64"
+              />
+              <UCheckbox v-model="useStream" label="Stream" />
+            </div>
           </div>
         </div>
       </template>
@@ -49,7 +66,7 @@
           <UButton
             type="submit"
             color="primary"
-            :disabled="!selectedModel || !input || isLoading"
+            :disabled="!selectedModel || !input || isLoading || !apiKey"
             :loading="isLoading"
           >
             Send
@@ -71,13 +88,14 @@ const input = ref('')
 const isLoading = ref(false)
 const chatContainer = ref<HTMLElement | null>(null)
 const useStream = ref(true)
+const apiKey = ref('')
 
 const endpoints = [
-  { label: 'OpenAI Chat Completions', value: '/api/v1/chat/completions' },
-  { label: 'OpenAI Completions', value: '/api/v1/completions' },
-  { label: 'OpenAI Responses', value: '/api/v1/responses' },
-  { label: 'Claude Messages', value: '/api/v1/messages' },
-  { label: 'Claude Completion', value: '/api/v1/complete' },
+  { label: 'OpenAI Chat Completions', value: '/api/openai/chat/completions' },
+  { label: 'OpenAI Completions', value: '/api/openai/completions' },
+  { label: 'OpenAI Responses', value: '/api/openai/responses' },
+  { label: 'Claude Messages', value: '/api/claude/v1/messages' },
+  { label: 'Claude Completion', value: '/api/claude/v1/complete' },
 ]
 const selectedEndpoint = ref(endpoints[0].value)
 
@@ -95,12 +113,30 @@ function renderMarkdownWithCursor(content: string, loading?: boolean): string {
   return html
 }
 
-onMounted(async () => {
+function onApiKeyChange(val: string) {
+  localStorage.setItem('llmhub_api_key', val)
+  loadModels()
+}
+
+async function loadModels() {
+  if (!apiKey.value) { models.value = []; return }
   try {
-    const data = await $fetch('/api/hub/models')
-    models.value = data.models
-  } catch (error) {
-    console.error('Failed to load models:', error)
+    const res = await fetch('/api/openai/models', {
+      headers: { 'Authorization': `Bearer ${apiKey.value}` }
+    })
+    if (!res.ok) { models.value = []; return }
+    const data = await res.json()
+    models.value = (data.data || []).map((m: any) => ({ id: m.id }))
+  } catch {
+    models.value = []
+  }
+}
+
+onMounted(async () => {
+  const saved = localStorage.getItem('llmhub_api_key')
+  if (saved) {
+    apiKey.value = saved
+    await loadModels()
   }
 })
 
@@ -115,84 +151,52 @@ function scrollToBottom() {
 function buildRequestBody(history: { role: string; content: string }[]) {
   const ep = selectedEndpoint.value
 
-  if (ep === '/api/v1/completions') {
+  if (ep === '/api/openai/completions') {
     const prompt = history.map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`).join('\n') + '\nAssistant:'
-    return {
-      model: selectedModel.value,
-      prompt,
-      stream: useStream.value
-    }
+    return { model: selectedModel.value, prompt, stream: useStream.value }
   }
 
-  if (ep === '/api/v1/complete') {
+  if (ep === '/api/claude/v1/complete') {
     const prompt = history.map(m => `\n\n${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`).join('') + '\n\nAssistant:'
-    return {
-      model: selectedModel.value,
-      prompt,
-      max_tokens_to_sample: 4096,
-      stream: useStream.value
-    }
+    return { model: selectedModel.value, prompt, max_tokens_to_sample: 4096, stream: useStream.value }
   }
 
-  if (ep === '/api/v1/responses') {
-    return {
-      model: selectedModel.value,
-      input: history.map(m => ({ role: m.role, content: m.content })),
-      stream: useStream.value
-    }
+  if (ep === '/api/openai/responses') {
+    return { model: selectedModel.value, input: history.map(m => ({ role: m.role, content: m.content })), stream: useStream.value }
   }
 
-  if (ep === '/api/v1/messages') {
-    return {
-      model: selectedModel.value,
-      max_tokens: 4096,
-      messages: history.map(m => ({ role: m.role, content: m.content })),
-      stream: useStream.value
-    }
+  if (ep === '/api/claude/v1/messages') {
+    return { model: selectedModel.value, max_tokens: 4096, messages: history.map(m => ({ role: m.role, content: m.content })), stream: useStream.value }
   }
 
-  return {
-    model: selectedModel.value,
-    messages: history.map(m => ({ role: m.role, content: m.content })),
-    stream: useStream.value
-  }
+  return { model: selectedModel.value, messages: history.map(m => ({ role: m.role, content: m.content })), stream: useStream.value }
 }
 
 function parseStreamContent(chunk: any): string | null {
-  if (chunk.choices?.[0]?.delta?.content) {
-    return chunk.choices[0].delta.content
-  }
-
-  if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
-    return chunk.delta.text
-  }
-
+  if (chunk.choices?.[0]?.delta?.content) return chunk.choices[0].delta.content
+  if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') return chunk.delta.text
   return null
 }
 
 function parseResponseContent(response: any): string {
   const ep = selectedEndpoint.value
-
-  if (ep === '/api/v1/completions' || ep === '/api/v1/complete') {
+  if (ep === '/api/openai/completions' || ep === '/api/claude/v1/complete') {
     return response.choices?.[0]?.text || response.completion || ''
   }
-
-  if (ep === '/api/v1/responses') {
+  if (ep === '/api/openai/responses') {
     const output = response.output?.[0]
     if (output?.content?.[0]?.text) return output.content[0].text
     if (response.output_text) return response.output_text
     return ''
   }
-
-  if (ep === '/api/v1/messages') {
+  if (ep === '/api/claude/v1/messages') {
     return response.content?.[0]?.text || ''
   }
-
   return response.choices?.[0]?.message?.content || ''
 }
 
 async function sendMessage() {
-  if (!selectedModel.value || !input.value || isLoading.value) return
+  if (!selectedModel.value || !input.value || isLoading.value || !apiKey.value) return
 
   const userMessage = input.value
   messages.value.push({ role: 'user', content: userMessage })
@@ -207,16 +211,23 @@ async function sendMessage() {
   const body = buildRequestBody(history)
 
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey.value}`
+    }
+
     if (useStream.value) {
       const response = await fetch(selectedEndpoint.value, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body)
       })
 
       if (!response.ok) {
         const errText = await response.text()
-        throw new Error(errText)
+        let errMsg = errText
+        try { errMsg = JSON.parse(errText)?.error?.message || errText } catch {}
+        throw new Error(errMsg)
       }
 
       const reader = response.body?.getReader()
@@ -242,7 +253,7 @@ async function sendMessage() {
             try {
               const chunk = JSON.parse(data)
               if (chunk.error) {
-                messages.value[assistantIndex].content = `Error: ${chunk.error}`
+                messages.value[assistantIndex].content = `Error: ${chunk.error.message || chunk.error}`
                 break
               }
               const content = parseStreamContent(chunk)
@@ -259,6 +270,7 @@ async function sendMessage() {
     } else {
       const response = await $fetch(selectedEndpoint.value, {
         method: 'POST',
+        headers,
         body
       })
 

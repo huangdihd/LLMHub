@@ -1,5 +1,6 @@
 import type { ProviderConfig } from '../../core/types'
 import { getProviderStore } from '../../stores/provider.store'
+import { ProviderLoader } from '../../providers/loader'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -28,6 +29,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const provider = await store.create(newProvider)
+    ProviderLoader.invalidateCache()
     return { success: true, provider }
   } catch (error: any) {
     if (error.statusCode) throw error

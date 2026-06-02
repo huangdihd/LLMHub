@@ -1,9 +1,12 @@
 import type { ProviderConfig, ModelInfo } from '../core/types'
 import { getProviderStore } from '../stores/provider.store'
 
+const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
 export class ProviderLoader {
   private providers: Map<string, ProviderConfig> = new Map()
-  private models: Map<string, ModelInfo> = new Map()
+  /** In-memory model cache shared across all ProviderLoader instances */
+  private static modelCache: { timestamp: number; models: ModelInfo[] } | null = null
 
   async loadAll(): Promise<void> {
     const store = getProviderStore()
@@ -130,19 +133,31 @@ export class ProviderLoader {
     }))
   }
 
+  /** Fetch models from ALL providers in parallel, with 5-min cache. */
   async fetchAllModels(): Promise<ModelInfo[]> {
-    const allModels: ModelInfo[] = []
-
-    for (const providerName of this.providers.keys()) {
-      try {
-        const models = await this.fetchModels(providerName)
-        allModels.push(...models)
-      } catch (error) {
-        console.error(`Failed to fetch models from ${providerName}:`, error)
-      }
+    // Static cache shared across short-lived instances
+    if (ProviderLoader.modelCache && Date.now() - ProviderLoader.modelCache.timestamp < MODEL_CACHE_TTL) {
+      return ProviderLoader.modelCache.models
     }
 
+    const providerNames = Array.from(this.providers.keys())
+    const results = await Promise.all(
+      providerNames.map(name =>
+        this.fetchModels(name).catch(err => {
+          console.error(`Failed to fetch models from ${name}:`, err)
+          return [] as ModelInfo[]
+        })
+      )
+    )
+
+    const allModels = results.flat()
+    ProviderLoader.modelCache = { timestamp: Date.now(), models: allModels }
     return allModels
+  }
+
+  /** Invalidate the model cache (called after provider config changes). */
+  static invalidateCache(): void {
+    ProviderLoader.modelCache = null
   }
 
   parseModelId(modelId: string): { provider: string; model: string } {

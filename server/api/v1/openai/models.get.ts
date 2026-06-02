@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
     const manager = new ProviderManager()
     await manager.loadProviders()
 
-    const models = await manager.getModels()
+    const models = await manager.getModelsByProtocol('openai')
 
     return {
       object: 'list',

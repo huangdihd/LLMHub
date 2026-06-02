@@ -134,7 +134,7 @@
             <li v-for="(count, provider) in modelsByProvider" :key="provider" class="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
               <span class="text-gray-700 dark:text-gray-300 capitalize flex items-center gap-2">
                 <UIcon name="i-heroicons-server" class="w-4 h-4 text-gray-400" />
-                {{ provider }}
+                {{ getProviderDisplayName(provider) }}
               </span>
               <UBadge color="blue" variant="soft">{{ count }} model{{ count !== 1 ? 's' : '' }}</UBadge>
             </li>
@@ -221,6 +221,11 @@ const modelsByProvider = ref<Record<string, number>>({})
 
 const openaiBaseUrl = ref('')
 const claudeBaseUrl = ref('')
+const providerDisplayNames = ref<Record<string, string>>({})
+
+function getProviderDisplayName(providerName: string): string {
+  return providerDisplayNames.value[providerName] || providerName
+}
 
 function copyUrl(url: string) {
   navigator.clipboard.writeText(url).then(() => {
@@ -244,6 +249,10 @@ onMounted(async () => {
     const providers = (providersData as any).providers || []
     totalProvidersCount.value = providers.length
     activeProvidersCount.value = providers.filter((p: any) => p.enabled).length
+
+    const nameMap: Record<string, string> = {}
+    providers.forEach((p: any) => { nameMap[p.name] = p.display_name || p.name })
+    providerDisplayNames.value = nameMap
     
     totalApiCalls.value = (statsData as any).totalCalls || 0
     

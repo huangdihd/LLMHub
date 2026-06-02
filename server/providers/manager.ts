@@ -67,6 +67,15 @@ export class ProviderManager {
     return this.loader.fetchModels(providerName)
   }
 
+  async getModelsByProtocol(protocol: string): Promise<ModelInfo[]> {
+    const protocolProviders = this.loader.getAllProviders()
+      .filter(c => c.protocol === protocol)
+      .map(c => c.name)
+    const providerSet = new Set(protocolProviders)
+    const allModels = await this.loader.fetchAllModels()
+    return allModels.filter(m => providerSet.has(m.provider))
+  }
+
   getAdapterForModel(modelId: string): ProviderAdapter | undefined {
     try {
       const parsed = this.parseModelId(modelId)

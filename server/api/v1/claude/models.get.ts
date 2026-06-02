@@ -1,11 +1,11 @@
-import { ProviderManager } from '../../providers/manager'
+import { ProviderManager } from '../../../providers/manager'
 
 export default defineEventHandler(async (event) => {
   try {
     const manager = new ProviderManager()
     await manager.loadProviders()
 
-    const models = await manager.getModels()
+    const models = await manager.getModelsByProtocol('claude')
 
     return {
       object: 'list',
@@ -14,6 +14,7 @@ export default defineEventHandler(async (event) => {
         object: 'model',
         created: Math.floor(Date.now() / 1000),
         owned_by: m.provider,
+        display_name: m.display_name,
         capabilities: m.capabilities
       }))
     }

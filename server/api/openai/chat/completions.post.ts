@@ -78,6 +78,12 @@ export default defineEventHandler(async (event) => {
               }
 
               if (unifiedChunk.type === 'done') {
+                if (doneSent) {
+                  // Provider may split usage into a separate chunk — still capture
+                  const u = (unifiedChunk as any).usage
+                  if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
+                  return
+                }
                 doneSent = true
                 // Track token usage from the final chunk
                 const u = (unifiedChunk as any).usage

@@ -353,11 +353,8 @@ export class OpenAIAdapter implements ProviderAdapter {
       completionTokens: chunk.usage.completion_tokens || 0
     } : undefined
 
-    console.log('[LLMHub debug] openai raw chunk: usage=', JSON.stringify(chunk.usage), 'finish_reason=', choice?.finish_reason, 'has_choices=', !!choice)
-
     if (!choice) {
       if (usage) {
-        console.log('[LLMHub debug] openai done (usage only):', JSON.stringify(usage))
         return { type: 'done', usage }
       }
       return { type: 'content', delta: '' }

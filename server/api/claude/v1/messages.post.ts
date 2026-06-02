@@ -176,12 +176,16 @@ export default defineEventHandler(async (event) => {
               writeSSE('content_block_delta', serializedChunk)
             }
           } else if (unifiedChunk.type === 'done') {
-            if (streamDone) return  // skip duplicate done
+            if (streamDone) {
+              // Some providers split usage into a separate chunk — capture if available
+              const u = (unifiedChunk as any).usage
+              if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
+              return
+            }
             streamDone = true
 
             // Track token usage from the final chunk
             const u = (unifiedChunk as any).usage
-            console.log('[LLMHub debug] claude-messages done chunk usage:', JSON.stringify(u))
             if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
 
             // Flush any remaining buffered thinking

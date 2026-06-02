@@ -59,8 +59,9 @@ async function submit() {
       // Auto-login after setup
       await $fetch('/api/auth/login', { method: 'POST', body: { password: password.value } })
     }
+    // Hard redirect to remount layout and pick up auth state
     const redirect = useRoute().query.redirect as string || '/'
-    await navigateTo(redirect)
+    window.location.href = redirect
   } catch (e: any) {
     error.value = e.data?.message || 'Something went wrong.'
   } finally {

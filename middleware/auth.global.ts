@@ -3,12 +3,12 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const protectedRoutes = ['/providers']
   if (!protectedRoutes.includes(to.path)) return
 
-  try {
-    const { $fetch } = useNuxtApp()
-    const res = await $fetch('/api/auth/status')
-    const status = res as any
+  // Skip check on login page itself
+  if (to.path === '/login') return
 
-    if (!status.authenticated) {
+  try {
+    const res = await $fetch('/api/auth/status')
+    if (!(res as any).authenticated) {
       return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
     }
   } catch {

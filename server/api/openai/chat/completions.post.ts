@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
     const adapter = resolved?.adapter
 
     if (request.stream && adapter) {
+      trackUsage(event, 0).catch(() => {})
       const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
 
       setResponseHeaders(event, {
@@ -119,6 +120,8 @@ export default defineEventHandler(async (event) => {
       throw manager.buildGatewayError('Serializer not found', 500)
     }
 
+    const u = response.usage
+    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0))
     return serializer.serializeResponse(response)
   } catch (error: any) {
     throwFormattedError(error)

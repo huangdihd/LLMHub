@@ -28,6 +28,7 @@ export default defineEventHandler(async (event) => {
     }
 
     if (request.stream && adapter) {
+      trackUsage(event, 0).catch(() => {})
       const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
 
       try {
@@ -264,6 +265,8 @@ export default defineEventHandler(async (event) => {
     if (!serializer) {
       throw new Error('Serializer not found')
     }
+    const u = response.usage
+    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0))
     return serializer.serializeResponse(response)
   } catch (error: any) {
     throw createError({ statusCode: 400, message: error.message })

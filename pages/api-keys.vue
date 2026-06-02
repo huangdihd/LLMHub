@@ -93,24 +93,83 @@
           </div>
         </template>
 
-        <div class="space-y-4">
-          <UFormGroup label="Name">
-            <UInput v-model="form.name" placeholder="e.g. Cursor, Continue" />
+        <div class="space-y-6">
+          <!-- Name -->
+          <UFormGroup label="Name" help="A descriptive label for this key">
+            <UInput v-model="form.name" placeholder="e.g. Cursor, Continue, My Project" />
           </UFormGroup>
 
-          <UFormGroup label="Monthly token limit (0 = unlimited)">
-            <UInput v-model.number="form.monthly_limit" type="number" min="0" />
+          <!-- Monthly Token Limit -->
+          <UFormGroup help="Set to 0 for unlimited">
+            <template #label>
+              <div class="flex items-center justify-between w-full">
+                <span>Monthly Token Limit</span>
+                <span class="text-xs text-gray-400 font-normal">{{ form.monthly_limit > 0 ? form.monthly_limit.toLocaleString() + ' tokens/month' : 'Unlimited' }}</span>
+              </div>
+            </template>
+            <UInput v-model.number="form.monthly_limit" type="number" min="0" step="1000" placeholder="0" />
           </UFormGroup>
 
-          <UFormGroup label="Allowed providers (comma-separated, empty = all)">
-            <UInput v-model="form.providersRaw" placeholder="deepseek, mimo" />
+          <!-- Allowed Providers -->
+          <UFormGroup help="Leave empty to allow all providers">
+            <template #label>
+              <div class="flex items-center justify-between w-full">
+                <span>Allowed Providers</span>
+                <UBadge v-if="form.selectedProviders.length > 0" color="blue" variant="soft" size="xs">
+                  {{ form.selectedProviders.length }} selected
+                </UBadge>
+              </div>
+            </template>
+            <USelectMenu
+              v-model="form.selectedProviders"
+              :options="providerOptions"
+              multiple
+              searchable
+              placeholder="All providers"
+              value-attribute="id"
+              option-attribute="label"
+            >
+              <template #label>
+                <span v-if="form.selectedProviders.length === 0" class="text-gray-400">All providers</span>
+                <span v-else>{{ form.selectedProviders.length }} provider{{ form.selectedProviders.length !== 1 ? 's' : '' }}</span>
+              </template>
+            </USelectMenu>
           </UFormGroup>
 
-          <UFormGroup label="Allowed models (comma-separated, empty = all)">
-            <UInput v-model="form.modelsRaw" placeholder="deepseek/deepseek-chat, mimo/mimo-v2.5" />
+          <!-- Allowed Models (filtered by selected providers) -->
+          <UFormGroup :help="form.selectedProviders.length > 0 ? 'Filtered by selected providers above' : 'Leave empty to allow all models'">
+            <template #label>
+              <div class="flex items-center justify-between w-full">
+                <span>Allowed Models</span>
+                <UBadge v-if="form.selectedModels.length > 0" color="purple" variant="soft" size="xs">
+                  {{ form.selectedModels.length }} selected
+                </UBadge>
+              </div>
+            </template>
+            <USelectMenu
+              v-model="form.selectedModels"
+              :options="filteredModelOptions"
+              multiple
+              searchable
+              placeholder="All models"
+              value-attribute="id"
+              option-attribute="label"
+              option-group-attribute="provider"
+            >
+              <template #label>
+                <span v-if="form.selectedModels.length === 0" class="text-gray-400">All models</span>
+                <span v-else>{{ form.selectedModels.length }} model{{ form.selectedModels.length !== 1 ? 's' : '' }}</span>
+              </template>
+              <template #option="{ option }">
+                <div class="flex items-center justify-between w-full">
+                  <span class="font-mono text-sm">{{ option.name }}</span>
+                  <UBadge color="gray" variant="soft" size="xs">{{ option.provider }}</UBadge>
+                </div>
+              </template>
+            </USelectMenu>
           </UFormGroup>
 
-          <!-- Show newly created key -->
+          <!-- Newly created key -->
           <div v-if="newKeyPlain" class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
             <p class="text-sm font-medium text-green-800 dark:text-green-300 mb-2">Your new API key (copy now — it won't be shown again):</p>
             <div class="flex items-center gap-2">
@@ -133,7 +192,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 
 const toast = useToast()
 const keys = ref<any[]>([])
@@ -143,16 +202,39 @@ const isModalOpen = ref(false)
 const editingKey = ref<any>(null)
 const newKeyPlain = ref('')
 
+const availableProviders = ref<{ name: string; display_name: string }[]>([])
+const availableModels = ref<{ id: string; name: string; provider: string }[]>([])
+
 const form = reactive({
   name: '',
   monthly_limit: 0,
-  providersRaw: '',
-  modelsRaw: ''
+  selectedProviders: [] as string[],
+  selectedModels: [] as string[]
+})
+
+const providerOptions = computed(() =>
+  availableProviders.value.map(p => ({ id: p.name, label: `${p.display_name} (${p.name})` }))
+)
+
+const filteredModelOptions = computed(() => {
+  let models = availableModels.value
+  if (form.selectedProviders.length > 0) {
+    const set = new Set(form.selectedProviders)
+    models = models.filter(m => set.has(m.provider))
+  }
+  return models.map(m => ({ id: m.id, name: m.name, provider: m.provider, label: m.id }))
 })
 
 onMounted(async () => {
   try {
-    await loadKeys()
+    const [keysData, providersData, modelsData] = await Promise.all([
+      $fetch('/api/hub/keys'),
+      $fetch('/api/hub/providers').catch(() => ({ providers: [] })),
+      $fetch('/api/hub/models').catch(() => ({ models: [] }))
+    ])
+    keys.value = (keysData as any).keys || []
+    availableProviders.value = (providersData as any).providers || []
+    availableModels.value = (modelsData as any).models || []
   } catch (e: any) {
     if (e?.statusCode === 401) return navigateTo('/login')
   } finally {
@@ -176,8 +258,8 @@ function openEditModal(key: any) {
   editingKey.value = key
   form.name = key.name
   form.monthly_limit = key.monthly_limit || 0
-  form.providersRaw = key.allowed_providers?.join(', ') || ''
-  form.modelsRaw = key.allowed_models?.join(', ') || ''
+  form.selectedProviders = [...(key.allowed_providers || [])]
+  form.selectedModels = [...(key.allowed_models || [])]
   newKeyPlain.value = ''
   isModalOpen.value = true
 }
@@ -185,8 +267,8 @@ function openEditModal(key: any) {
 function resetForm() {
   form.name = ''
   form.monthly_limit = 0
-  form.providersRaw = ''
-  form.modelsRaw = ''
+  form.selectedProviders = []
+  form.selectedModels = []
 }
 
 function closeModal() {
@@ -195,18 +277,14 @@ function closeModal() {
   newKeyPlain.value = ''
 }
 
-function parseComma(s: string): string[] {
-  return s.split(',').map(x => x.trim()).filter(Boolean)
-}
-
 async function saveKey() {
   saving.value = true
   try {
     const payload = {
       name: form.name,
       monthly_limit: form.monthly_limit,
-      allowed_providers: parseComma(form.providersRaw),
-      allowed_models: parseComma(form.modelsRaw)
+      allowed_providers: form.selectedProviders,
+      allowed_models: form.selectedModels
     }
 
     if (editingKey.value) {
@@ -216,12 +294,9 @@ async function saveKey() {
     } else {
       const res = await $fetch('/api/hub/keys', { method: 'POST', body: { name: form.name } })
       newKeyPlain.value = (res as any).key?.plain_key || ''
-      // Apply remaining settings via PUT
-      if (newKeyPlain.value) {
-        const id = (res as any).key?.id
-        if (id) {
-          await $fetch(`/api/hub/keys/${id}`, { method: 'PUT', body: payload })
-        }
+      const id = (res as any).key?.id
+      if (id) {
+        await $fetch(`/api/hub/keys/${id}`, { method: 'PUT', body: payload })
       }
     }
   } catch (e: any) {

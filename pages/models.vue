@@ -5,12 +5,15 @@
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Model List</h2>
         <p class="text-gray-500 dark:text-gray-400 mt-1">{{ totalModels }} models across {{ providerGroups.length }} providers</p>
       </div>
-      <UInput
-        v-model="search"
-        icon="i-heroicons-magnifying-glass-20-solid"
-        placeholder="Search models..."
-        class="w-64"
-      />
+      <div class="flex items-center gap-2">
+        <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-arrow-path" :loading="refreshing" @click="refreshModels" />
+        <UInput
+          v-model="search"
+          icon="i-heroicons-magnifying-glass-20-solid"
+          placeholder="Search models..."
+          class="w-64"
+        />
+      </div>
     </div>
 
     <div v-if="loading" class="flex justify-center py-12">
@@ -98,6 +101,7 @@ import { ref, computed, onMounted } from 'vue'
 const toast = useToast()
 const models = ref<any[]>([])
 const loading = ref(true)
+const refreshing = ref(false)
 const search = ref('')
 const providerDisplayNames = ref<Record<string, string>>({})
 
@@ -107,12 +111,20 @@ interface ModelGroup {
 }
 
 onMounted(async () => {
+  await loadAll()
+})
+
+async function loadModels() {
+  const data = await $fetch('/api/hub/models')
+  models.value = (data as any).models || []
+}
+
+async function loadAll() {
   try {
-    const [modelsData, providersData] = await Promise.all([
-      $fetch('/api/hub/models'),
-      $fetch('/api/hub/providers').catch(() => ({ providers: [] }))
+    const [providersData] = await Promise.all([
+      $fetch('/api/hub/providers').catch(() => ({ providers: [] })),
+      loadModels()
     ])
-    models.value = (modelsData as any).models || []
 
     const providers = (providersData as any).providers || []
     const nameMap: Record<string, string> = {}
@@ -125,7 +137,20 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+async function refreshModels() {
+  refreshing.value = true
+  try {
+    await $fetch('/api/hub/models/refresh', { method: 'POST' })
+    await loadModels()
+    toast.add({ title: 'Refreshed', description: 'Model list updated from providers', icon: 'i-heroicons-check-circle', color: 'green', timeout: 2000 })
+  } catch (e) {
+    toast.add({ title: 'Refresh failed', color: 'red', timeout: 2000 })
+  } finally {
+    refreshing.value = false
+  }
+}
 
 function getProviderDisplayName(providerName: string): string {
   return providerDisplayNames.value[providerName] || providerName

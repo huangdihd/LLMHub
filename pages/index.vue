@@ -127,7 +127,10 @@
       <div class="space-y-6">
         <UCard>
           <template #header>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Models Breakdown</h3>
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white">Models Breakdown</h3>
+              <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-arrow-path" :loading="refreshing" @click="refreshModels" />
+            </div>
           </template>
           
           <ul v-if="!loading && Object.keys(modelsByProvider).length > 0" class="space-y-3 text-sm">
@@ -235,17 +238,43 @@ function copyUrl(url: string) {
   })
 }
 
+async function loadModels() {
+  const data = await $fetch('/api/hub/models')
+  const models = (data as any).models || []
+  totalModelsCount.value = models.length
+  const mByProvider: Record<string, number> = {}
+  models.forEach((m: any) => {
+    if (m.provider) {
+      mByProvider[m.provider] = (mByProvider[m.provider] || 0) + 1
+    }
+  })
+  modelsByProvider.value = mByProvider
+}
+
+const refreshing = ref(false)
+async function refreshModels() {
+  refreshing.value = true
+  try {
+    await $fetch('/api/hub/models/refresh', { method: 'POST' })
+    await loadModels()
+    toast.add({ title: 'Refreshed', description: 'Model list updated from providers', icon: 'i-heroicons-check-circle', color: 'green', timeout: 2000 })
+  } catch (e) {
+    toast.add({ title: 'Refresh failed', color: 'red', timeout: 2000 })
+  } finally {
+    refreshing.value = false
+  }
+}
+
 onMounted(async () => {
   const origin = window.location.origin
   openaiBaseUrl.value = `${origin}/api/v1/openai`
   claudeBaseUrl.value = `${origin}/api/v1/claude`
   try {
-    const [providersData, modelsData, statsData] = await Promise.all([
+    const [providersData, statsData] = await Promise.all([
       $fetch('/api/hub/providers'),
-      $fetch('/api/hub/models'),
       $fetch('/api/hub/stats').catch(() => ({ totalCalls: 0 }))
     ])
-    
+
     const providers = (providersData as any).providers || []
     totalProvidersCount.value = providers.length
     activeProvidersCount.value = providers.filter((p: any) => p.enabled).length
@@ -253,9 +282,9 @@ onMounted(async () => {
     const nameMap: Record<string, string> = {}
     providers.forEach((p: any) => { nameMap[p.name] = p.display_name || p.name })
     providerDisplayNames.value = nameMap
-    
+
     totalApiCalls.value = (statsData as any).totalCalls || 0
-    
+
     // Calculate protocols
     const pCounts: Record<string, number> = {}
     providers.forEach((p: any) => {
@@ -264,19 +293,8 @@ onMounted(async () => {
       }
     })
     protocolCounts.value = pCounts
-    
-    // Calculate models
-    const models = (modelsData as any).models || []
-    totalModelsCount.value = models.length
-    
-    const mByProvider: Record<string, number> = {}
-    models.forEach((m: any) => {
-      if (m.provider) {
-        mByProvider[m.provider] = (mByProvider[m.provider] || 0) + 1
-      }
-    })
-    modelsByProvider.value = mByProvider
-    
+
+    await loadModels()
   } catch (error) {
     console.error('Failed to load dashboard metrics:', error)
   } finally {

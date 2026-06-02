@@ -311,10 +311,13 @@ export class ClaudeAdapter implements ProviderAdapter {
   }
 
   fromProviderStreamChunk(chunk: any, state: any = {}): LLMStreamChunk {
+    console.log('[LLMHub debug] raw chunk type:', chunk.type, 'usage:', JSON.stringify(chunk.usage), 'delta:', JSON.stringify(chunk.delta), 'message.usage:', JSON.stringify(chunk.message?.usage))
+
     // message_start carries input_tokens — stash for later
     if (chunk.type === 'message_start') {
       if (chunk.message?.usage?.input_tokens) {
         state._inputTokens = chunk.message.usage.input_tokens
+        console.log('[LLMHub debug] stashed input_tokens:', state._inputTokens)
       }
       return { type: 'content', delta: '' }
     }
@@ -324,6 +327,7 @@ export class ClaudeAdapter implements ProviderAdapter {
         ? { promptTokens: state._inputTokens, completionTokens: 0 }
         : undefined
       delete state._inputTokens
+      console.log('[LLMHub debug] message_stop → done, usage:', JSON.stringify(usage))
       return { type: 'done', usage }
     }
 
@@ -359,6 +363,8 @@ export class ClaudeAdapter implements ProviderAdapter {
     }
 
     if (chunk.type === 'message_delta') {
+      console.log('[LLMHub debug] message_delta: stop_reason=', chunk.delta?.stop_reason, 'output_tokens=', chunk.usage?.output_tokens, 'state._inputTokens=', state._inputTokens, 'state._outputTokens=', state._outputTokens)
+
       // Accumulate output_tokens (sometimes on delta, sometimes on usage)
       if (chunk.usage?.output_tokens) {
         state._outputTokens = (state._outputTokens || 0) + chunk.usage.output_tokens
@@ -369,6 +375,7 @@ export class ClaudeAdapter implements ProviderAdapter {
         const completionTokens = state._outputTokens || chunk.usage?.output_tokens || 0
         delete state._inputTokens
         delete state._outputTokens
+        console.log('[LLMHub debug] message_delta → done, usage:', JSON.stringify({ promptTokens, completionTokens }))
         return {
           type: 'done',
           finishReason: chunk.delta.stop_reason === 'tool_use' ? 'tool_calls' : 'stop',

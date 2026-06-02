@@ -181,6 +181,7 @@ export default defineEventHandler(async (event) => {
 
             // Track token usage from the final chunk
             const u = (unifiedChunk as any).usage
+            console.log('[LLMHub debug] claude-messages done chunk usage:', JSON.stringify(u))
             if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
 
             // Flush any remaining buffered thinking

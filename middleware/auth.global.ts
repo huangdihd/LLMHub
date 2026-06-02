@@ -11,7 +11,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
     if (!(res as any).authenticated) {
       return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
     }
-  } catch {
-    return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
+  } catch (e: any) {
+    // Only redirect on explicit 401; transient errors shouldn't block access
+    if (e?.statusCode === 401) {
+      return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
+    }
   }
 })

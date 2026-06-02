@@ -149,27 +149,58 @@
 
         <UCard>
           <template #header>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Supported Endpoints</h3>
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <UIcon name="i-heroicons-circle-stack" class="w-5 h-5 text-green-500" />
+                OpenAI Base URL
+              </h3>
+              <UButton
+                color="gray"
+                variant="ghost"
+                size="xs"
+                icon="i-heroicons-clipboard-document"
+                @click="copyUrl(openaiBaseUrl)"
+              />
+            </div>
           </template>
-          
-          <ul class="space-y-3 text-sm">
-            <li class="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-              <span class="text-gray-700 dark:text-gray-300">Chat Completions</span>
-              <UBadge color="gray" variant="soft">v1/chat/completions</UBadge>
-            </li>
-            <li class="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-              <span class="text-gray-700 dark:text-gray-300">Completions</span>
-              <UBadge color="gray" variant="soft">v1/completions</UBadge>
-            </li>
-            <li class="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-              <span class="text-gray-700 dark:text-gray-300">Claude Messages</span>
-              <UBadge color="gray" variant="soft">v1/messages</UBadge>
-            </li>
-            <li class="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-              <span class="text-gray-700 dark:text-gray-300">OpenAI Responses</span>
-              <UBadge color="gray" variant="soft">v1/responses</UBadge>
-            </li>
-          </ul>
+          <div class="space-y-2">
+            <code class="block text-sm font-mono bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded select-all break-all">
+              {{ openaiBaseUrl }}
+            </code>
+            <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <UBadge color="gray" variant="soft">/chat/completions</UBadge>
+              <UBadge color="gray" variant="soft">/completions</UBadge>
+              <UBadge color="gray" variant="soft">/responses</UBadge>
+              <UBadge color="gray" variant="soft">/models</UBadge>
+            </div>
+          </div>
+        </UCard>
+
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <UIcon name="i-heroicons-circle-stack" class="w-5 h-5 text-orange-500" />
+                Claude Base URL
+              </h3>
+              <UButton
+                color="gray"
+                variant="ghost"
+                size="xs"
+                icon="i-heroicons-clipboard-document"
+                @click="copyUrl(claudeBaseUrl)"
+              />
+            </div>
+          </template>
+          <div class="space-y-2">
+            <code class="block text-sm font-mono bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded select-all break-all">
+              {{ claudeBaseUrl }}
+            </code>
+            <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <UBadge color="gray" variant="soft">/messages</UBadge>
+              <UBadge color="gray" variant="soft">/complete</UBadge>
+            </div>
+          </div>
         </UCard>
       </div>
     </div>
@@ -179,6 +210,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
+const toast = useToast()
 const loading = ref(true)
 const activeProvidersCount = ref(0)
 const totalProvidersCount = ref(0)
@@ -187,7 +219,21 @@ const totalApiCalls = ref(0)
 const protocolCounts = ref<Record<string, number>>({})
 const modelsByProvider = ref<Record<string, number>>({})
 
+const openaiBaseUrl = ref('')
+const claudeBaseUrl = ref('')
+
+function copyUrl(url: string) {
+  navigator.clipboard.writeText(url).then(() => {
+    toast.add({ title: 'Copied!', description: url, icon: 'i-heroicons-check-circle', color: 'green', timeout: 2000 })
+  }).catch(() => {
+    toast.add({ title: 'Copy failed', description: 'Please copy manually', color: 'red', timeout: 2000 })
+  })
+}
+
 onMounted(async () => {
+  const origin = window.location.origin
+  openaiBaseUrl.value = `${origin}/api/v1/openai`
+  claudeBaseUrl.value = `${origin}/api/v1/claude`
   try {
     const [providersData, modelsData, statsData] = await Promise.all([
       $fetch('/api/hub/providers'),

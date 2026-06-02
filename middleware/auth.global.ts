@@ -1,6 +1,6 @@
 export default defineNuxtRouteMiddleware(async (to) => {
   // Pages that require authentication
-  const protectedRoutes = ['/providers']
+  const protectedRoutes = ['/providers', '/api-keys']
   if (!protectedRoutes.includes(to.path)) return
 
   // Skip check on login page itself

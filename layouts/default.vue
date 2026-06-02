@@ -12,6 +12,7 @@
           <div class="flex items-center space-x-2">
             <UButton to="/" variant="ghost" color="gray">Home</UButton>
             <UButton to="/models" variant="ghost" color="gray">Models</UButton>
+            <UButton to="/api-keys" variant="ghost" color="gray">API Keys</UButton>
             <UButton to="/providers" variant="ghost" color="gray">Providers</UButton>
             <UButton to="/chat" variant="ghost" color="gray">Chat</UButton>
             <UButton v-if="!authenticated" to="/login" variant="ghost" color="gray" icon="i-heroicons-lock-closed">

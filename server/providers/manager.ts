@@ -78,7 +78,7 @@ export class ProviderManager {
     }
   }
 
-  resolveAdapter(modelId: string, incomingProtocol: string): { adapter: ProviderAdapter; providerName: string } | undefined {
+  resolveAdapter(modelId: string, incomingProtocol: string, stream?: boolean): { adapter: ProviderAdapter; providerName: string } | undefined {
     let providerName: string | undefined
     let adapter: ProviderAdapter | undefined
 
@@ -92,7 +92,7 @@ export class ProviderManager {
     }
 
     if (adapter && providerName) {
-      console.log(`[LLMHub] ${new Date().toISOString()} model=${modelId}, incoming=${incomingProtocol}, provider=${providerName}(${adapter.name})`)
+      console.log(`[LLMHub] ${new Date().toISOString()} model=${modelId}, incoming=${incomingProtocol}, provider=${providerName}(${adapter.name}), stream=${stream ?? false}`)
     }
 
     return adapter ? { adapter, providerName: providerName! } : undefined

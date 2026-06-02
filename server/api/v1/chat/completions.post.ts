@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     incrementCalls().catch(() => {})
-    const resolved = manager.resolveAdapter(request.model || '', 'openai-chat')
+    const resolved = manager.resolveAdapter(request.model || '', 'openai-chat', request.stream)
     const adapter = resolved?.adapter
 
     if (request.stream && adapter) {

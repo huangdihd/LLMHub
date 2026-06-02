@@ -355,7 +355,6 @@ export class OpenAIAdapter implements ProviderAdapter {
 
     if (!choice) {
       if (usage) {
-        console.log('DEBUG: returning done because no choice but usage present');
         return { type: 'done', usage }
       }
       return { type: 'content', delta: '' }
@@ -396,7 +395,6 @@ export class OpenAIAdapter implements ProviderAdapter {
 
     if (choice.delta?.content != null && choice.delta.content !== '') {
       const content = choice.delta.content
-      console.log(`[DSML DEBUG] Raw chunk: "${content}"`);
 
       // DSML parser state machine
       if (!state.dsml_buffer) state.dsml_buffer = ''

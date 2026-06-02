@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     incrementCalls().catch(() => {})
-    const resolved = manager.resolveAdapter(request.model || '', 'claude-completion')
+    const resolved = manager.resolveAdapter(request.model || '', 'claude-completion', request.stream)
     const adapter = resolved?.adapter
 
     if (request.stream && adapter) {

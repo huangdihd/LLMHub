@@ -126,43 +126,107 @@ LLMHub/
 ### Request Flow
 
 ```
-Client Request
-      │
-      ▼
-┌─────────────────┐
-│  Auth Middleware │  Validate API key / Session
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   API Route     │  /api/openai/chat/completions
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Protocol Parser │  Convert to unified LLMRequest
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│Provider Manager │  Resolve model → provider
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│Provider Adapter │  Convert to provider-native format
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  LLM Provider   │  OpenAI / Claude / DeepSeek / ...
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│Protocol Serialze│  Convert response back to client format
-└─────────────────┘
+                          ┌─────────────────────────────────────────────────────────────┐
+                          │                      Unified Abstraction                    │
+                          │                    ┌───────────────────┐                    │
+                          │                    │    LLMRequest     │                    │
+                          │                    │  - model          │                    │
+                          │                    │  - messages[]     │                    │
+                          │                    │  - config         │                    │
+                          │                    │  - tools[]        │                    │
+                          │                    │  - stream         │                    │
+                          │                    └───────────────────┘                    │
+                          │                             ▲                               │
+          ┌───────────────┼─────────────────────────────┼───────────────────────────────┼───────────────┐
+          │               │                             │                               │               │
+          ▼               ▼                             │                               ▼               ▼
+   ┌─────────────┐  ┌─────────────┐                    │                        ┌─────────────┐  ┌─────────────┐
+   │OpenAI Client│  │Claude Client│                    │                        │OpenAI Client│  │Claude Client│
+   └──────┬──────┘  └──────┬──────┘                    │                        └──────▲──────┘  └──────▲──────┘
+          │                │                           │                               │               │
+          ▼                ▼                           │                               │               │
+┌─────────────────────────────────────┐               │                        ┌─────────────────────────────────────┐
+│           API Routes                │               │                        │           API Routes                │
+│  /api/openai/chat/completions       │               │                        │  /api/openai/chat/completions       │
+│  /api/claude/v1/messages            │               │                        │  /api/claude/v1/messages            │
+└─────────────────┬───────────────────┘               │                        └─────────────────▲───────────────────┘
+                  │                                   │                                            │
+                  ▼                                   │                                            │
+┌─────────────────────────────────────┐               │                        ┌─────────────────────────────────────┐
+│        Protocol Parsers             │               │                        │       Protocol Serializers          │
+│  ┌─────────────────────────────┐    │               │                        │    ┌─────────────────────────────┐   │
+│  │ openai-chat.ts              │    │               │                        │    │ openai-chat-serializer.ts   │   │
+│  │ parseRequest(body) ─────────┼────┼───────────────┘                        │    │ serializeResponse(response) │   │
+│  └─────────────────────────────┘    │                                        │    └─────────────────────────────┘   │
+│  ┌─────────────────────────────┐    │                                        │    ┌─────────────────────────────┐   │
+│  │ claude-messages.ts          │    │                                        │    │ claude-messages-serializer  │   │
+│  │ parseRequest(body) ─────────┼────┘                                        │    │ serializeResponse(response) │   │
+│  └─────────────────────────────┘                                             │    └─────────────────────────────┘   │
+└─────────────────────────────────────┘                                         └─────────────────────────────────────┘
+                                                                              ▲
+                                                                              │
+┌─────────────────────────────────────┐                         ┌─────────────┴───────────────┐
+│        Provider Manager             │                         │         LLMResponse         │
+│  resolveAdapter(model, protocol)    │                         │  - content                  │
+└─────────────────┬───────────────────┘                         │  - finishReason             │
+                  │                                             │  - toolCalls[]              │
+                  ▼                                             │  - usage                    │
+┌─────────────────────────────────────┐                         └─────────────────────────────┘
+│        Provider Adapters            │                                        ▲
+│  ┌─────────────────────────────┐    │                                        │
+│  │ openai.ts                   │    │    ┌───────────────────────────────┐   │
+│  │ toProviderRequest(request) ─┼────┼───▶│   OpenAI / DeepSeek / ...     │───┘
+│  └─────────────────────────────┘    │    └───────────────────────────────┘
+│  ┌─────────────────────────────┐    │    ┌───────────────────────────────┐
+│  │ claude.ts                   │    │───▶│   Claude / Anthropic          │───┐
+│  │ toProviderRequest(request) ─┼────┘    └───────────────────────────────┘   │
+│  └─────────────────────────────┘                                            │
+└─────────────────────────────────────┘                                        │
+                                                                               │
+                                                                               ▼
+                                                                ┌───────────────────────────┐
+                                                                │ fromProviderResponse()    │
+                                                                │ fromProviderStreamChunk() │
+                                                                └───────────────────────────┘
 ```
+
+### Unified Abstraction Layer
+
+The core of LLMHub is the **unified abstraction** defined in `server/core/types.ts`:
+
+```typescript
+// Unified request - all protocols parse into this
+interface LLMRequest {
+  model?: string
+  messages: Message[]
+  config: GenerateConfig
+  tools?: Tool[]
+  stream?: boolean
+}
+
+// Unified response - all providers return this
+interface LLMResponse {
+  content: Content
+  finishReason: 'stop' | 'length' | 'tool_calls' | 'error'
+  toolCalls?: ToolCall[]
+  usage: Usage
+}
+
+// Unified stream chunk
+interface LLMStreamChunk {
+  type: 'content' | 'thinking' | 'tool_call' | 'done' | 'error'
+  delta?: string
+  toolCall?: ToolCallDelta
+}
+```
+
+**Flow Summary**:
+1. **Parse**: Protocol-specific request → `LLMRequest` (e.g., `openai-chat.ts` parses OpenAI format, `claude-messages.ts` parses Claude format)
+2. **Route**: Provider Manager resolves `model` → `ProviderAdapter`
+3. **Transform**: Adapter converts `LLMRequest` → provider-native request
+4. **Call**: Adapter sends request to LLM provider
+5. **Normalize**: Adapter converts provider response → `LLMResponse` / `LLMStreamChunk`
+6. **Serialize**: Protocol serializer converts `LLMResponse` → client-expected format
 
 ### Key Design Decisions
 

@@ -14,6 +14,12 @@
             <UButton to="/models" variant="ghost" color="gray">Models</UButton>
             <UButton to="/providers" variant="ghost" color="gray">Providers</UButton>
             <UButton to="/chat" variant="ghost" color="gray">Chat</UButton>
+            <UButton v-if="!authenticated" to="/login" variant="ghost" color="gray" icon="i-heroicons-lock-closed">
+              Login
+            </UButton>
+            <UButton v-else color="gray" variant="ghost" icon="i-heroicons-arrow-right-on-rectangle" @click="doLogout">
+              Logout
+            </UButton>
             <ClientOnly>
               <UButton
                 :icon="isDark ? 'i-heroicons-moon-20-solid' : 'i-heroicons-sun-20-solid'"
@@ -35,6 +41,8 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
+
 const colorMode = useColorMode()
 const isDark = computed({
   get () {
@@ -44,4 +52,19 @@ const isDark = computed({
     colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
   }
 })
+
+const authenticated = ref(false)
+
+onMounted(async () => {
+  try {
+    const res = await $fetch('/api/auth/status')
+    authenticated.value = (res as any).authenticated
+  } catch {}
+})
+
+async function doLogout() {
+  await $fetch('/api/auth/logout', { method: 'POST' })
+  authenticated.value = false
+  await navigateTo('/')
+}
 </script>

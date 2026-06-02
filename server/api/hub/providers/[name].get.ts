@@ -1,18 +1,14 @@
-import { join } from 'path'
-import { readFileSync, existsSync } from 'fs'
+import { getProviderStore } from '../../../stores/provider.store'
 
 export default defineEventHandler(async (event) => {
   try {
     const name = getRouterParam(event, 'name')
-    const providersDir = join(process.cwd(), 'providers')
-    const filePath = join(providersDir, `${name}.json`)
+    const store = getProviderStore()
+    const provider = await store.get(name!)
 
-    if (!existsSync(filePath)) {
+    if (!provider) {
       throw createError({ statusCode: 404, message: 'Provider not found' })
     }
-
-    const content = readFileSync(filePath, 'utf-8')
-    const provider = JSON.parse(content)
 
     return { provider }
   } catch (error: any) {

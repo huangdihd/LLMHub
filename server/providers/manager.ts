@@ -1,4 +1,3 @@
-import { join } from 'path'
 import type { ProviderAdapter, ProtocolParser, ProtocolSerializer, ModelInfo, LLMRequest, LLMResponse } from '../core/types'
 import { ProviderLoader } from './loader'
 import { OpenAIAdapter } from './openai'
@@ -17,8 +16,8 @@ export class ProviderManager {
   private parsers: ProtocolParser[] = []
   private serializers: Map<string, ProtocolSerializer> = new Map()
 
-  constructor(providersDir?: string) {
-    this.loader = new ProviderLoader(providersDir || join(process.cwd(), 'providers'))
+  constructor() {
+    this.loader = new ProviderLoader()
 
     this.parsers = [
       new OpenAIChatParser(),
@@ -32,8 +31,8 @@ export class ProviderManager {
     this.serializers.set('claude-messages', new ClaudeMessagesSerializer())
   }
 
-  loadProviders(): void {
-    this.loader.loadAll()
+  async loadProviders(): Promise<void> {
+    await this.loader.loadAll()
 
     for (const config of this.loader.getAllProviders()) {
       if (config.protocol === 'openai') {

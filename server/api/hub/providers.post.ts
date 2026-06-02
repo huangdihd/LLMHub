@@ -1,20 +1,13 @@
-import { join } from 'path'
-import { writeFileSync, existsSync } from 'fs'
 import type { ProviderConfig } from '../../core/types'
+import { getProviderStore } from '../../stores/provider.store'
 
 export default defineEventHandler(async (event) => {
   try {
     const body = await readBody(event)
-    const providersDir = join(process.cwd(), 'providers')
+    const store = getProviderStore()
 
     if (!body.name) {
       throw createError({ statusCode: 400, message: 'Provider name is required' })
-    }
-
-    const filePath = join(providersDir, `${body.name}.json`)
-
-    if (existsSync(filePath)) {
-      throw createError({ statusCode: 409, message: `Provider '${body.name}' already exists` })
     }
 
     const newProvider: ProviderConfig = {
@@ -34,9 +27,8 @@ export default defineEventHandler(async (event) => {
       defaults: body.defaults || { temperature: 0.7, max_tokens: 4096 }
     }
 
-    writeFileSync(filePath, JSON.stringify(newProvider, null, 2), 'utf-8')
-
-    return { success: true, provider: newProvider }
+    const provider = await store.create(newProvider)
+    return { success: true, provider }
   } catch (error: any) {
     if (error.statusCode) throw error
     throwFormattedError(error)

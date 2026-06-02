@@ -1,10 +1,9 @@
-import { join } from 'path'
 import { ProviderManager } from '../../providers/manager'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const manager = new ProviderManager(join(process.cwd(), 'providers'))
-  manager.loadProviders()
+  const manager = new ProviderManager()
+  await manager.loadProviders()
 
   const parser = manager.getParser('/v1/messages', 'POST', body)
   if (!parser) {

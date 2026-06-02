@@ -1,32 +1,17 @@
-import { readFileSync, readdirSync, existsSync } from 'fs'
-import { join } from 'path'
 import type { ProviderConfig, ModelInfo } from '../core/types'
+import { getProviderStore } from '../stores/provider.store'
 
 export class ProviderLoader {
   private providers: Map<string, ProviderConfig> = new Map()
   private models: Map<string, ModelInfo> = new Map()
 
-  constructor(private providersDir: string) {}
+  async loadAll(): Promise<void> {
+    const store = getProviderStore()
+    const configs = await store.getAll()
 
-  loadAll(): void {
-    if (!existsSync(this.providersDir)) {
-      console.warn(`Providers directory not found: ${this.providersDir}`)
-      return
-    }
-
-    const files = readdirSync(this.providersDir).filter(f => f.endsWith('.json'))
-
-    for (const file of files) {
-      try {
-        const filePath = join(this.providersDir, file)
-        const content = readFileSync(filePath, 'utf-8')
-        const config: ProviderConfig = JSON.parse(content)
-
-        if (config.enabled) {
-          this.providers.set(config.name, config)
-        }
-      } catch (error) {
-        console.error(`Failed to load provider from ${file}:`, error)
+    for (const config of configs) {
+      if (config.enabled) {
+        this.providers.set(config.name, config)
       }
     }
   }

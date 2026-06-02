@@ -77,46 +77,47 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Feature Overview -->
+      <!-- API Key Usage -->
       <div class="lg:col-span-2 space-y-6">
         <UCard>
           <template #header>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-              <UIcon name="i-heroicons-sparkles" class="w-5 h-5 text-primary" />
-              Gateway Features
-            </h3>
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <UIcon name="i-heroicons-key" class="w-5 h-5 text-primary" />
+                API Key Usage
+              </h3>
+              <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-arrow-path" :loading="refreshingKeys" @click="loadKeyStats" />
+            </div>
           </template>
-          
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
-              <UIcon name="i-heroicons-photo" class="w-5 h-5 text-gray-500 dark:text-gray-400 mt-0.5" />
-              <div>
-                <h4 class="text-sm font-medium text-gray-900 dark:text-white">Multimodal Support</h4>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Process text, images, and other supported media types seamlessly.</p>
-              </div>
-            </div>
-            
-            <div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
-              <UIcon name="i-heroicons-wrench-screwdriver" class="w-5 h-5 text-gray-500 dark:text-gray-400 mt-0.5" />
-              <div>
-                <h4 class="text-sm font-medium text-gray-900 dark:text-white">Tool Calling</h4>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Full support for function calling and structured outputs.</p>
-              </div>
-            </div>
 
-            <div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
-              <UIcon name="i-heroicons-bolt" class="w-5 h-5 text-gray-500 dark:text-gray-400 mt-0.5" />
-              <div>
-                <h4 class="text-sm font-medium text-gray-900 dark:text-white">Streaming</h4>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Real-time Server-Sent Events (SSE) streaming responses.</p>
-              </div>
-            </div>
+          <div v-if="apiKeys.length === 0" class="text-center py-6 text-sm text-gray-500">
+            <UIcon name="i-heroicons-key" class="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+            <p>No API keys created yet.</p>
+            <p class="text-xs mt-1">Create keys from the API Keys page to see usage here.</p>
+          </div>
 
-            <div class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
-              <UIcon name="i-heroicons-funnel" class="w-5 h-5 text-gray-500 dark:text-gray-400 mt-0.5" />
-              <div>
-                <h4 class="text-sm font-medium text-gray-900 dark:text-white">Unified Format</h4>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Standardized provider/model routing syntax.</p>
+          <div v-else class="space-y-3">
+            <div v-for="key in apiKeys" :key="key.id" class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-800">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">{{ key.name }}</span>
+                  <UBadge v-if="key.monthly_limit > 0" :color="key.tokens_used >= key.monthly_limit ? 'red' : 'green'" variant="soft" size="xs">
+                    {{ Math.round(key.tokens_used / key.monthly_limit * 100) }}%
+                  </UBadge>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ key.tokens_used.toLocaleString() }} / {{ key.monthly_limit > 0 ? key.monthly_limit.toLocaleString() : '∞' }} tokens · {{ key.call_count }} calls
+                </div>
+                <div v-if="key.allowed_providers.length > 0 || key.allowed_models.length > 0" class="flex flex-wrap gap-1 mt-1">
+                  <UBadge v-for="p in key.allowed_providers" :key="p" color="blue" variant="soft" size="xs">{{ p }}</UBadge>
+                  <UBadge v-for="m in key.allowed_models" :key="m" color="purple" variant="soft" size="xs">{{ m }}</UBadge>
+                </div>
+              </div>
+              <!-- mini progress bar -->
+              <div v-if="key.monthly_limit > 0" class="ml-4 w-16">
+                <div class="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full transition-all" :class="key.tokens_used >= key.monthly_limit ? 'bg-red-500' : 'bg-primary'" :style="{ width: Math.min(100, key.tokens_used / key.monthly_limit * 100) + '%' }" />
+                </div>
               </div>
             </div>
           </div>
@@ -225,9 +226,20 @@ const modelsByProvider = ref<Record<string, number>>({})
 const openaiBaseUrl = ref('')
 const claudeBaseUrl = ref('')
 const providerDisplayNames = ref<Record<string, string>>({})
+const apiKeys = ref<any[]>([])
+const refreshingKeys = ref(false)
 
 function getProviderDisplayName(providerName: string): string {
   return providerDisplayNames.value[providerName] || providerName
+}
+
+async function loadKeyStats() {
+  refreshingKeys.value = true
+  try {
+    const data = await $fetch('/api/hub/keys')
+    apiKeys.value = (data as any).keys || []
+  } catch { apiKeys.value = [] }
+  finally { refreshingKeys.value = false }
 }
 
 function copyUrl(url: string) {
@@ -295,6 +307,7 @@ onMounted(async () => {
     protocolCounts.value = pCounts
 
     await loadModels()
+    loadKeyStats() // non-blocking
   } catch (error) {
     console.error('Failed to load dashboard metrics:', error)
   } finally {

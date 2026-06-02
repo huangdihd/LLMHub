@@ -6,6 +6,5 @@ export default defineEventHandler(async (event) => {
   const initialized = await store.isSetup()
   const token = getCookie(event, 'llmhub_session') || ''
   const authenticated = token ? await store.validateSession(token) : false
-
   return { initialized, authenticated }
 })

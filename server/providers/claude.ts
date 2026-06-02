@@ -311,11 +311,20 @@ export class ClaudeAdapter implements ProviderAdapter {
   }
 
   fromProviderStreamChunk(chunk: any, state: any = {}): LLMStreamChunk {
-    if (chunk.type === 'message_stop') {
-      if (chunk.usage) {
-        return { type: 'done', usage: { promptTokens: chunk.usage.input_tokens || 0, completionTokens: chunk.usage.output_tokens || 0 } }
+    // message_start carries input_tokens — stash for later
+    if (chunk.type === 'message_start') {
+      if (chunk.message?.usage?.input_tokens) {
+        state._inputTokens = chunk.message.usage.input_tokens
       }
-      return { type: 'done' }
+      return { type: 'content', delta: '' }
+    }
+
+    if (chunk.type === 'message_stop') {
+      const usage = state._inputTokens
+        ? { promptTokens: state._inputTokens, completionTokens: 0 }
+        : undefined
+      delete state._inputTokens
+      return { type: 'done', usage }
     }
 
     if (chunk.type === 'content_block_delta') {
@@ -350,13 +359,24 @@ export class ClaudeAdapter implements ProviderAdapter {
     }
 
     if (chunk.type === 'message_delta') {
+      // Accumulate output_tokens (sometimes on delta, sometimes on usage)
+      if (chunk.usage?.output_tokens) {
+        state._outputTokens = (state._outputTokens || 0) + chunk.usage.output_tokens
+      }
+
       if (chunk.delta?.stop_reason) {
+        const promptTokens = state._inputTokens || 0
+        const completionTokens = state._outputTokens || chunk.usage?.output_tokens || 0
+        delete state._inputTokens
+        delete state._outputTokens
         return {
           type: 'done',
           finishReason: chunk.delta.stop_reason === 'tool_use' ? 'tool_calls' : 'stop',
-          usage: chunk.usage ? { promptTokens: chunk.usage.input_tokens || 0, completionTokens: chunk.usage.output_tokens || 0 } : undefined
+          usage: { promptTokens, completionTokens }
         }
       }
+      // message_delta without stop_reason: still collect output_tokens
+      return { type: 'content', delta: '' }
     }
 
     // Default to an empty content chunk if nothing matched, 

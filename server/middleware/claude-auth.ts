@@ -6,10 +6,11 @@ export default defineEventHandler(async (event: H3Event) => {
   if (!event.path.startsWith('/api/claude')) return
 
   const store = getAuthStore()
-  const keys = await store.listKeys()
-  if (keys.length === 0) return
-
   const plainKey = extractApiKey(event)
+  if (!plainKey) {
+    throw authError('API Key required. Provide via Authorization: Bearer <key> or X-API-Key header.')
+  }
+
   const record = await store.getKeyRecord(plainKey)
   if (!record) {
     throw authError('Invalid API Key')

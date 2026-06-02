@@ -18,7 +18,6 @@ export default defineEventHandler(async (event) => {
     const adapter = resolved?.adapter
 
     if (request.stream && adapter) {
-      trackUsage(event, 0).catch(() => {})
       const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
 
       setResponseHeaders(event, {
@@ -39,11 +38,59 @@ export default defineEventHandler(async (event) => {
       try {
         const stream = adapter.callStream(providerRequest)
         const reader = stream.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let streamUsage: any = null
 
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          event.node.res.write(value)
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed || !trimmed.startsWith('data: ')) {
+              event.node.res.write(line + '\n')
+              continue
+            }
+            const data = trimmed.slice(6).trim()
+            if (data === '[DONE]') {
+              event.node.res.write('data: [DONE]\n\n')
+              continue
+            }
+            if (!data) continue
+
+            try {
+              const chunk = JSON.parse(data)
+              // Capture usage from the last chunk
+              if (chunk.usage) {
+                streamUsage = chunk.usage
+              }
+            } catch (e) {}
+
+            event.node.res.write(`data: ${data}\n\n`)
+          }
+        }
+
+        // Write remaining buffer and track usage
+        if (buffer.trim() && buffer.trim().startsWith('data: ')) {
+          const d = buffer.trim().slice(6).trim()
+          if (d !== '[DONE]') {
+            try {
+              const chunk = JSON.parse(d)
+              if (chunk.usage) streamUsage = chunk.usage
+            } catch (e) {}
+          }
+          event.node.res.write(`data: ${d}\n\n`)
+        }
+
+        if (streamUsage) {
+          trackUsage(event, (streamUsage.prompt_tokens || 0) + (streamUsage.completion_tokens || streamUsage.total_tokens || 0))
+        } else {
+          trackUsage(event, 0)
         }
       } catch (streamError: any) {
         const resp = formatErrorResponse(streamError)

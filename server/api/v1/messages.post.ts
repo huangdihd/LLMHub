@@ -200,6 +200,7 @@ export default defineEventHandler(async (event) => {
 
         let rawIdx = 0
         let lineBuffer = ''
+        let providerState = {}
 
         const processLine = (line: string) => {
           if (!line.startsWith('data: ')) return
@@ -212,7 +213,7 @@ export default defineEventHandler(async (event) => {
           rawIdx++
           try {
             const originalChunk = JSON.parse(data)
-            const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk)
+            const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk, providerState)
             const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
 
             for (const unifiedChunk of unifiedChunks) {

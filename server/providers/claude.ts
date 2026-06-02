@@ -310,7 +310,7 @@ export class ClaudeAdapter implements ProviderAdapter {
     } as LLMResponse
   }
 
-  fromProviderStreamChunk(chunk: any): LLMStreamChunk {
+  fromProviderStreamChunk(chunk: any, state: any = {}): LLMStreamChunk {
     if (chunk.type === 'message_stop') {
       return { type: 'done' }
     }

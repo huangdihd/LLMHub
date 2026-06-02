@@ -168,6 +168,6 @@ export interface ProviderAdapter {
   call(request: any): Promise<any>
   callStream(request: any): ReadableStream
   fromProviderResponse(response: any): LLMResponse
-  fromProviderStreamChunk(chunk: any): LLMStreamChunk | LLMStreamChunk[]
+  fromProviderStreamChunk(chunk: any, state?: any): LLMStreamChunk | LLMStreamChunk[]
   getModels(): ModelInfo[]
 }

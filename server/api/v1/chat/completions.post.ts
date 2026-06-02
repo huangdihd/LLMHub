@@ -45,6 +45,7 @@ export default defineEventHandler(async (event) => {
         let lineBuffer = ''
         const blockIndexToToolIndex = new Map<number, number>()
         let nextToolIndex = 0
+        let providerState = {}
         let doneSent = false
 
         const processLine = (line: string) => {
@@ -62,7 +63,7 @@ export default defineEventHandler(async (event) => {
           if (!data) return
           try {
             const originalChunk = JSON.parse(data)
-            const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk)
+            const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk, providerState)
             const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
 
             for (const unifiedChunk of unifiedChunks) {

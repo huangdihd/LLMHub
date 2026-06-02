@@ -1,4 +1,4 @@
-import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo } from '../core/types'
+import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock } from '../core/types'
 
 export class OpenAIAdapter implements ProviderAdapter {
   name = 'openai'
@@ -344,7 +344,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     }
   }
 
-  fromProviderStreamChunk(chunk: any): LLMStreamChunk {
+  fromProviderStreamChunk(chunk: any, state: any = {}): LLMStreamChunk | LLMStreamChunk[] {
     const choice = chunk.choices?.[0]
     const usage = chunk.usage ? {
       promptTokens: chunk.usage.prompt_tokens || 0,
@@ -361,15 +361,153 @@ export class OpenAIAdapter implements ProviderAdapter {
 
     if (choice.finish_reason) {
       console.log('DEBUG: returning done because choice.finish_reason is present:', choice.finish_reason);
+      let finishReason = choice.finish_reason === 'tool_calls' ? 'tool_calls' : 'stop'
+      if (state.dsml_in_tool_calls) {
+         finishReason = 'tool_calls'
+      }
       return {
         type: 'done',
-        finishReason: choice.finish_reason === 'tool_calls' ? 'tool_calls' : 'stop',
+        finishReason,
         usage
       }
     }
 
     if (choice.delta?.content != null && choice.delta.content !== '') {
-      return { type: 'content', delta: choice.delta.content }
+      const content = choice.delta.content
+
+      // DSML parser state machine
+      if (!state.dsml_buffer) state.dsml_buffer = ''
+      state.dsml_buffer += content
+      
+      const TOOL_CALLS_START = '<｜DSML｜tool_calls>'
+      const TOOL_CALLS_END = '</｜DSML｜tool_calls>'
+      const INVOKE_START_REGEX = /<｜DSML｜invoke name="([^"]+)">/
+      const INVOKE_END = '</｜DSML｜invoke>'
+      
+      if (!state.dsml_in_tool_calls) {
+        const startIdx = state.dsml_buffer.indexOf(TOOL_CALLS_START)
+        if (startIdx !== -1) {
+          state.dsml_in_tool_calls = true
+          state.dsml_tool_index = state.dsml_tool_index === undefined ? 0 : state.dsml_tool_index + 1
+          state.dsml_buffer = state.dsml_buffer.slice(startIdx + TOOL_CALLS_START.length)
+          // Yield whatever text came before the tool call
+          return { type: 'content', delta: content.slice(0, startIdx) }
+        }
+      }
+
+      if (state.dsml_in_tool_calls) {
+        const chunks: LLMStreamChunk[] = []
+        
+        // Loop to process all complete tool calls or partial JSON
+        while (state.dsml_buffer.length > 0) {
+          if (!state.dsml_current_tool_name) {
+            const match = state.dsml_buffer.match(INVOKE_START_REGEX)
+            if (match) {
+              state.dsml_current_tool_name = match[1]
+              state.dsml_buffer = state.dsml_buffer.slice(match.index! + match[0].length)
+              state.dsml_tool_id = `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+              chunks.push({
+                type: 'tool_call',
+                toolCall: {
+                  index: state.dsml_tool_index,
+                  id: state.dsml_tool_id,
+                  name: state.dsml_current_tool_name,
+                  inputDelta: ''
+                }
+              })
+              continue
+            }
+          } else {
+            // Looking for parameter or invoke end
+            const paramStartRegex = /<｜DSML｜parameter name="([^"]+)"[^>]*>/
+            const paramEnd = '</｜DSML｜parameter>'
+            
+            if (!state.dsml_in_parameter) {
+              const pMatch = state.dsml_buffer.match(paramStartRegex)
+              const invokeEndIdx = state.dsml_buffer.indexOf(INVOKE_END)
+              
+              if (invokeEndIdx !== -1 && (!pMatch || invokeEndIdx < pMatch.index!)) {
+                // End of current tool
+                state.dsml_current_tool_name = undefined
+                state.dsml_tool_index++
+                state.dsml_buffer = state.dsml_buffer.slice(invokeEndIdx + INVOKE_END.length)
+                continue
+              }
+              
+              if (pMatch) {
+                state.dsml_in_parameter = true
+                state.dsml_buffer = state.dsml_buffer.slice(pMatch.index! + pMatch[0].length)
+                continue
+              }
+            } else {
+              // We are inside a parameter, stream its content until paramEnd
+              const paramEndIdx = state.dsml_buffer.indexOf(paramEnd)
+              if (paramEndIdx !== -1) {
+                const paramContent = state.dsml_buffer.slice(0, paramEndIdx)
+                chunks.push({
+                  type: 'tool_call',
+                  toolCall: {
+                    index: state.dsml_tool_index,
+                    inputDelta: paramContent
+                  }
+                })
+                state.dsml_in_parameter = false
+                state.dsml_buffer = state.dsml_buffer.slice(paramEndIdx + paramEnd.length)
+                continue
+              } else {
+                // Not reached end of parameter, flush everything we have except potential partial tags
+                let safeLen = state.dsml_buffer.length
+                const lastBracket = state.dsml_buffer.lastIndexOf('<')
+                if (lastBracket !== -1) {
+                  safeLen = lastBracket
+                }
+                
+                if (safeLen > 0) {
+                  const paramContent = state.dsml_buffer.slice(0, safeLen)
+                  chunks.push({
+                    type: 'tool_call',
+                    toolCall: {
+                      index: state.dsml_tool_index,
+                      inputDelta: paramContent
+                    }
+                  })
+                  state.dsml_buffer = state.dsml_buffer.slice(safeLen)
+                }
+              }
+            }
+          }
+          
+          const toolCallsEndIdx = state.dsml_buffer.indexOf(TOOL_CALLS_END)
+          if (toolCallsEndIdx !== -1) {
+             state.dsml_in_tool_calls = false
+             state.dsml_buffer = state.dsml_buffer.slice(toolCallsEndIdx + TOOL_CALLS_END.length)
+             // Any remaining buffer after </|DSML|tool_calls> should just sit there for next chunk processing
+             continue
+          }
+
+          // If we reach here, we need more data to proceed
+          break
+        }
+        
+        // If we are waiting for a tag, we might have buffered something we can't emit.
+        // We shouldn't return plain content if we are inside tool calls.
+        return chunks.length > 0 ? chunks : { type: 'content', delta: '' }
+      }
+
+      // If we are not in tool calls, flush buffer safely (keeping partial tags in buffer just in case)
+      let safeEmitLen = state.dsml_buffer.length
+      const lastBracket = state.dsml_buffer.lastIndexOf('<')
+      if (lastBracket !== -1 && lastBracket >= state.dsml_buffer.length - 25) { // 25 is longer than <｜DSML｜tool_calls>
+          safeEmitLen = lastBracket
+      }
+      
+      if (safeEmitLen > 0) {
+          const emitText = state.dsml_buffer.slice(0, safeEmitLen)
+          state.dsml_buffer = state.dsml_buffer.slice(safeEmitLen)
+          return { type: 'content', delta: emitText }
+      } else {
+          return { type: 'content', delta: '' }
+      }
     }
 
     if (choice.delta?.reasoning_content) {

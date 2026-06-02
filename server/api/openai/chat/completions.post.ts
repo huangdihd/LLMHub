@@ -1,4 +1,4 @@
-import { ProviderManager } from '../../../../providers/manager'
+import { ProviderManager } from '../../../providers/manager'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)

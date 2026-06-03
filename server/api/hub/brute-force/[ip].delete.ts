@@ -1,4 +1,4 @@
-import { getAuthStore } from '../../stores/auth.store'
+import { getAuthStore } from '../../../stores/auth.store'
 
 export default defineEventHandler(async (event) => {
   const ip = getRouterParam(event, 'ip')

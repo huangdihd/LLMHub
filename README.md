@@ -1,11 +1,12 @@
 # LLMHub
 
-A unified LLM gateway that aggregates multiple LLM providers behind OpenAI and Claude compatible API endpoints.
+A unified LLM gateway that aggregates multiple LLM providers behind OpenAI, Claude, and Gemini compatible API endpoints.
 
 ## Features
 
-- **Dual Protocol Support**: Exposes both OpenAI-compatible (`/api/openai/*`) and Claude-compatible (`/api/claude/v1/*`) endpoints
-- **Multi-Provider Aggregation**: Connect multiple LLM providers (OpenAI, Claude, DeepSeek, etc.) through a single gateway
+- **Triple Protocol Support**: Exposes OpenAI-compatible (`/api/openai/*`), Claude-compatible (`/api/claude/v1/*`), and Gemini-compatible (`/api/gemini/v1/*`) endpoints
+- **Cross-Protocol Routing**: Call any provider through any protocol (e.g., use Gemini protocol to call OpenAI models)
+- **Multi-Provider Aggregation**: Connect multiple LLM providers (OpenAI, Claude, Gemini, DeepSeek, etc.) through a single gateway
 - **API Key Management**: Create and manage API keys with per-key rate limiting and model access control
 - **Brute-Force Protection**: Configurable login protection with IP-based lockout
 - **Usage Tracking**: Monitor API calls and token usage per key
@@ -31,8 +32,8 @@ Navigate to **Providers** page to add your LLM providers:
 
 | Field | Description |
 |-------|-------------|
-| Name | Unique identifier (e.g., `openai`, `deepseek`) |
-| Protocol | `openai` or `claude` |
+| Name | Unique identifier (e.g., `openai`, `deepseek`, `gemini`) |
+| Protocol | `openai`, `claude`, or `gemini` |
 | Base URL | Provider API endpoint |
 | API Key | Your provider API key |
 
@@ -63,6 +64,14 @@ POST /api/claude/v1/complete
 GET  /api/claude/v1/models
 ```
 
+### Gemini Compatible
+
+```
+POST /api/gemini/v1/models/:model/generateContent
+POST /api/gemini/v1/models/:model/streamGenerateContent
+GET  /api/gemini/v1/models
+```
+
 ### Usage Example
 
 ```bash
@@ -77,6 +86,12 @@ curl http://localhost:3000/api/claude/v1/messages \
   -H "x-api-key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model": "claude-3-sonnet-20240229", "max_tokens": 1024, "messages": [{"role": "user", "content": "Hello"}]}'
+
+# Gemini SDK
+curl http://localhost:3000/api/gemini/v1/models/gemini-2.5-flash:generateContent \
+  -H "x-goog-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"contents": [{"role": "user", "parts": [{"text": "Hello"}]}]}'
 ```
 
 ## Architecture
@@ -99,22 +114,28 @@ LLMHub/
 │   │   ├── auth/             #     Authentication
 │   │   ├── hub/              #     Dashboard APIs
 │   │   ├── openai/           #     OpenAI-compatible endpoints
-│   │   └── claude/v1/        #     Claude-compatible endpoints
-│   ├── protocols/            #   Request/response parsers
+│   │   ├── claude/v1/        #     Claude-compatible endpoints
+│   │   └── gemini/v1/        #     Gemini-compatible endpoints
+│   ├── protocols/            #   Request/response parsers & serializers
 │   │   ├── openai-chat.ts    #     OpenAI Chat parser
+│   │   ├── openai-chat-serializer.ts
 │   │   ├── claude-messages.ts#     Claude Messages parser
-│   │   └── ...               #     Serializers
+│   │   ├── claude-messages-serializer.ts
+│   │   ├── gemini-generate.ts#     Gemini GenerateContent parser
+│   │   └── gemini-generate-serializer.ts
 │   ├── providers/            #   Provider adapters
 │   │   ├── loader.ts         #     Config & model loader
-│   │   ├── manager.ts        #     Adapter manager
+│   │   ├── manager.ts        #     Adapter manager & cross-protocol router
 │   │   ├── openai.ts         #     OpenAI adapter
-│   │   └── claude.ts         #     Claude adapter
+│   │   ├── claude.ts         #     Claude adapter
+│   │   └── gemini.ts         #     Gemini adapter
 │   ├── stores/               #   Data persistence
 │   │   ├── auth.store.ts     #     Keys, sessions, brute-force
 │   │   └── provider.store.ts #     Provider configs
 │   └── middleware/           #   Auth middleware
 │       ├── openai-auth.ts    #     Validate OpenAI API keys
 │       ├── claude-auth.ts    #     Validate Claude API keys
+│       ├── gemini-auth.ts    #     Validate Gemini API keys
 │       └── hub-auth.ts       #     Validate admin session
 │
 └── .data/                    # Runtime storage (gitignored)
@@ -126,68 +147,70 @@ LLMHub/
 ### Request Flow
 
 ```
-                          ┌─────────────────────────────────────────────────────────────┐
-                          │                      Unified Abstraction                    │
-                          │                    ┌───────────────────┐                    │
-                          │                    │    LLMRequest     │                    │
-                          │                    │  - model          │                    │
-                          │                    │  - messages[]     │                    │
-                          │                    │  - config         │                    │
-                          │                    │  - tools[]        │                    │
-                          │                    │  - stream         │                    │
-                          │                    └───────────────────┘                    │
-                          │                             ▲                               │
-          ┌───────────────┼─────────────────────────────┼───────────────────────────────┼───────────────┐
-          │               │                             │                               │               │
-          ▼               ▼                             │                               ▼               ▼
-   ┌─────────────┐  ┌─────────────┐                    │                        ┌─────────────┐  ┌─────────────┐
-   │OpenAI Client│  │Claude Client│                    │                        │OpenAI Client│  │Claude Client│
-   └──────┬──────┘  └──────┬──────┘                    │                        └──────▲──────┘  └──────▲──────┘
-          │                │                           │                               │               │
-          ▼                ▼                           │                               │               │
-┌─────────────────────────────────────┐               │                        ┌─────────────────────────────────────┐
-│           API Routes                │               │                        │           API Routes                │
-│  /api/openai/chat/completions       │               │                        │  /api/openai/chat/completions       │
-│  /api/claude/v1/messages            │               │                        │  /api/claude/v1/messages            │
-└─────────────────┬───────────────────┘               │                        └─────────────────▲───────────────────┘
-                  │                                   │                                            │
-                  ▼                                   │                                            │
-┌─────────────────────────────────────┐               │                        ┌─────────────────────────────────────┐
-│        Protocol Parsers             │               │                        │       Protocol Serializers          │
-│  ┌─────────────────────────────┐    │               │                        │    ┌─────────────────────────────┐   │
-│  │ openai-chat.ts              │    │               │                        │    │ openai-chat-serializer.ts   │   │
-│  │ parseRequest(body) ─────────┼────┼───────────────┘                        │    │ serializeResponse(response) │   │
-│  └─────────────────────────────┘    │                                        │    └─────────────────────────────┘   │
-│  ┌─────────────────────────────┐    │                                        │    ┌─────────────────────────────┐   │
-│  │ claude-messages.ts          │    │                                        │    │ claude-messages-serializer  │   │
-│  │ parseRequest(body) ─────────┼────┘                                        │    │ serializeResponse(response) │   │
-│  └─────────────────────────────┘                                             │    └─────────────────────────────┘   │
-└─────────────────────────────────────┘                                         └─────────────────────────────────────┘
-                                                                              ▲
-                                                                              │
-┌─────────────────────────────────────┐                         ┌─────────────┴───────────────┐
-│        Provider Manager             │                         │         LLMResponse         │
-│  resolveAdapter(model, protocol)    │                         │  - content                  │
-└─────────────────┬───────────────────┘                         │  - finishReason             │
-                  │                                             │  - toolCalls[]              │
-                  ▼                                             │  - usage                    │
-┌─────────────────────────────────────┐                         └─────────────────────────────┘
-│        Provider Adapters            │                                        ▲
-│  ┌─────────────────────────────┐    │                                        │
-│  │ openai.ts                   │    │    ┌───────────────────────────────┐   │
-│  │ toProviderRequest(request) ─┼────┼───▶│   OpenAI / DeepSeek / ...     │───┘
-│  └─────────────────────────────┘    │    └───────────────────────────────┘
-│  ┌─────────────────────────────┐    │    ┌───────────────────────────────┐
-│  │ claude.ts                   │    │───▶│   Claude / Anthropic          │───┐
-│  │ toProviderRequest(request) ─┼────┘    └───────────────────────────────┘   │
-│  └─────────────────────────────┘                                            │
-└─────────────────────────────────────┘                                        │
-                                                                               │
-                                                                               ▼
-                                                                ┌───────────────────────────┐
-                                                                │ fromProviderResponse()    │
-                                                                │ fromProviderStreamChunk() │
-                                                                └───────────────────────────┘
+                    ┌──────────────────────────────────────────────────────────────┐
+                    │                      Unified Abstraction                      │
+                    │                    ┌───────────────────┐                      │
+                    │                    │    LLMRequest     │                      │
+                    │                    │  - model          │                      │
+                    │                    │  - messages[]     │                      │
+                    │                    │  - config         │                      │
+                    │                    │  - tools[]        │                      │
+                    │                    │  - stream         │                      │
+                    │                    └───────────────────┘                      │
+                    │                             ▲                                 │
+   ┌────────────────┼─────────────────────────────┼────────────────────────────────┼──────────────┐
+   │                │                             │                                 │              │
+   ▼                ▼                             │                                 ▼              ▼
+┌──────────┐  ┌──────────┐  ┌──────────┐         │                          ┌──────────┐  ┌──────────┐
+│  OpenAI  │  │  Claude  │  │  Gemini  │         │                          │  OpenAI  │  │  Claude  │
+│  Client  │  │  Client  │  │  Client  │         │                          │  Client  │  │  Client  │
+└────┬─────┘  └────┬─────┘  └────┬─────┘         │                          └────▲─────┘  └────▲─────┘
+     │             │             │                │                               │             │
+     ▼             ▼             ▼                │                               │             │
+┌────────────────────────────────────────┐        │                        ┌────────────────────────────────────────┐
+│             API Routes                 │        │                        │             API Routes                 │
+│  /api/openai/chat/completions          │        │                        │  /api/openai/chat/completions          │
+│  /api/claude/v1/messages               │        │                        │  /api/claude/v1/messages               │
+│  /api/gemini/v1/models/:m/generate     │        │                        │  /api/gemini/v1/models/:m/generate     │
+└────────────────┬───────────────────────┘        │                        └────────────────────────────────────────┘
+                 │                                 │                                            ▲
+                 ▼                                 │                                            │
+┌────────────────────────────────────────┐        │                        ┌────────────────────┴───────────────────┐
+│         Protocol Parsers               │        │                        │        Protocol Serializers            │
+│  ┌──────────────────────────────┐      │        │                        │   ┌──────────────────────────────┐      │
+│  │ openai-chat.ts               │      │        │                        │   │ openai-chat-serializer.ts    │      │
+│  │ parseRequest(body) ──────────┼──────┼────────┘                        │   │ serializeResponse(response)  │      │
+│  └──────────────────────────────┘      │                                 │   └──────────────────────────────┘      │
+│  ┌──────────────────────────────┐      │                                 │   ┌──────────────────────────────┐      │
+│  │ claude-messages.ts           │      │                                 │   │ claude-messages-serializer   │      │
+│  │ parseRequest(body) ──────────┼──────┘                                 │   │ serializeResponse(response)  │      │
+│  └──────────────────────────────┘                                        │   └──────────────────────────────┘      │
+│  ┌──────────────────────────────┐                                        │   ┌──────────────────────────────┐      │
+│  │ gemini-generate.ts           │                                        │   │ gemini-generate-serializer   │      │
+│  │ parseRequest(body) ──────────┼────┐                                   │   │ serializeResponse(response)  │      │
+│  └──────────────────────────────┘    │                                   │   └──────────────────────────────┘      │
+└──────────────────────────────────────┘                                   └────────────────────────────────────────┘
+                                      │                                                                  ▲
+                                      ▼                                                                  │
+                    ┌─────────────────────────────────────┐                    ┌──────────────────────────┴──────────┐
+                    │        Provider Manager              │                    │           LLMResponse                │
+                    │  resolveAdapter(model, protocol)     │                    │  - content                           │
+                    │  callLLM(request) ← cross-protocol   │                    │  - finishReason                      │
+                    └──────────────────┬──────────────────┘                    │  - toolCalls[]                       │
+                                       │                                       │  - usage                             │
+                                       ▼                                       └────────────────────────────────────┘
+                    ┌─────────────────────────────────────┐                                      ▲
+                    │        Provider Adapters             │                                      │
+                    │  ┌─────────────────────────────┐    │    ┌────────────────────────────┐    │
+                    │  │ openai.ts                   │────┼───▶│  OpenAI / DeepSeek / mimo  │────┘
+                    │  └─────────────────────────────┘    │    └────────────────────────────┘
+                    │  ┌─────────────────────────────┐    │    ┌────────────────────────────┐
+                    │  │ claude.ts                   │────┼───▶│  Claude / Anthropic        │────┐
+                    │  └─────────────────────────────┘    │    └────────────────────────────┘    │
+                    │  ┌─────────────────────────────┐    │    ┌────────────────────────────┐    │
+                    │  │ gemini.ts                   │────┼───▶│  Gemini / Google AI        │────┘
+                    │  └─────────────────────────────┘    │    └────────────────────────────┘
+                    └─────────────────────────────────────┘
 ```
 
 ### Unified Abstraction Layer
@@ -221,8 +244,8 @@ interface LLMStreamChunk {
 ```
 
 **Flow Summary**:
-1. **Parse**: Protocol-specific request → `LLMRequest` (e.g., `openai-chat.ts` parses OpenAI format, `claude-messages.ts` parses Claude format)
-2. **Route**: Provider Manager resolves `model` → `ProviderAdapter`
+1. **Parse**: Protocol-specific request → `LLMRequest` (e.g., `openai-chat.ts` parses OpenAI format, `gemini-generate.ts` parses Gemini format)
+2. **Route**: Provider Manager resolves `model` → `ProviderAdapter` (supports cross-protocol routing)
 3. **Transform**: Adapter converts `LLMRequest` → provider-native request
 4. **Call**: Adapter sends request to LLM provider
 5. **Normalize**: Adapter converts provider response → `LLMResponse` / `LLMStreamChunk`
@@ -230,10 +253,11 @@ interface LLMStreamChunk {
 
 ### Key Design Decisions
 
-1. **Dual Protocol Gateway**: Single backend serves both OpenAI and Claude clients, allowing seamless migration between SDKs
-2. **Adapter Pattern**: Each provider has an adapter that converts unified requests to native format, making it easy to add new providers
-3. **File-Based Storage**: No database required; all data persisted to `.data/` directory using Nitro's FS driver
-4. **Model Name Format**: Models are namespaced as `provider/model-id` (e.g., `openai/gpt-4`, `deepseek/deepseek-chat`)
+1. **Triple Protocol Gateway**: Single backend serves OpenAI, Claude, and Gemini clients, allowing seamless migration between SDKs
+2. **Cross-Protocol Routing**: Any protocol endpoint can route to any provider (e.g., Gemini protocol → OpenAI provider)
+3. **Adapter Pattern**: Each provider has an adapter that converts unified requests to native format, making it easy to add new providers
+4. **File-Based Storage**: No database required; all data persisted to `.data/` directory using Nitro's FS driver
+5. **Model Name Format**: Models are namespaced as `provider/model-id` (e.g., `openai/gpt-4`, `deepseek/deepseek-chat`, `gemini/gemini-2.5-flash`)
 
 ## Tech Stack
 

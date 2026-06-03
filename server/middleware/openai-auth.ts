@@ -10,6 +10,16 @@ export default defineEventHandler(async (event: H3Event) => {
   if (!plainKey) {
     const token = getCookie(event, 'llmhub_session') || ''
     if (token && (await store.validateSession(token))) {
+      // Check if we want to impersonate a specific key's permissions
+      const impersonateId = getHeader(event, 'X-LLMHub-Key-ID')
+      if (impersonateId) {
+        const record = await store.getKeyById(impersonateId)
+        if (record) {
+          event.context._apiKeyRecord = record
+          return
+        }
+      }
+
       // Gateway session (admin) has full access
       event.context._apiKeyRecord = {
         name: 'Gateway Session',

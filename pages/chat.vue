@@ -119,7 +119,7 @@ const authOptions = computed(() => {
   }
   opts.push({ label: 'Custom API Key', id: 'custom' })
   availableKeys.value.forEach(k => {
-    opts.push({ label: `Key: ${k.name}`, id: k.id, value: k.key })
+    opts.push({ label: `Key: ${k.name}`, id: k.id })
   })
   return opts
 })
@@ -148,16 +148,11 @@ function renderMarkdownWithCursor(content: string, loading?: boolean): string {
 }
 
 function onAuthModeChange() {
-  const opt = authOptions.value.find(o => o.id === selectedAuthId.value)
-  if (!opt) return
-
-  if (opt.id === 'session') {
-    apiKey.value = ''
-  } else if (opt.id === 'custom') {
+  if (selectedAuthId.value === 'custom') {
     const saved = localStorage.getItem('llmhub_api_key')
     apiKey.value = saved || ''
   } else {
-    apiKey.value = (opt as any).value
+    apiKey.value = ''
   }
   loadModels()
 }
@@ -172,12 +167,15 @@ function onApiKeyChange(val: string) {
 async function loadModels() {
   try {
     const headers: Record<string, string> = {}
-    if (apiKey.value) {
+    
+    if (selectedAuthId.value !== 'session' && selectedAuthId.value !== 'custom') {
+      headers['X-LLMHub-Key-ID'] = selectedAuthId.value
+    } else if (apiKey.value) {
       headers['Authorization'] = `Bearer ${apiKey.value}`
     }
 
-    // If using session (no apiKey) and we have a session, use hub endpoint for all models
-    if (!apiKey.value && hasSession.value) {
+    // If using session and no impersonation/custom key, try hub models first
+    if (selectedAuthId.value === 'session' && hasSession.value) {
       const hubRes = await $fetch('/api/hub/models').catch(() => null)
       if (hubRes && (hubRes as any).models) {
         models.value = (hubRes as any).models.map((m: any) => ({ id: m.id }))
@@ -185,7 +183,6 @@ async function loadModels() {
       }
     }
 
-    // Otherwise use OpenAI models endpoint (which now supports session cookies too)
     const data = await $fetch('/api/openai/models', { headers })
     models.value = ((data as any).data || []).map((m: any) => ({ id: m.id }))
   } catch (e) {
@@ -274,7 +271,8 @@ function parseResponseContent(response: any): string {
 }
 
 async function sendMessage() {
-  if (!selectedModel.value || !input.value || isLoading.value || (!apiKey.value && !hasSession.value)) return
+  if (!selectedModel.value || !input.value || isLoading.value) return
+  if (selectedAuthId.value === 'custom' && !apiKey.value && !hasSession.value) return
 
   const userMessage = input.value
   messages.value.push({ role: 'user', content: userMessage })
@@ -292,7 +290,10 @@ async function sendMessage() {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     }
-    if (apiKey.value) {
+
+    if (selectedAuthId.value !== 'session' && selectedAuthId.value !== 'custom') {
+      headers['X-LLMHub-Key-ID'] = selectedAuthId.value
+    } else if (apiKey.value) {
       headers['Authorization'] = `Bearer ${apiKey.value}`
     }
 

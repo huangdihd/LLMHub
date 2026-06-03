@@ -5,7 +5,22 @@ export default defineEventHandler(async (event) => {
     const manager = new ProviderManager()
     await manager.loadProviders()
 
-    const models = await manager.getModelsByProtocol('claude')
+    let models = await manager.getModelsByProtocol('claude')
+
+    // Filter based on API Key restrictions
+    const record = event.context._apiKeyRecord
+    if (record) {
+      const hasModels = record.allowed_models?.length > 0
+      const hasProviders = record.allowed_providers?.length > 0
+
+      if (hasModels || hasProviders) {
+        models = models.filter(m => {
+          if (hasModels && record.allowed_models.includes(m.id)) return true
+          if (hasProviders && record.allowed_providers.includes(m.provider)) return true
+          return false
+        })
+      }
+    }
 
     return {
       object: 'list',

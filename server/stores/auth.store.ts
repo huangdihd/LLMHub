@@ -98,6 +98,11 @@ export class AuthStore {
     }))
   }
 
+  async getKeyById(id: string): Promise<ApiKeyRecord | null> {
+    const keys = await this.readKeys()
+    return keys.find(k => k.id === id) || null
+  }
+
   async getKeyRecord(key: string): Promise<ApiKeyRecord | null> {
     if (!key) return null
     const hash = crypto.createHash('sha256').update(key).digest('hex')

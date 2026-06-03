@@ -18,6 +18,7 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
+    "@iconify-json/heroicons": "^1.2.3",
     "@nuxt/ui": "^2.18.4",
     "@nuxtjs/color-mode": "^4.0.0",
     "@types/node": "^22.15.21",

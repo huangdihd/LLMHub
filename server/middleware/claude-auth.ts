@@ -7,45 +7,48 @@ export default defineEventHandler(async (event: H3Event) => {
 
   const store = getAuthStore()
   const plainKey = extractApiKey(event)
+  let record: any = null
+
   if (!plainKey) {
     const token = getCookie(event, 'llmhub_session') || ''
     if (token && (await store.validateSession(token))) {
       // Check if we want to impersonate a specific key's permissions
       const impersonateId = getHeader(event, 'X-LLMHub-Key-ID')
       if (impersonateId) {
-        const record = await store.getKeyById(impersonateId)
-        if (record) {
-          event.context._apiKeyRecord = record
-          return
+        record = await store.getKeyById(impersonateId)
+      }
+
+      if (!record) {
+        // Gateway session (admin) has full access
+        event.context._apiKeyRecord = {
+          name: 'Gateway Session',
+          tokens_used: 0,
+          monthly_limit: 0,
+          allowed_providers: [],
+          allowed_models: []
         }
+        return
       }
-
-      // Gateway session (admin) has full access
-      event.context._apiKeyRecord = {
-        name: 'Gateway Session',
-        tokens_used: 0,
-        monthly_limit: 0,
-        allowed_providers: [],
-        allowed_models: []
-      }
-      return
+    } else {
+      return sendAuthError(event, 401, 'API Key required. Provide via Authorization: Bearer <key> or X-API-Key header.')
     }
-    return sendAuthError(event, 401, 'API Key required. Provide via Authorization: Bearer <key> or X-API-Key header.')
+  } else {
+    record = await store.getKeyRecord(plainKey)
+    if (!record) {
+      return sendAuthError(event, 401, 'Invalid API Key')
+    }
   }
 
-  const record = await store.getKeyRecord(plainKey)
-  if (!record) {
-    return sendAuthError(event, 401, 'Invalid API Key')
-  }
-
-  if (record.monthly_limit > 0 && record.tokens_used >= record.monthly_limit) {
+  if (event.method === 'POST' && record.monthly_limit > 0 && record.tokens_used >= record.monthly_limit) {
     return sendAuthError(event, 429, `Monthly token quota (${record.monthly_limit}) exceeded.`, 'quota_exceeded')
   }
 
-  const body = await readBody(event).catch(() => ({}))
-  const model = body?.model || ''
-  if (model && !checkAccess(record, model)) {
-    return sendAuthError(event, 403, `Model "${model}" is not allowed for this API key.`, 'access_denied')
+  if (event.method === 'POST') {
+    const body = await readBody(event).catch(() => ({}))
+    const model = body?.model || ''
+    if (model && !checkAccess(record, model)) {
+      return sendAuthError(event, 403, `Model "${model}" is not allowed for this API key.`, 'access_denied')
+    }
   }
 
   event.context._apiKeyRecord = record

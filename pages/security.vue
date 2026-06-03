@@ -41,7 +41,7 @@
           </UFormGroup>
 
           <div class="flex justify-end">
-            <UButton color="primary" @click="saveConfig" :loading="saving" :disabled="!config.enabled">
+            <UButton color="primary" @click="saveConfig" :loading="saving">
               Save Configuration
             </UButton>
           </div>
@@ -64,11 +64,16 @@
             <div>
               <code class="text-sm font-mono text-gray-900 dark:text-white">{{ entry.ip }}</code>
               <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {{ entry.failures }} failed attempt{{ entry.failures !== 1 ? 's' : '' }}
+                {{ entry.failures }} / {{ config.max_attempts }} failed attempts
               </div>
             </div>
-            <div class="text-sm text-gray-500 dark:text-gray-400">
-              Unlocks in {{ formatLockout(entry.locked_until) }}
+            <div class="flex items-center gap-3">
+              <span class="text-sm text-gray-500 dark:text-gray-400">
+                Unlocks in {{ formatLockout(entry.locked_until) }}
+              </span>
+              <UButton color="red" variant="ghost" size="xs" @click="unlockIp(entry.ip)">
+                Unlock
+              </UButton>
             </div>
           </div>
         </div>
@@ -149,5 +154,16 @@ function formatLockout(until: number): string {
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+}
+
+async function unlockIp(ip: string) {
+  try {
+    await $fetch(`/api/hub/brute-force/${ip}`, { method: 'DELETE' })
+    await loadConfig()
+    toast.add({ title: 'Unlocked', description: `IP ${ip} has been unlocked`, icon: 'i-heroicons-check-circle', color: 'green', timeout: 2000 })
+  } catch (e: any) {
+    if (e?.statusCode === 401) return navigateTo('/login')
+    toast.add({ title: 'Error', description: 'Failed to unlock IP', color: 'red' })
+  }
 }
 </script>

@@ -63,7 +63,11 @@ async function submit() {
     const redirect = useRoute().query.redirect as string || '/'
     window.location.href = redirect
   } catch (e: any) {
-    error.value = e.data?.message || 'Something went wrong.'
+    if (e?.statusCode === 429) {
+      error.value = e.data?.error?.message || 'Too many attempts. Please try again later.'
+    } else {
+      error.value = e.data?.message || 'Something went wrong.'
+    }
   } finally {
     loading.value = false
   }

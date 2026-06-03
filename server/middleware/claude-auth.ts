@@ -8,6 +8,18 @@ export default defineEventHandler(async (event: H3Event) => {
   const store = getAuthStore()
   const plainKey = extractApiKey(event)
   if (!plainKey) {
+    const token = getCookie(event, 'llmhub_session') || ''
+    if (token && (await store.validateSession(token))) {
+      // Gateway session (admin) has full access
+      event.context._apiKeyRecord = {
+        name: 'Gateway Session',
+        tokens_used: 0,
+        monthly_limit: 0,
+        allowed_providers: [],
+        allowed_models: []
+      }
+      return
+    }
     return sendAuthError(event, 401, 'API Key required. Provide via Authorization: Bearer <key> or X-API-Key header.')
   }
 

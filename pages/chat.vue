@@ -66,7 +66,7 @@
           <UButton
             type="submit"
             color="primary"
-            :disabled="!selectedModel || !input || isLoading || !apiKey"
+            :disabled="!selectedModel || !input || isLoading || (!apiKey && !hasSession)"
             :loading="isLoading"
           >
             Send
@@ -89,6 +89,7 @@ const isLoading = ref(false)
 const chatContainer = ref<HTMLElement | null>(null)
 const useStream = ref(true)
 const apiKey = ref('')
+const hasSession = ref(false)
 
 const endpoints = [
   { label: 'OpenAI Chat Completions', value: '/api/openai/chat/completions' },
@@ -119,21 +120,33 @@ function onApiKeyChange(val: string) {
 }
 
 async function loadModels() {
-  if (!apiKey.value) { models.value = []; return }
   try {
+    // 1. Try to load models using session (hub-auth)
+    const hubRes = await $fetch('/api/hub/models').catch(() => null)
+    if (hubRes && (hubRes as any).models) {
+      models.value = (hubRes as any).models.map((m: any) => ({ id: m.id }))
+      hasSession.value = true
+      return
+    }
+
+    // 2. Fallback to API Key if no session or hub-auth failed
+    if (!apiKey.value) {
+      models.value = []
+      hasSession.value = false
+      return
+    }
+
     const res = await fetch('/api/openai/models', {
       headers: { 'Authorization': `Bearer ${apiKey.value}` }
     })
     if (!res.ok) {
       models.value = []
-      if (res.status === 401 || res.status === 403) {
-        console.warn('Invalid API key')
-      }
       return
     }
     const data = await res.json()
     models.value = (data.data || []).map((m: any) => ({ id: m.id }))
-  } catch {
+  } catch (e) {
+    console.error('Failed to load models:', e)
     models.value = []
   }
 }
@@ -142,8 +155,8 @@ onMounted(async () => {
   const saved = localStorage.getItem('llmhub_api_key')
   if (saved) {
     apiKey.value = saved
-    await loadModels()
   }
+  await loadModels()
 })
 
 function scrollToBottom() {
@@ -202,7 +215,7 @@ function parseResponseContent(response: any): string {
 }
 
 async function sendMessage() {
-  if (!selectedModel.value || !input.value || isLoading.value || !apiKey.value) return
+  if (!selectedModel.value || !input.value || isLoading.value || (!apiKey.value && !hasSession.value)) return
 
   const userMessage = input.value
   messages.value.push({ role: 'user', content: userMessage })
@@ -218,8 +231,10 @@ async function sendMessage() {
 
   try {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey.value}`
+      'Content-Type': 'application/json'
+    }
+    if (apiKey.value) {
+      headers['Authorization'] = `Bearer ${apiKey.value}`
     }
 
     if (useStream.value) {

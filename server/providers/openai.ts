@@ -14,6 +14,38 @@ export class OpenAIAdapter implements ProviderAdapter {
     }
 
     for (const msg of request.messages) {
+      if (msg.role === 'tool') {
+        // Tool messages: use meta.toolCallId (from opencode) or content tool_result blocks
+        const toolCallId = msg.meta?.toolCallId
+        if (Array.isArray(msg.content)) {
+          const toolResults = msg.content.filter(b => b.type === 'tool_result')
+          if (toolResults.length > 0) {
+            for (const tr of toolResults) {
+              messages.push({
+                role: 'tool',
+                tool_call_id: tr.toolResult?.toolUseId || toolCallId,
+                content: tr.toolResult?.content || ''
+              })
+            }
+            continue
+          }
+        }
+        // meta.toolCallId set but no tool_result blocks — send text content as tool response
+        if (toolCallId) {
+          const textContent = typeof msg.content === 'string'
+            ? msg.content
+            : (Array.isArray(msg.content) ? msg.content.filter(b => b.type === 'text').map(b => b.text).join('') : '')
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCallId,
+            content: textContent
+          })
+          continue
+        }
+        // No toolCallId at all — skip (invalid tool message)
+        continue
+      }
+
       if (Array.isArray(msg.content) && msg.content.some(b => b.type === 'tool_result')) {
         const toolResults = msg.content.filter(b => b.type === 'tool_result')
         const otherContent = msg.content.filter(b => b.type !== 'tool_result')
@@ -152,7 +184,8 @@ export class OpenAIAdapter implements ProviderAdapter {
   }
 
   async call(request: any): Promise<any> {
-    const response = await fetchWithRetry(`${this.config.connection.base_url}/chat/completions`, {
+    const url = `${this.config.connection.base_url}/chat/completions`
+    const response = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -304,7 +337,7 @@ export class OpenAIAdapter implements ProviderAdapter {
               }
             }
             
-          } catch (err) {
+          } catch (err: any) {
             safeError(err)
           } finally {
             if (timeoutId) clearTimeout(timeoutId)

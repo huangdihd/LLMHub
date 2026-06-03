@@ -54,7 +54,10 @@
                 option-attribute="label"
                 class="flex-1 sm:w-64"
               />
-              <UCheckbox v-model="useStream" label="Stream" />
+              <UCheckbox v-if="!isGeminiEndpoint" v-model="useStream" label="Stream" />
+              <UBadge v-if="isGeminiEndpoint" :color="isGeminiStream ? 'green' : 'gray'" variant="soft" size="sm">
+                {{ isGeminiStream ? 'Stream (forced)' : 'No Stream (forced)' }}
+              </UBadge>
             </div>
           </div>
         </div>
@@ -68,7 +71,15 @@
             : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'"
             class="inline-block px-4 py-2 rounded-lg max-w-[85%] text-left shadow-sm">
             <div v-if="msg.role === 'user'" class="whitespace-pre-wrap text-sm">{{ msg.content }}</div>
-            <div v-else class="markdown-body text-sm" v-html="renderMarkdownWithCursor(msg.content, msg.loading)"></div>
+            <div v-else>
+              <details v-if="msg.thinking" class="mb-2">
+                <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 select-none">
+                  Thinking
+                </summary>
+                <div class="mt-1 text-xs text-gray-400 dark:text-gray-500 border-l-2 border-gray-300 dark:border-gray-600 pl-2 whitespace-pre-wrap markdown-body" v-html="renderMarkdownWithCursor(msg.thinking)"></div>
+              </details>
+              <div class="markdown-body text-sm" v-html="renderMarkdownWithCursor(msg.content, msg.loading)"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -98,13 +109,21 @@
 
 <script setup lang="ts">
 import { marked } from 'marked'
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
+
+const isGeminiEndpoint = computed(() =>
+  selectedEndpoint.value === 'gemini-generate' || selectedEndpoint.value === 'gemini-stream'
+)
+const isGeminiStream = computed(() => selectedEndpoint.value === 'gemini-stream')
+const effectiveStream = computed(() =>
+  isGeminiEndpoint.value ? isGeminiStream.value : useStream.value
+)
 
 const models = ref<any[]>([])
 const availableKeys = ref<any[]>([])
 const selectedAuthId = ref('session')
 const selectedModel = ref('')
-const messages = ref<{ role: string; content: string; loading?: boolean }[]>([])
+const messages = ref<{ role: string; content: string; thinking?: string; loading?: boolean }[]>([])
 const input = ref('')
 const isLoading = ref(false)
 const chatContainer = ref<HTMLElement | null>(null)
@@ -130,6 +149,8 @@ const endpoints = [
   { label: 'OpenAI Responses', value: '/api/openai/responses' },
   { label: 'Claude Messages', value: '/api/claude/v1/messages' },
   { label: 'Claude Completion', value: '/api/claude/v1/complete' },
+  { label: 'Gemini generateContent', value: 'gemini-generate' },
+  { label: 'Gemini streamGenerateContent', value: 'gemini-stream' },
 ]
 const selectedEndpoint = ref(endpoints[0].value)
 
@@ -223,51 +244,87 @@ function scrollToBottom() {
   })
 }
 
+function getEndpointUrl(): string {
+  const ep = selectedEndpoint.value
+  if (ep === 'gemini-generate' || ep === 'gemini-stream') {
+    const model = encodeURIComponent(selectedModel.value)
+    const action = ep === 'gemini-generate' ? 'generateContent' : 'streamGenerateContent'
+    return `/api/gemini/v1/models/${model}/${action}`
+  }
+  return ep
+}
+
 function buildRequestBody(history: { role: string; content: string }[]) {
   const ep = selectedEndpoint.value
 
   if (ep === '/api/openai/completions') {
     const prompt = history.map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`).join('\n') + '\nAssistant:'
-    return { model: selectedModel.value, prompt, stream: useStream.value }
+    return { model: selectedModel.value, prompt, stream: effectiveStream.value }
   }
 
   if (ep === '/api/claude/v1/complete') {
     const prompt = history.map(m => `\n\n${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`).join('') + '\n\nAssistant:'
-    return { model: selectedModel.value, prompt, max_tokens_to_sample: 4096, stream: useStream.value }
+    return { model: selectedModel.value, prompt, max_tokens_to_sample: 4096, stream: effectiveStream.value }
   }
 
   if (ep === '/api/openai/responses') {
-    return { model: selectedModel.value, input: history.map(m => ({ role: m.role, content: m.content })), stream: useStream.value }
+    return { model: selectedModel.value, input: history.map(m => ({ role: m.role, content: m.content })), stream: effectiveStream.value }
   }
 
   if (ep === '/api/claude/v1/messages') {
-    return { model: selectedModel.value, max_tokens: 4096, messages: history.map(m => ({ role: m.role, content: m.content })), stream: useStream.value }
+    return { model: selectedModel.value, max_tokens: 4096, messages: history.map(m => ({ role: m.role, content: m.content })), stream: effectiveStream.value }
   }
 
-  return { model: selectedModel.value, messages: history.map(m => ({ role: m.role, content: m.content })), stream: useStream.value }
+  if (ep === 'gemini-generate' || ep === 'gemini-stream') {
+    return {
+      model: selectedModel.value,
+      contents: history.map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      })),
+      generationConfig: { maxOutputTokens: 4096 }
+    }
+  }
+
+  return { model: selectedModel.value, messages: history.map(m => ({ role: m.role, content: m.content })), stream: effectiveStream.value }
 }
 
-function parseStreamContent(chunk: any): string | null {
-  if (chunk.choices?.[0]?.delta?.content) return chunk.choices[0].delta.content
-  if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') return chunk.delta.text
+function parseStreamContent(chunk: any): { thinking?: string; content?: string } | null {
+  if (chunk.choices?.[0]?.delta?.content) return { content: chunk.choices[0].delta.content }
+  if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') return { content: chunk.delta.text }
+  if (chunk.candidates?.[0]?.content?.parts?.length) {
+    const part = chunk.candidates[0].content.parts[0]
+    if (part.thought && part.text) return { thinking: part.text }
+    if (part.text) return { content: part.text }
+  }
   return null
 }
 
-function parseResponseContent(response: any): string {
+function parseResponseContent(response: any): { thinking?: string; content: string } {
   const ep = selectedEndpoint.value
   if (ep === '/api/openai/completions' || ep === '/api/claude/v1/complete') {
-    return response.choices?.[0]?.text || response.completion || ''
+    return { content: response.choices?.[0]?.text || response.completion || '' }
   }
   if (ep === '/api/openai/responses') {
     const output = response.output?.[0]
-    if (output?.content?.[0]?.text) return output.content[0].text
-    if (response.output_text) return response.output_text
-    return ''
+    if (output?.content?.[0]?.text) return { content: output.content[0].text }
+    if (response.output_text) return { content: response.output_text }
+    return { content: '' }
   }
   if (ep === '/api/claude/v1/messages') {
-    return response.content?.[0]?.text || ''
+    return { content: response.content?.[0]?.text || '' }
   }
-  return response.choices?.[0]?.message?.content || ''
+  if (ep === 'gemini-generate' || ep === 'gemini-stream') {
+    const parts = response.candidates?.[0]?.content?.parts || []
+    let thinking = ''
+    let content = ''
+    for (const part of parts) {
+      if (part.thought && part.text) thinking += part.text
+      else if (part.text) content += part.text
+    }
+    return { thinking: thinking || undefined, content }
+  }
+  return { content: response.choices?.[0]?.message?.content || '' }
 }
 
 async function sendMessage() {
@@ -297,8 +354,10 @@ async function sendMessage() {
       headers['Authorization'] = `Bearer ${apiKey.value}`
     }
 
-    if (useStream.value) {
-      const response = await fetch(selectedEndpoint.value, {
+    const endpointUrl = getEndpointUrl()
+
+    if (effectiveStream.value) {
+      const response = await fetch(endpointUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(body)
@@ -339,9 +398,14 @@ async function sendMessage() {
                 messages.value[assistantIndex].content = `Error: ${msg}`
                 break
               }
-              const content = parseStreamContent(chunk)
-              if (content) {
-                messages.value[assistantIndex].content += content
+              const parsed = parseStreamContent(chunk)
+              if (parsed) {
+                if (parsed.thinking) {
+                  messages.value[assistantIndex].thinking = (messages.value[assistantIndex].thinking || '') + parsed.thinking
+                }
+                if (parsed.content) {
+                  messages.value[assistantIndex].content += parsed.content
+                }
                 scrollToBottom()
               }
             } catch (e) {
@@ -351,13 +415,17 @@ async function sendMessage() {
         }
       }
     } else {
-      const response = await $fetch(selectedEndpoint.value, {
+      const response = await $fetch(endpointUrl, {
         method: 'POST',
         headers,
         body
       })
 
-      messages.value[assistantIndex].content = parseResponseContent(response)
+      const parsed = parseResponseContent(response)
+      messages.value[assistantIndex].content = parsed.content
+      if (parsed.thinking) {
+        messages.value[assistantIndex].thinking = parsed.thinking
+      }
     }
 
     messages.value[assistantIndex].loading = false

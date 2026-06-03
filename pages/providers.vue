@@ -69,7 +69,7 @@
 
           <div class="grid grid-cols-2 gap-4">
             <UFormGroup label="Protocol">
-              <USelect v-model="form.protocol" :options="[{ label: 'OpenAI', value: 'openai' }, { label: 'Claude', value: 'claude' }]" />
+              <USelect v-model="form.protocol" :options="[{ label: 'OpenAI', value: 'openai' }, { label: 'Claude', value: 'claude' }, { label: 'Gemini', value: 'gemini' }]" />
             </UFormGroup>
             <UFormGroup label="Status">
               <div class="flex items-center h-[32px]">
@@ -141,7 +141,7 @@ const editingProvider = ref<any>(null)
 const form = reactive({
   name: '',
   display_name: '',
-  protocol: 'openai' as 'openai' | 'claude',
+  protocol: 'openai' as 'openai' | 'claude' | 'gemini',
   enabled: true,
   use_custom_models: false,
   custom_models: [] as { id: string; display_name: string }[],

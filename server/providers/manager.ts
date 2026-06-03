@@ -2,13 +2,16 @@ import type { ProviderAdapter, ProtocolParser, ProtocolSerializer, ModelInfo, LL
 import { ProviderLoader } from './loader'
 import { OpenAIAdapter } from './openai'
 import { ClaudeAdapter } from './claude'
+import { GeminiAdapter } from './gemini'
 import { OpenAIChatParser } from '../protocols/openai-chat'
 import { OpenAICompletionParser } from '../protocols/openai-completion'
 import { OpenAIResponsesParser } from '../protocols/openai-responses'
 import { ClaudeMessagesParser } from '../protocols/claude-messages'
 import { ClaudeCompletionParser } from '../protocols/claude-completion'
+import { GeminiGenerateParser } from '../protocols/gemini-generate'
 import { OpenAIChatSerializer } from '../protocols/openai-chat-serializer'
 import { ClaudeMessagesSerializer } from '../protocols/claude-messages-serializer'
+import { GeminiGenerateSerializer } from '../protocols/gemini-generate-serializer'
 
 export class ProviderManager {
   private loader: ProviderLoader
@@ -24,11 +27,13 @@ export class ProviderManager {
       new OpenAICompletionParser(),
       new OpenAIResponsesParser(),
       new ClaudeMessagesParser(),
-      new ClaudeCompletionParser()
+      new ClaudeCompletionParser(),
+      new GeminiGenerateParser()
     ]
 
     this.serializers.set('openai-chat', new OpenAIChatSerializer())
     this.serializers.set('claude-messages', new ClaudeMessagesSerializer())
+    this.serializers.set('gemini-generate', new GeminiGenerateSerializer())
   }
 
   async loadProviders(): Promise<void> {
@@ -39,6 +44,8 @@ export class ProviderManager {
         this.adapters.set(config.name, new OpenAIAdapter(config))
       } else if (config.protocol === 'claude') {
         this.adapters.set(config.name, new ClaudeAdapter(config))
+      } else if (config.protocol === 'gemini') {
+        this.adapters.set(config.name, new GeminiAdapter(config))
       }
     }
   }

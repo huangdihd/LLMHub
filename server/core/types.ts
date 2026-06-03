@@ -104,7 +104,7 @@ export interface ToolCallDelta {
 export interface ProviderConfig {
   name: string
   display_name: string
-  protocol: 'openai' | 'claude'
+  protocol: 'openai' | 'claude' | 'gemini'
   enabled: boolean
   use_custom_models: boolean
   connection: {

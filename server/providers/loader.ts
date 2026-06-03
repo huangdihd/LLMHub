@@ -49,6 +49,8 @@ export class ProviderLoader {
         return await this.fetchOpenAIModels(config)
       } else if (config.protocol === 'claude') {
         return await this.fetchClaudeModels(config)
+      } else if (config.protocol === 'gemini') {
+        return await this.fetchGeminiModels(config)
       }
     } catch (error) {
       console.error(`Failed to fetch models from ${providerName}:`, error)
@@ -123,6 +125,47 @@ export class ProviderLoader {
       }
     } catch (error) {
       console.error('Failed to fetch Claude models from API:', error)
+    }
+
+    return config.models.map(m => ({
+      id: `${config.name}/${m.id}`,
+      provider: config.name,
+      name: m.id,
+      display_name: m.display_name,
+      capabilities: m.capabilities
+    }))
+  }
+
+  private async fetchGeminiModels(config: ProviderConfig): Promise<ModelInfo[]> {
+    try {
+      const response = await fetchWithRetry(`${config.connection.base_url}/v1beta/models`, {
+        headers: {
+          'x-goog-api-key': config.connection.api_key
+        }
+      }, config.connection)
+
+      if (response.ok) {
+        const data = await response.json() as any
+        const models: ModelInfo[] = []
+
+        for (const model of data.models || []) {
+          const modelId = model.name?.replace('models/', '') || model.id
+          const modelConfig = config.models.find(m => m.id === modelId)
+          if (model.supportedGenerationMethods?.includes('generateContent')) {
+            models.push({
+              id: `${config.name}/${modelId}`,
+              provider: config.name,
+              name: modelId,
+              display_name: modelConfig?.display_name || model.displayName || modelId,
+              capabilities: modelConfig?.capabilities
+            })
+          }
+        }
+
+        return models
+      }
+    } catch (error) {
+      console.error('Failed to fetch Gemini models from API:', error)
     }
 
     return config.models.map(m => ({

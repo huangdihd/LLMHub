@@ -1,5 +1,6 @@
 import { setCookie, getHeader } from 'h3'
-import { getAuthStore, BruteForceConfig } from '../../stores/auth.store'
+import { getAuthStore } from '../../stores/auth.store'
+import type { BruteForceConfig } from '../../stores/auth.store'
 
 function getClientIP(event: any, cfg: BruteForceConfig): string {
   if (cfg.ip_header) {

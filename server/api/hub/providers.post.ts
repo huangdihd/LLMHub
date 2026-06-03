@@ -21,9 +21,10 @@ export default defineEventHandler(async (event) => {
         api_key: body.api_key || '',
         base_url: body.base_url || '',
         timeout: body.timeout || 30000,
+        enable_timeout: body.enable_timeout ?? true,
         max_retries: body.max_retries || 3,
-        version: body.version
-      },
+        version: body.version || ''
+        },
       models: body.models || [],
       defaults: body.defaults || { temperature: 0.7, max_tokens: 4096 }
     }

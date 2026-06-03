@@ -1,5 +1,6 @@
 import type { ProviderConfig, ModelInfo } from '../core/types'
 import { getProviderStore } from '../stores/provider.store'
+import { fetchWithRetry } from '../utils/fetch'
 
 const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
@@ -63,11 +64,11 @@ export class ProviderLoader {
   }
 
   private async fetchOpenAIModels(config: ProviderConfig): Promise<ModelInfo[]> {
-    const response = await fetch(`${config.connection.base_url}/models`, {
+    const response = await fetchWithRetry(`${config.connection.base_url}/models`, {
       headers: {
         'Authorization': `Bearer ${config.connection.api_key}`
       }
-    })
+    }, config.connection)
 
     if (!response.ok) {
       throw new Error(`Failed to fetch models: ${response.status}`)
@@ -99,9 +100,9 @@ export class ProviderLoader {
         headers['anthropic-version'] = config.connection.version
       }
 
-      const response = await fetch(`${config.connection.base_url}/v1/models`, {
+      const response = await fetchWithRetry(`${config.connection.base_url}/v1/models`, {
         headers
-      })
+      }, config.connection)
 
       if (response.ok) {
         const data = await response.json() as any

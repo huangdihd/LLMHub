@@ -7,6 +7,7 @@ import type {
   ModelInfo,
   ContentBlock
 } from '../core/types'
+import { fetchWithRetry } from '../utils/fetch'
 
 export class ClaudeAdapter implements ProviderAdapter {
   name = 'claude'
@@ -145,11 +146,11 @@ export class ClaudeAdapter implements ProviderAdapter {
       'anthropic-version': this.config.connection.version || '2023-06-01'
     }
 
-    const response = await fetch(`${this.config.connection.base_url}/v1/messages`, {
+    const response = await fetchWithRetry(`${this.config.connection.base_url}/v1/messages`, {
       method: 'POST',
       headers,
       body: JSON.stringify(request)
-    })
+    }, this.config.connection)
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => '')
@@ -178,6 +179,12 @@ export class ClaudeAdapter implements ProviderAdapter {
     return new ReadableStream({
       start(controller) {
         ;(async () => {
+          const abortController = new AbortController()
+          let timeoutId: any
+          if (config.connection.enable_timeout) {
+            timeoutId = setTimeout(() => abortController.abort(), config.connection.timeout || 30000)
+          }
+
           let reader: ReadableStreamDefaultReader | undefined
           let closed = false
           const safeClose = () => {
@@ -201,8 +208,11 @@ export class ClaudeAdapter implements ProviderAdapter {
             const response = await fetch(`${config.connection.base_url}/v1/messages`, {
               method: 'POST',
               headers,
-              body: JSON.stringify(request)
+              body: JSON.stringify(request),
+              signal: abortController.signal
             })
+
+            if (timeoutId) clearTimeout(timeoutId)
 
             if (!response.ok) {
               const errorBody = await response.text().catch(() => '')
@@ -223,16 +233,22 @@ export class ClaudeAdapter implements ProviderAdapter {
             reader = response.body?.getReader()
             if (!reader) throw new Error('No response body')
 
-            const READ_TIMEOUT_MS = 30000
+            const READ_TIMEOUT_MS = config.connection.enable_timeout ? (config.connection.timeout || 30000) / 2 : 0
             const readWithTimeout = async (r: ReadableStreamDefaultReader): Promise<ReadableStreamReadResult<any>> => {
-              let timeoutId: any
+              let idleTimeoutId: any
               const timeoutPromise = new Promise<never>((_, rej) => {
-                timeoutId = setTimeout(() => rej(new Error('Upstream stream read timeout (30s)')), READ_TIMEOUT_MS)
+                if (READ_TIMEOUT_MS > 0) {
+                  idleTimeoutId = setTimeout(() => rej(new Error(`Upstream stream read timeout (${READ_TIMEOUT_MS}ms)`)), READ_TIMEOUT_MS)
+                }
               })
               try {
-                return await Promise.race([r.read(), timeoutPromise])
+                if (READ_TIMEOUT_MS > 0) {
+                  return await Promise.race([r.read(), timeoutPromise])
+                } else {
+                  return await r.read()
+                }
               } finally {
-                clearTimeout(timeoutId)
+                if (idleTimeoutId) clearTimeout(idleTimeoutId)
               }
             }
 
@@ -269,6 +285,7 @@ export class ClaudeAdapter implements ProviderAdapter {
           } catch (err) {
             safeError(err)
           } finally {
+            if (timeoutId) clearTimeout(timeoutId)
             if (reader) {
               reader.cancel().catch(() => {})
             }

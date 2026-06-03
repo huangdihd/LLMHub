@@ -133,6 +133,7 @@ export class ProviderStore {
         api_key: connection?.api_key ?? '',
         base_url: connection?.base_url ?? '',
         timeout: connection?.timeout ?? 30000,
+        enable_timeout: connection?.enable_timeout ?? true,
         max_retries: connection?.max_retries ?? 3,
         ...(connection?.version ? { version: connection.version } : {})
       },

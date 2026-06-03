@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
     if (body.base_url !== undefined) connectionPatch.base_url = body.base_url
     if (body.api_key !== undefined) connectionPatch.api_key = body.api_key
     if (body.timeout !== undefined) connectionPatch.timeout = body.timeout
+    if (body.enable_timeout !== undefined) connectionPatch.enable_timeout = body.enable_timeout
     if (body.max_retries !== undefined) connectionPatch.max_retries = body.max_retries
     if (body.version !== undefined) connectionPatch.version = body.version
     // Also merge any nested connection object

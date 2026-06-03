@@ -20,5 +20,5 @@ export function formatErrorResponse(error: any) {
 
 export function throwFormattedError(error: any): never {
   const resp = formatErrorResponse(error)
-  throw createError({ statusCode: resp.error?.status_code || 500, data: resp })
+  throw createError({ statusCode: error._statusCode || 500, data: resp })
 }

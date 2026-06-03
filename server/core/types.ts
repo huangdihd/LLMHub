@@ -111,6 +111,7 @@ export interface ProviderConfig {
     api_key: string
     base_url: string
     timeout?: number
+    enable_timeout?: boolean
     max_retries?: number
     version?: string
   }

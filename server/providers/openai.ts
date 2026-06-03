@@ -1,4 +1,5 @@
 import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock } from '../core/types'
+import { fetchWithRetry } from '../utils/fetch'
 
 export class OpenAIAdapter implements ProviderAdapter {
   name = 'openai'
@@ -151,7 +152,7 @@ export class OpenAIAdapter implements ProviderAdapter {
   }
 
   async call(request: any): Promise<any> {
-    const response = await fetch(`${this.config.connection.base_url}/chat/completions`, {
+    const response = await fetchWithRetry(`${this.config.connection.base_url}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -159,7 +160,7 @@ export class OpenAIAdapter implements ProviderAdapter {
         'Connection': 'close'
       },
       body: JSON.stringify(request)
-    })
+    }, this.config.connection)
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => '')
@@ -189,9 +190,10 @@ export class OpenAIAdapter implements ProviderAdapter {
       start(controller) {
         ;(async () => {
           const abortController = new AbortController()
-          const fetchTimeout = setTimeout(() => {
-            abortController.abort()
-          }, 30000) // 30s connection timeout
+          let timeoutId: any
+          if (config.connection.enable_timeout) {
+            timeoutId = setTimeout(() => abortController.abort(), config.connection.timeout || 30000)
+          }
 
           let reader: ReadableStreamDefaultReader | undefined
           let closed = false
@@ -217,7 +219,7 @@ export class OpenAIAdapter implements ProviderAdapter {
               signal: abortController.signal
             })
 
-            clearTimeout(fetchTimeout)
+            if (timeoutId) clearTimeout(timeoutId)
 
             if (!response.ok) {
               const errorBody = await response.text().catch(() => '')
@@ -238,16 +240,22 @@ export class OpenAIAdapter implements ProviderAdapter {
             reader = response.body?.getReader()
             if (!reader) throw new Error('No response body')
 
-            const READ_TIMEOUT_MS = 15000
+            const READ_TIMEOUT_MS = config.connection.enable_timeout ? (config.connection.timeout || 30000) / 2 : 0
             const readWithTimeout = async (r: ReadableStreamDefaultReader): Promise<ReadableStreamReadResult<any>> => {
-              let timeoutId: any
+              let idleTimeoutId: any
               const timeoutPromise = new Promise<never>((_, rej) => {
-                timeoutId = setTimeout(() => rej(new Error('Upstream stream read timeout (15s)')), READ_TIMEOUT_MS)
+                if (READ_TIMEOUT_MS > 0) {
+                  idleTimeoutId = setTimeout(() => rej(new Error(`Upstream stream read timeout (${READ_TIMEOUT_MS}ms)`)), READ_TIMEOUT_MS)
+                }
               })
               try {
-                return await Promise.race([r.read(), timeoutPromise])
+                if (READ_TIMEOUT_MS > 0) {
+                  return await Promise.race([r.read(), timeoutPromise])
+                } else {
+                  return await r.read()
+                }
               } finally {
-                clearTimeout(timeoutId)
+                if (idleTimeoutId) clearTimeout(idleTimeoutId)
               }
             }
 
@@ -299,7 +307,7 @@ export class OpenAIAdapter implements ProviderAdapter {
           } catch (err) {
             safeError(err)
           } finally {
-            clearTimeout(fetchTimeout)
+            if (timeoutId) clearTimeout(timeoutId)
             if (reader) {
               reader.cancel().catch(() => {})
             }

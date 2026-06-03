@@ -103,7 +103,10 @@
 
           <div class="grid grid-cols-2 gap-4">
             <UFormGroup label="Timeout (ms)">
-              <UInput v-model.number="form.timeout" type="number" />
+              <div class="flex items-center gap-2">
+                <UInput v-model.number="form.timeout" type="number" class="flex-1" :disabled="!form.enable_timeout" />
+                <UCheckbox v-model="form.enable_timeout" label="Enable" />
+              </div>
             </UFormGroup>
             <UFormGroup label="Max Retries">
               <UInput v-model.number="form.max_retries" type="number" />
@@ -145,6 +148,7 @@ const form = reactive({
   base_url: '',
   api_key: '',
   timeout: 30000,
+  enable_timeout: true,
   max_retries: 3,
   version: '2023-06-01'
 })
@@ -183,6 +187,7 @@ function editProvider(provider: any) {
   form.base_url = provider.connection.base_url
   form.api_key = provider.connection.api_key
   form.timeout = provider.connection.timeout || 30000
+  form.enable_timeout = provider.connection.enable_timeout ?? true
   form.max_retries = provider.connection.max_retries || 3
   form.version = provider.connection.version || '2023-06-01'
   isModalOpen.value = true
@@ -198,6 +203,7 @@ function resetForm() {
   form.base_url = ''
   form.api_key = ''
   form.timeout = 30000
+  form.enable_timeout = true
   form.max_retries = 3
   form.version = '2023-06-01'
 }
@@ -222,6 +228,7 @@ async function saveProvider() {
       base_url: form.base_url,
       api_key: form.api_key,
       timeout: form.timeout,
+      enable_timeout: form.enable_timeout,
       max_retries: form.max_retries,
       version: form.version,
       models

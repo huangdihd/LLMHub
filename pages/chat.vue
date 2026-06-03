@@ -3,19 +3,37 @@
     <UCard class="flex flex-col h-[calc(100vh-8rem)]" :ui="{ body: { base: 'flex-1 overflow-hidden flex flex-col', padding: 'p-0 sm:p-0' } }">
       <template #header>
         <div class="space-y-3">
-          <!-- API Key -->
+          <!-- Auth Selection -->
           <div class="flex items-center gap-2">
+            <USelectMenu
+              v-model="selectedAuthId"
+              :options="authOptions"
+              value-attribute="id"
+              option-attribute="label"
+              class="w-48"
+              @update:model-value="onAuthModeChange"
+            >
+              <template #leading>
+                <UIcon name="i-heroicons-shield-check" class="w-4 h-4 text-primary" />
+              </template>
+            </USelectMenu>
+            
             <UInput
+              v-if="selectedAuthId === 'custom'"
               v-model="apiKey"
               type="password"
-              placeholder="Enter API Key"
+              placeholder="Enter Custom API Key"
               icon="i-heroicons-key"
               class="flex-1"
               size="sm"
               @update:model-value="onApiKeyChange"
             />
-            <UBadge v-if="apiKey" color="green" variant="soft" size="sm">Set</UBadge>
-            <UBadge v-else color="gray" variant="soft" size="sm">Required</UBadge>
+            <div v-else class="flex-1 flex items-center px-3 py-1 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 text-xs text-gray-500 italic">
+              {{ selectedAuthId === 'session' ? 'Using Admin Session Permissions' : 'Using Pre-defined Token Permissions' }}
+            </div>
+
+            <UBadge v-if="apiKey || selectedAuthId === 'session'" color="green" variant="soft" size="sm">Auth Set</UBadge>
+            <UBadge v-else color="gray" variant="soft" size="sm">Auth Required</UBadge>
           </div>
           <!-- Model + Endpoint -->
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -26,6 +44,7 @@
               option-attribute="id"
               placeholder="Select a model"
               class="w-full sm:w-64"
+              searchable
             />
             <div class="flex items-center gap-4 w-full sm:w-auto">
               <USelectMenu
@@ -82,6 +101,8 @@ import { marked } from 'marked'
 import { ref, onMounted, nextTick } from 'vue'
 
 const models = ref<any[]>([])
+const availableKeys = ref<any[]>([])
+const selectedAuthId = ref('session')
 const selectedModel = ref('')
 const messages = ref<{ role: string; content: string; loading?: boolean }[]>([])
 const input = ref('')
@@ -90,6 +111,18 @@ const chatContainer = ref<HTMLElement | null>(null)
 const useStream = ref(true)
 const apiKey = ref('')
 const hasSession = ref(false)
+
+const authOptions = computed(() => {
+  const opts = []
+  if (hasSession.value) {
+    opts.push({ label: 'Admin Session', id: 'session' })
+  }
+  opts.push({ label: 'Custom API Key', id: 'custom' })
+  availableKeys.value.forEach(k => {
+    opts.push({ label: `Key: ${k.name}`, id: k.id, value: k.key })
+  })
+  return opts
+})
 
 const endpoints = [
   { label: 'OpenAI Chat Completions', value: '/api/openai/chat/completions' },
@@ -114,37 +147,47 @@ function renderMarkdownWithCursor(content: string, loading?: boolean): string {
   return html
 }
 
+function onAuthModeChange() {
+  const opt = authOptions.value.find(o => o.id === selectedAuthId.value)
+  if (!opt) return
+
+  if (opt.id === 'session') {
+    apiKey.value = ''
+  } else if (opt.id === 'custom') {
+    const saved = localStorage.getItem('llmhub_api_key')
+    apiKey.value = saved || ''
+  } else {
+    apiKey.value = (opt as any).value
+  }
+  loadModels()
+}
+
 function onApiKeyChange(val: string) {
-  localStorage.setItem('llmhub_api_key', val)
+  if (selectedAuthId.value === 'custom') {
+    localStorage.setItem('llmhub_api_key', val)
+  }
   loadModels()
 }
 
 async function loadModels() {
   try {
-    // 1. Try to load models using session (hub-auth)
-    const hubRes = await $fetch('/api/hub/models').catch(() => null)
-    if (hubRes && (hubRes as any).models) {
-      models.value = (hubRes as any).models.map((m: any) => ({ id: m.id }))
-      hasSession.value = true
-      return
+    const headers: Record<string, string> = {}
+    if (apiKey.value) {
+      headers['Authorization'] = `Bearer ${apiKey.value}`
     }
 
-    // 2. Fallback to API Key if no session or hub-auth failed
-    if (!apiKey.value) {
-      models.value = []
-      hasSession.value = false
-      return
+    // If using session (no apiKey) and we have a session, use hub endpoint for all models
+    if (!apiKey.value && hasSession.value) {
+      const hubRes = await $fetch('/api/hub/models').catch(() => null)
+      if (hubRes && (hubRes as any).models) {
+        models.value = (hubRes as any).models.map((m: any) => ({ id: m.id }))
+        return
+      }
     }
 
-    const res = await fetch('/api/openai/models', {
-      headers: { 'Authorization': `Bearer ${apiKey.value}` }
-    })
-    if (!res.ok) {
-      models.value = []
-      return
-    }
-    const data = await res.json()
-    models.value = (data.data || []).map((m: any) => ({ id: m.id }))
+    // Otherwise use OpenAI models endpoint (which now supports session cookies too)
+    const data = await $fetch('/api/openai/models', { headers })
+    models.value = ((data as any).data || []).map((m: any) => ({ id: m.id }))
   } catch (e) {
     console.error('Failed to load models:', e)
     models.value = []
@@ -152,10 +195,26 @@ async function loadModels() {
 }
 
 onMounted(async () => {
+  // 1. Check session status
+  try {
+    const status = await $fetch('/api/auth/status').catch(() => ({ authenticated: false }))
+    hasSession.value = (status as any).authenticated
+    
+    if (hasSession.value) {
+      const keysData = await $fetch('/api/hub/keys').catch(() => ({ keys: [] }))
+      availableKeys.value = (keysData as any).keys || []
+    }
+  } catch {}
+
+  // 2. Initial Auth Mode
   const saved = localStorage.getItem('llmhub_api_key')
-  if (saved) {
+  if (saved && !hasSession.value) {
+    selectedAuthId.value = 'custom'
     apiKey.value = saved
+  } else if (!hasSession.value) {
+    selectedAuthId.value = 'custom'
   }
+  
   await loadModels()
 })
 

@@ -76,9 +76,20 @@ export class OpenAIChatParser implements ProtocolParser {
           return { type: 'text' as const, text: part.text }
         }
         if (part.type === 'image_url') {
+          const url = part.image_url.url
+          if (url.startsWith('data:')) {
+            const match = url.match(/^data:([^;]+);base64,(.+)$/)
+            if (match) {
+              return {
+                type: 'image' as const,
+                imageBase64: match[2],
+                imageMediaType: match[1]
+              }
+            }
+          }
           return {
             type: 'image' as const,
-            imageUrl: part.image_url.url
+            imageUrl: url
           }
         }
         return { type: 'text' as const, text: '' }

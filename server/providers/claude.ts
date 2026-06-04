@@ -99,9 +99,17 @@ export class ClaudeAdapter implements ProviderAdapter {
     return content.map(block => {
       if (block.type === 'text') return { type: 'text', text: block.text }
       if (block.type === 'image') {
-        if (block.imageUrl) return { type: 'image', source: { type: 'url', url: block.imageUrl } }
         if (block.imageBase64) {
-          return { type: 'image', source: { type: 'base64', media_type: block.imageMediaType, data: block.imageBase64 } }
+          return { type: 'image', source: { type: 'base64', media_type: block.imageMediaType || 'image/jpeg', data: block.imageBase64 } }
+        }
+        if (block.imageUrl) {
+          if (block.imageUrl.startsWith('data:')) {
+            const match = block.imageUrl.match(/^data:([^;]+);base64,(.+)$/)
+            if (match) {
+              return { type: 'image', source: { type: 'base64', media_type: match[1], data: match[2] } }
+            }
+          }
+          return { type: 'image', source: { type: 'url', url: block.imageUrl } }
         }
       }
       if (block.type === 'tool_use') {

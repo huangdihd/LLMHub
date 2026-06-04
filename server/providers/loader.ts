@@ -81,12 +81,18 @@ export class ProviderLoader {
 
     for (const model of data.data || []) {
       const modelConfig = config.models.find(m => m.id === model.id)
+      
+      // 从上游 API 获取 capabilities，尝试多种字段名
+      // 获取不到就返回空对象，让客户端认为不支持
+      const upstreamCapabilities = model.capabilities || model.supported_capabilities || model.abilities
+      const capabilities = modelConfig?.capabilities || upstreamCapabilities || {}
+      
       models.push({
         id: `${config.name}/${model.id}`,
         provider: config.name,
         name: model.id,
-        display_name: modelConfig?.display_name || model.id,
-        capabilities: modelConfig?.capabilities
+        display_name: modelConfig?.display_name || model.display_name || model.id,
+        capabilities
       })
     }
 

@@ -105,17 +105,29 @@ export class GeminiAdapter implements ProviderAdapter {
       if (block.type === 'text' && block.text) {
         parts.push({ text: block.text })
       } else if (block.type === 'image') {
-        if (block.imageUrl) {
-          parts.push({
-            fileData: {
-              fileUri: block.imageUrl,
-              mimeType: block.imageMediaType || 'image/jpeg'
-            }
-          })
-        } else if (block.imageBase64) {
+        if (block.imageBase64) {
           parts.push({
             inlineData: {
               data: block.imageBase64,
+              mimeType: block.imageMediaType || 'image/jpeg'
+            }
+          })
+        } else if (block.imageUrl) {
+          if (block.imageUrl.startsWith('data:')) {
+            const match = block.imageUrl.match(/^data:([^;]+);base64,(.+)$/)
+            if (match) {
+              parts.push({
+                inlineData: {
+                  data: match[2],
+                  mimeType: match[1]
+                }
+              })
+              continue
+            }
+          }
+          parts.push({
+            fileData: {
+              fileUri: block.imageUrl,
               mimeType: block.imageMediaType || 'image/jpeg'
             }
           })

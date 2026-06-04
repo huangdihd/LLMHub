@@ -3,6 +3,7 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/references/anthropic-sdk-typescript" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/references/google-genai-typescript" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/references/openai-node" vcs="Git" />
   </component>
 </project>

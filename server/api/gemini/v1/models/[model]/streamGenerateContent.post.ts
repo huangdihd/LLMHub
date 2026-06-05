@@ -8,7 +8,10 @@ export default defineEventHandler(async (event) => {
   const params = event.context.params || {}
   const modelFromUrl = params.model ? decodeURIComponent(params.model) : undefined
 
-  const fullModel = body.model || modelFromUrl
+  // Use resolved fallback model if set by auth middleware
+  const resolvedModel = (event as any).context?._resolvedModel
+
+  const fullModel = (resolvedModel && resolvedModel !== modelFromUrl) ? resolvedModel : (body.model || modelFromUrl)
 
   let request
   try {
@@ -83,12 +86,12 @@ export default defineEventHandler(async (event) => {
             if (unifiedChunk.type === 'done') {
               if (doneSent) {
                 const u = (unifiedChunk as any).usage
-                if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
+                if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
                 return
               }
               doneSent = true
               const u = (unifiedChunk as any).usage
-              if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
+              if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
               const serializedChunk = serializer!.serializeStreamChunk(unifiedChunk)
               event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
             } else if (unifiedChunk.type !== 'content' || unifiedChunk.delta) {

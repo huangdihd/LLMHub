@@ -84,9 +84,9 @@ export default defineEventHandler(async (event) => {
         }
 
         if (streamUsage) {
-          trackUsage(event, (streamUsage.prompt_tokens || 0) + (streamUsage.completion_tokens || streamUsage.total_tokens || 0))
+          trackUsage(event, (streamUsage.prompt_tokens || 0) + (streamUsage.completion_tokens || streamUsage.total_tokens || 0), request.model)
         } else {
-          trackUsage(event, 0)
+          trackUsage(event, 0, request.model)
         }
       } catch (streamError: any) {
         const resp = formatErrorResponse(streamError)
@@ -107,7 +107,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const u = response.usage
-    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0))
+    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0), request.model)
     return serializer.serializeResponse(response)
   } catch (error: any) {
     throwFormattedError(error)

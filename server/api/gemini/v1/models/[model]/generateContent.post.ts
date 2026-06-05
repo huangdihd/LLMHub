@@ -8,8 +8,11 @@ export default defineEventHandler(async (event) => {
   const params = event.context.params || {}
   const modelFromUrl = params.model ? decodeURIComponent(params.model) : undefined
 
+  // Use resolved fallback model if set by auth middleware
+  const resolvedModel = (event as any).context?._resolvedModel
+
   // Build the full model ID with provider prefix from body
-  const fullModel = body.model || modelFromUrl
+  const fullModel = (resolvedModel && resolvedModel !== modelFromUrl) ? resolvedModel : (body.model || modelFromUrl)
 
   let request
   try {
@@ -37,7 +40,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const u = response.usage
-    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0))
+    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0), request.model)
     return serializer.serializeResponse(response)
   } catch (error: any) {
     throwFormattedError(error)

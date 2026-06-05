@@ -18,10 +18,11 @@ export const incrementCalls = async () => {
  * Call from non-streaming handlers with actual token counts.
  * Call from streaming handlers with tokens=0 to just count the call.
  */
-export async function trackUsage(event: H3Event, tokens: number): Promise<void> {
+export async function trackUsage(event: H3Event, tokens: number, model?: string): Promise<void> {
   const record = (event as any).context?._apiKeyRecord
   if (!record) return
   try {
-    await getAuthStore().addUsage(record, tokens)
+    const provider = model?.includes('/') ? model.split('/')[0] : undefined
+    await getAuthStore().addUsage(record, tokens, model, provider)
   } catch {}
 }

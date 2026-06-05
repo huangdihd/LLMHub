@@ -18,10 +18,13 @@
           <div class="flex justify-between items-center">
             <div class="flex items-center gap-2">
               <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ key.name }}</h3>
-              <UBadge v-if="key.monthly_limit > 0" :color="key.tokens_used >= key.monthly_limit ? 'red' : 'green'" variant="soft">
+              <UBadge v-if="Number(key.monthly_limit) > 0" :color="Number(key.tokens_used) >= Number(key.monthly_limit) ? 'red' : 'green'" variant="soft">
                 {{ key.tokens_used.toLocaleString() }} / {{ key.monthly_limit.toLocaleString() }} tokens
               </UBadge>
               <UBadge v-else color="gray" variant="soft">Unlimited</UBadge>
+              <UBadge v-if="key.fallback_strategy?.enabled" color="orange" variant="soft">
+                Auto: {{ key.fallback_strategy.name || 'auto' }}
+              </UBadge>
             </div>
             <div class="flex items-center gap-2">
               <UButton color="gray" variant="ghost" icon="i-heroicons-pencil-square" @click="openEditModal(key)">Edit</UButton>
@@ -71,6 +74,34 @@
           <p v-if="key.allowed_providers.length === 0 && key.allowed_models.length === 0" class="text-gray-400 italic">
             Access to all providers and models
           </p>
+
+          <div v-if="modelQuotaEntries(key).length > 0">
+            <span class="text-gray-500 dark:text-gray-400">Model Quotas:</span>
+            <div class="flex flex-wrap gap-1 mt-1">
+              <UBadge v-for="mq in modelQuotaEntries(key)" :key="mq.id" color="pink" variant="soft">
+                {{ mq.id }}: {{ mq.limit.toLocaleString() }}
+              </UBadge>
+            </div>
+          </div>
+
+          <div v-if="providerQuotaEntries(key).length > 0">
+            <span class="text-gray-500 dark:text-gray-400">Provider Quotas:</span>
+            <div class="flex flex-wrap gap-1 mt-1">
+              <UBadge v-for="pq in providerQuotaEntries(key)" :key="pq.id" color="yellow" variant="soft">
+                {{ pq.id }}: {{ pq.limit.toLocaleString() }}
+              </UBadge>
+            </div>
+          </div>
+
+          <div v-if="key.fallback_strategy?.enabled && key.fallback_strategy?.priority?.length > 0">
+            <span class="text-gray-500 dark:text-gray-400">Fallback:</span>
+            <div class="flex flex-wrap gap-1 mt-1 items-center">
+              <span v-for="(m, i) in key.fallback_strategy.priority" :key="m" class="flex items-center gap-0">
+                <UBadge color="orange" variant="soft">{{ m }}</UBadge>
+                <span v-if="Number(i) < key.fallback_strategy.priority.length - 1" class="mx-0.5 text-gray-400">&rarr;</span>
+              </span>
+            </div>
+          </div>
         </div>
       </UCard>
 
@@ -82,7 +113,7 @@
     </div>
 
     <!-- Create / Edit Modal -->
-    <UModal v-model="isModalOpen">
+    <UModal v-model="isModalOpen" :ui="{ width: 'max-w-2xl' }">
       <UCard :ui="{ ring: '', divide: 'divide-y divide-gray-100 dark:divide-gray-800' }">
         <template #header>
           <div class="flex items-center justify-between">
@@ -169,6 +200,113 @@
             </USelectMenu>
           </UFormGroup>
 
+          <!-- Model Quotas -->
+          <UFormGroup help="Set monthly token limits per model. 0 = unlimited.">
+            <template #label>
+              <span>Model Quotas</span>
+            </template>
+            <div class="space-y-2">
+              <div v-for="(entry, i) in form.modelQuotaList" :key="i" class="flex items-center gap-2">
+                <USelectMenu
+                  v-model="entry.model"
+                  :options="filteredModelOptions"
+                  searchable
+                  placeholder="Pick model"
+                  value-attribute="id"
+                  option-attribute="label"
+                  class="flex-1"
+                >
+                  <template #label>
+                    <span v-if="!entry.model" class="text-gray-400">Pick model</span>
+                    <span v-else class="font-mono text-sm">{{ entry.model }}</span>
+                  </template>
+                </USelectMenu>
+                <UInput v-model.number="entry.limit" type="number" min="0" step="10000" placeholder="Limit" class="w-32" />
+                <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="form.modelQuotaList.splice(i, 1)" />
+              </div>
+              <UButton color="blue" variant="soft" size="sm" @click="form.modelQuotaList.push({ model: '', limit: 0 })">
+                + Add Model Quota
+              </UButton>
+            </div>
+          </UFormGroup>
+
+          <!-- Provider Quotas -->
+          <UFormGroup help="Set monthly token limits per provider. 0 = unlimited.">
+            <template #label>
+              <span>Provider Quotas</span>
+            </template>
+            <div class="space-y-2">
+              <div v-for="(entry, i) in form.providerQuotaList" :key="i" class="flex items-center gap-2">
+                <USelectMenu
+                  v-model="entry.provider"
+                  :options="providerOptions"
+                  searchable
+                  placeholder="Pick provider"
+                  value-attribute="id"
+                  option-attribute="label"
+                  class="flex-1"
+                >
+                  <template #label>
+                    <span v-if="!entry.provider" class="text-gray-400">Pick provider</span>
+                    <span v-else class="font-mono text-sm">{{ entry.provider }}</span>
+                  </template>
+                </USelectMenu>
+                <UInput v-model.number="entry.limit" type="number" min="0" step="100000" placeholder="Limit" class="w-32" />
+                <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="form.providerQuotaList.splice(i, 1)" />
+              </div>
+              <UButton color="blue" variant="soft" size="sm" @click="form.providerQuotaList.push({ provider: '', limit: 0 })">
+                + Add Provider Quota
+              </UButton>
+            </div>
+          </UFormGroup>
+
+          <!-- Fallback Strategy -->
+          <UCard :ui="{ body: { padding: 'p-4' }, ring: 'ring-1 ring-gray-200 dark:ring-gray-700' }">
+            <template #header>
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-900 dark:text-white">Fallback Strategy (Auto Model)</span>
+                <UToggle v-model="form.fallbackEnabled" />
+              </div>
+            </template>
+
+            <div v-if="form.fallbackEnabled" class="space-y-4">
+              <UFormGroup label="Virtual Model Name" help="The model name clients should use to trigger fallback">
+                <UInput v-model="form.fallbackName" placeholder="auto" />
+              </UFormGroup>
+
+              <UFormGroup help="Ordered priority list. First available model will be used.">
+                <template #label>
+                  <span>Priority List</span>
+                </template>
+                <div class="space-y-2">
+                  <div v-for="(entry, i) in form.fallbackPriority" :key="i" class="flex items-center gap-2">
+                    <span class="text-xs text-gray-400 w-6 text-right">{{ i + 1 }}.</span>
+                    <USelectMenu
+                      v-model="form.fallbackPriority[i]"
+                      :options="filteredModelOptions"
+                      searchable
+                      placeholder="Pick model"
+                      value-attribute="id"
+                      option-attribute="label"
+                      class="flex-1"
+                    >
+                      <template #label>
+                        <span v-if="!form.fallbackPriority[i]" class="text-gray-400">Pick model</span>
+                        <span v-else class="font-mono text-sm">{{ form.fallbackPriority[i] }}</span>
+                      </template>
+                    </USelectMenu>
+                    <UButton color="red" variant="ghost" icon="i-heroicons-trash" size="xs" @click="form.fallbackPriority.splice(i, 1)" />
+                  </div>
+                  <div class="flex gap-2">
+                    <UButton color="blue" variant="soft" size="sm" @click="form.fallbackPriority.push('')">
+                      + Add Priority
+                    </UButton>
+                  </div>
+                </div>
+              </UFormGroup>
+            </div>
+          </UCard>
+
           <!-- Newly created key -->
           <div v-if="newKeyPlain" class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
             <p class="text-sm font-medium text-green-800 dark:text-green-300 mb-2">Your new API key (copy now — it won't be shown again):</p>
@@ -205,11 +343,19 @@ const newKeyPlain = ref('')
 const availableProviders = ref<{ name: string; display_name: string }[]>([])
 const availableModels = ref<{ id: string; name: string; provider: string }[]>([])
 
+interface QuotaEntry { model: string; limit: number }
+interface ProviderQuotaEntry { provider: string; limit: number }
+
 const form = reactive({
   name: '',
   monthly_limit: 0,
   selectedProviders: [] as string[],
-  selectedModels: [] as string[]
+  selectedModels: [] as string[],
+  modelQuotaList: [] as QuotaEntry[],
+  providerQuotaList: [] as ProviderQuotaEntry[],
+  fallbackEnabled: false,
+  fallbackName: 'auto',
+  fallbackPriority: [] as string[]
 })
 
 const providerOptions = computed(() =>
@@ -224,6 +370,20 @@ const filteredModelOptions = computed(() => {
   }
   return models.map(m => ({ id: m.id, name: m.name, provider: m.provider, label: m.id }))
 })
+
+function modelQuotaEntries(key: any): { id: string; limit: number }[] {
+  const quotas: Record<string, number> = key.model_quotas || {}
+  return Object.entries(quotas)
+    .filter(([, limit]) => limit > 0)
+    .map(([id, limit]) => ({ id, limit }))
+}
+
+function providerQuotaEntries(key: any): { id: string; limit: number }[] {
+  const quotas: Record<string, number> = key.provider_quotas || {}
+  return Object.entries(quotas)
+    .filter(([, limit]) => limit > 0)
+    .map(([id, limit]) => ({ id, limit }))
+}
 
 onMounted(async () => {
   try {
@@ -260,6 +420,22 @@ function openEditModal(key: any) {
   form.monthly_limit = key.monthly_limit || 0
   form.selectedProviders = [...(key.allowed_providers || [])]
   form.selectedModels = [...(key.allowed_models || [])]
+
+  const mq = key.model_quotas || {}
+  form.modelQuotaList = Object.entries(mq)
+    .filter(([, limit]) => (limit as number) > 0)
+    .map(([model, limit]) => ({ model, limit: limit as number }))
+
+  const pq = key.provider_quotas || {}
+  form.providerQuotaList = Object.entries(pq)
+    .filter(([, limit]) => (limit as number) > 0)
+    .map(([provider, limit]) => ({ provider, limit: limit as number }))
+
+  const fs = key.fallback_strategy
+  form.fallbackEnabled = fs?.enabled || false
+  form.fallbackName = fs?.name || 'auto'
+  form.fallbackPriority = [...(fs?.priority || [])]
+
   newKeyPlain.value = ''
   isModalOpen.value = true
 }
@@ -269,6 +445,11 @@ function resetForm() {
   form.monthly_limit = 0
   form.selectedProviders = []
   form.selectedModels = []
+  form.modelQuotaList = []
+  form.providerQuotaList = []
+  form.fallbackEnabled = false
+  form.fallbackName = 'auto'
+  form.fallbackPriority = []
 }
 
 function closeModal() {
@@ -277,14 +458,41 @@ function closeModal() {
   newKeyPlain.value = ''
 }
 
+function buildModelQuotas(entries: QuotaEntry[]): Record<string, number> {
+  const result: Record<string, number> = {}
+  for (const e of entries) {
+    if (e.model && e.limit > 0) {
+      result[e.model] = e.limit
+    }
+  }
+  return result
+}
+
+function buildProviderQuotas(entries: ProviderQuotaEntry[]): Record<string, number> {
+  const result: Record<string, number> = {}
+  for (const e of entries) {
+    if (e.provider && e.limit > 0) {
+      result[e.provider] = e.limit
+    }
+  }
+  return result
+}
+
 async function saveKey() {
   saving.value = true
   try {
-    const payload = {
+    const payload: any = {
       name: form.name,
       monthly_limit: form.monthly_limit,
       allowed_providers: form.selectedProviders,
-      allowed_models: form.selectedModels
+      allowed_models: form.selectedModels,
+      model_quotas: buildModelQuotas(form.modelQuotaList),
+      provider_quotas: buildProviderQuotas(form.providerQuotaList),
+      fallback_strategy: {
+        enabled: form.fallbackEnabled,
+        name: form.fallbackName || 'auto',
+        priority: form.fallbackPriority.filter(m => m)
+      }
     }
 
     if (editingKey.value) {

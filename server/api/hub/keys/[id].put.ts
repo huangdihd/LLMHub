@@ -9,6 +9,9 @@ export default defineEventHandler(async (event) => {
   if (body.allowed_providers !== undefined) patch.allowed_providers = body.allowed_providers
   if (body.allowed_models !== undefined) patch.allowed_models = body.allowed_models
   if (body.monthly_limit !== undefined) patch.monthly_limit = body.monthly_limit
+  if (body.model_quotas !== undefined) patch.model_quotas = body.model_quotas
+  if (body.provider_quotas !== undefined) patch.provider_quotas = body.provider_quotas
+  if (body.fallback_strategy !== undefined) patch.fallback_strategy = body.fallback_strategy
 
   const store = getAuthStore()
   const updated = await store.updateKey(id, patch)

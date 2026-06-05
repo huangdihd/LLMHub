@@ -22,6 +22,21 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // Include fallback virtual model if key has fallback enabled
+    if (record?.fallback_strategy?.enabled) {
+      const fallbackName = record.fallback_strategy.name || 'auto'
+      const existing = models.find(m => m.id === fallbackName)
+      if (!existing) {
+        models.unshift({
+          id: fallbackName,
+          provider: 'fallback',
+          name: fallbackName,
+          display_name: `Auto (${record.fallback_strategy.priority.length} models)`,
+          capabilities: { tools: true, vision: true, streaming: true }
+        })
+      }
+    }
+
     return {
       object: 'list',
       data: models.map(m => ({

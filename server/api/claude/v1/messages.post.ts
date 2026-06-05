@@ -179,14 +179,14 @@ export default defineEventHandler(async (event) => {
             if (streamDone) {
               // Some providers split usage into a separate chunk — capture if available
               const u = (unifiedChunk as any).usage
-              if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
+              if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
               return
             }
             streamDone = true
 
             // Track token usage from the final chunk
             const u = (unifiedChunk as any).usage
-            if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
+            if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
 
             // Flush any remaining buffered thinking
             if (thinkingBuffer.length > 0 && !thinkingFlushed) {
@@ -274,7 +274,7 @@ export default defineEventHandler(async (event) => {
       throw new Error('Serializer not found')
     }
     const u = response.usage
-    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0))
+    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0), request.model)
     return serializer.serializeResponse(response)
   } catch (error: any) {
     throw createError({ statusCode: 400, message: error.message })

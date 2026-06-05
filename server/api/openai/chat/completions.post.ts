@@ -81,13 +81,13 @@ export default defineEventHandler(async (event) => {
                 if (doneSent) {
                   // Provider may split usage into a separate chunk — still capture
                   const u = (unifiedChunk as any).usage
-                  if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
+                  if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
                   return
                 }
                 doneSent = true
                 // Track token usage from the final chunk
                 const u = (unifiedChunk as any).usage
-                if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0))
+                if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
                 const serializedChunk = serializer!.serializeStreamChunk(unifiedChunk)
                 event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
                 event.node.res.write('data: [DONE]\n\n')
@@ -129,7 +129,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const u = response.usage
-    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0))
+    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0), request.model)
     return serializer.serializeResponse(response)
   } catch (error: any) {
     throwFormattedError(error)

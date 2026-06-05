@@ -1,6 +1,7 @@
 import { getHeader, readBody, setResponseStatus, setResponseHeader, send } from 'h3'
 import type { H3Event } from 'h3'
 import { getAuthStore } from '../stores/auth.store'
+import { resolveFallbackModel } from '../utils/fallback'
 
 export default defineEventHandler(async (event: H3Event) => {
   if (!event.path.startsWith('/api/claude')) return
@@ -25,7 +26,12 @@ export default defineEventHandler(async (event: H3Event) => {
           tokens_used: 0,
           monthly_limit: 0,
           allowed_providers: [],
-          allowed_models: []
+          allowed_models: [],
+          model_quotas: {},
+          model_usage: {},
+          provider_quotas: {},
+          provider_usage: {},
+          fallback_strategy: { enabled: false, name: 'auto', priority: [] }
         }
         return
       }
@@ -45,9 +51,42 @@ export default defineEventHandler(async (event: H3Event) => {
 
   if (event.method === 'POST') {
     const body = await readBody(event).catch(() => ({}))
-    const model = body?.model || ''
-    if (model && !checkAccess(record, model)) {
-      return sendAuthError(event, 403, `Model "${model}" is not allowed for this API key.`, 'access_denied')
+    let model = body?.model || ''
+
+    if (model) {
+      if (record.fallback_strategy?.enabled && model === record.fallback_strategy.name) {
+        const result = resolveFallbackModel(record)
+        if (result.exhausted) {
+          return sendAuthError(event, 429, 'All fallback models exhausted.', 'fallback_exhausted')
+        }
+        if (result.resolved) {
+          model = result.resolved
+          body.model = model
+        }
+      }
+
+      if (!checkAccess(record, model)) {
+        return sendAuthError(event, 403, `Model "${model}" is not allowed for this API key.`, 'access_denied')
+      }
+
+      const modelQuota = record.model_quotas?.[model] || 0
+      if (modelQuota > 0) {
+        const modelUsed = record.model_usage?.[model] || 0
+        if (modelUsed >= modelQuota) {
+          return sendAuthError(event, 429, `Model "${model}" quota (${modelQuota}) exceeded.`, 'model_quota_exceeded')
+        }
+      }
+
+      const provider = model.includes('/') ? model.split('/')[0] : ''
+      if (provider) {
+        const providerQuota = record.provider_quotas?.[provider] || 0
+        if (providerQuota > 0) {
+          const providerUsed = record.provider_usage?.[provider] || 0
+          if (providerUsed >= providerQuota) {
+            return sendAuthError(event, 429, `Provider "${provider}" quota (${providerQuota}) exceeded.`, 'provider_quota_exceeded')
+          }
+        }
+      }
     }
   }
 

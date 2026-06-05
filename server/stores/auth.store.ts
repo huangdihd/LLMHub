@@ -4,6 +4,12 @@ import crypto from 'crypto'
 // Types
 // ============================================================
 
+export interface FallbackStrategy {
+  enabled: boolean
+  name: string
+  priority: string[]
+}
+
 export interface ApiKeyRecord {
   id: string
   name: string
@@ -15,6 +21,11 @@ export interface ApiKeyRecord {
   current_month: string        // "2025-06"
   call_count: number           // total
   created_at: string
+  model_quotas: Record<string, number>     // model_id -> monthly token limit
+  model_usage: Record<string, number>      // model_id -> tokens used this month
+  provider_quotas: Record<string, number>  // provider_name -> monthly token limit
+  provider_usage: Record<string, number>   // provider_name -> tokens used this month
+  fallback_strategy: FallbackStrategy
 }
 
 export interface ApiKeyPublic {
@@ -26,6 +37,11 @@ export interface ApiKeyPublic {
   tokens_used: number
   call_count: number
   created_at: string
+  model_quotas: Record<string, number>
+  model_usage: Record<string, number>
+  provider_quotas: Record<string, number>
+  provider_usage: Record<string, number>
+  fallback_strategy: FallbackStrategy
 }
 
 export interface BruteForceConfig {
@@ -63,7 +79,12 @@ export class AuthStore {
       tokens_used: 0,
       current_month: this.monthKey(),
       call_count: 0,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      model_quotas: {},
+      model_usage: {},
+      provider_quotas: {},
+      provider_usage: {},
+      fallback_strategy: { enabled: false, name: 'auto', priority: [] }
     }
 
     const keys = await this.readKeys()
@@ -80,6 +101,8 @@ export class AuthStore {
     for (const k of keys) {
       if (k.current_month !== month) {
         k.tokens_used = 0
+        k.model_usage = k.model_usage ? {} : {}
+        k.provider_usage = k.provider_usage ? {} : {}
         k.current_month = month
         changed = true
       }
@@ -94,7 +117,12 @@ export class AuthStore {
       monthly_limit: k.monthly_limit,
       tokens_used: k.tokens_used,
       call_count: k.call_count,
-      created_at: k.created_at
+      created_at: k.created_at,
+      model_quotas: k.model_quotas || {},
+      model_usage: k.model_usage || {},
+      provider_quotas: k.provider_quotas || {},
+      provider_usage: k.provider_usage || {},
+      fallback_strategy: k.fallback_strategy || { enabled: false, name: 'auto', priority: [] }
     }))
   }
 
@@ -115,8 +143,8 @@ export class AuthStore {
     const idx = keys.findIndex(k => k.id === id)
     if (idx === -1) return null
 
-    // Cannot modify hash, id, tokens_used, call_count via patch
-    const { hash, tokens_used, call_count, current_month, id: _id, ...allowed } = patch
+    // Cannot modify hash, id, tokens_used, call_count, model_usage, provider_usage via patch
+    const { hash, tokens_used, call_count, current_month, id: _id, model_usage, provider_usage, ...allowed } = patch
     Object.assign(keys[idx], allowed)
     await this.writeKeys(keys)
     return keys[idx]
@@ -131,7 +159,7 @@ export class AuthStore {
   }
 
   /** Increment usage for a key record. Must pass the record (already looked up). */
-  async addUsage(record: ApiKeyRecord, tokens: number): Promise<void> {
+  async addUsage(record: ApiKeyRecord, tokens: number, model?: string, provider?: string): Promise<void> {
     const keys = await this.readKeys()
     const target = keys.find(k => k.id === record.id)
     if (!target) return
@@ -139,10 +167,22 @@ export class AuthStore {
     const month = this.monthKey()
     if (target.current_month !== month) {
       target.tokens_used = 0
+      target.model_usage = target.model_usage ? {} : {}
+      target.provider_usage = target.provider_usage ? {} : {}
       target.current_month = month
     }
     target.tokens_used += tokens
     target.call_count += 1
+
+    if (model) {
+      if (!target.model_usage) target.model_usage = {}
+      target.model_usage[model] = (target.model_usage[model] || 0) + tokens
+    }
+    if (provider) {
+      if (!target.provider_usage) target.provider_usage = {}
+      target.provider_usage[provider] = (target.provider_usage[provider] || 0) + tokens
+    }
+
     await this.writeKeys(keys)
   }
 
@@ -217,6 +257,41 @@ export class AuthStore {
 
   async clearBruteForce(ip: string): Promise<void> {
     await useStorage('data').removeItem(`auth:bf:${ip}`)
+  }
+
+  // ---- Model Cleanup ---------------------------------------------
+
+  /** Remove stale model references from all keys after provider model list changes. */
+  async cleanupStaleModels(validModelIds: Set<string>): Promise<void> {
+    const keys = await this.readKeys()
+    let changed = false
+    for (const k of keys) {
+      // Clean up allowed_models
+      if (k.allowed_models?.length > 0) {
+        const before = k.allowed_models.length
+        k.allowed_models = k.allowed_models.filter(m => validModelIds.has(m))
+        if (k.allowed_models.length !== before) changed = true
+      }
+      // Clean up model_quotas
+      if (k.model_quotas) {
+        for (const m of Object.keys(k.model_quotas)) {
+          if (!validModelIds.has(m)) {
+            delete k.model_quotas[m]
+            changed = true
+          }
+        }
+      }
+      // Clean up model_usage
+      if (k.model_usage) {
+        for (const m of Object.keys(k.model_usage)) {
+          if (!validModelIds.has(m)) {
+            delete k.model_usage[m]
+            changed = true
+          }
+        }
+      }
+    }
+    if (changed) await this.writeKeys(keys)
   }
 
   // ---- Internal --------------------------------------------------

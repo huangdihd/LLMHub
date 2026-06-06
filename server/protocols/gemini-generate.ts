@@ -72,6 +72,7 @@ export class GeminiGenerateParser implements ProtocolParser {
     }
 
     const genConfig = body.generationConfig || {}
+    const thinkConfig = body.thinkingConfig || {}
     const modelId = modelFromUrl || body.model
 
     return {
@@ -82,7 +83,11 @@ export class GeminiGenerateParser implements ProtocolParser {
         temperature: genConfig.temperature,
         topP: genConfig.topP,
         stop: genConfig.stopSequences,
-        systemPrompt
+        systemPrompt,
+        thinkingConfig: Object.keys(thinkConfig).length > 0 ? {
+          thinkingBudget: thinkConfig.thinkingBudget,
+          includeThoughts: thinkConfig.includeThoughts
+        } : undefined
       },
       tools: this.extractTools(body.tools),
       stream: false

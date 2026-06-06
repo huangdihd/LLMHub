@@ -80,6 +80,16 @@ export class GeminiAdapter implements ProviderAdapter {
       payload.generationConfig.stopSequences = request.config.stop
     }
 
+    if (request.config.thinkingConfig) {
+      payload.thinkingConfig = {}
+      if (request.config.thinkingConfig.thinkingBudget != null) {
+        payload.thinkingConfig.thinkingBudget = request.config.thinkingConfig.thinkingBudget
+      }
+      if (request.config.thinkingConfig.includeThoughts != null) {
+        payload.thinkingConfig.includeThoughts = request.config.thinkingConfig.includeThoughts
+      }
+    }
+
     if (request.tools && request.tools.length > 0) {
       payload.tools = [{
         functionDeclarations: request.tools.map(t => ({
@@ -151,7 +161,7 @@ export class GeminiAdapter implements ProviderAdapter {
           }
         })
       } else if (block.type === 'thinking') {
-        parts.push({ text: block.thinking || '' })
+        parts.push({ text: block.thinking || '', thought: true })
       }
     }
     return parts
@@ -336,7 +346,11 @@ export class GeminiAdapter implements ProviderAdapter {
 
     for (const part of parts) {
       if (part.text) {
-        content.push({ type: 'text', text: part.text })
+        if (part.thought === true) {
+          content.push({ type: 'thinking', thinking: part.text })
+        } else {
+          content.push({ type: 'text', text: part.text })
+        }
       }
       if (part.functionCall) {
         toolCalls.push({
@@ -380,7 +394,11 @@ export class GeminiAdapter implements ProviderAdapter {
 
     for (const part of parts) {
       if (part.text) {
-        chunks.push({ type: 'content', delta: part.text })
+        if (part.thought === true) {
+          chunks.push({ type: 'thinking', delta: part.text })
+        } else {
+          chunks.push({ type: 'content', delta: part.text })
+        }
       }
       if (part.functionCall) {
         chunks.push({

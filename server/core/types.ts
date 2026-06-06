@@ -63,6 +63,10 @@ export interface GenerateConfig {
   topP?: number
   stop?: string[]
   systemPrompt?: string
+  thinkingConfig?: {
+    thinkingBudget?: number
+    includeThoughts?: boolean
+  }
 }
 
 // ============ 统一响应 ============

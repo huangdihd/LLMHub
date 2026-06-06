@@ -69,24 +69,29 @@ export class GeminiGenerateSerializer implements ProtocolSerializer {
       }
     }
 
-    if (chunk.type === 'content') {
-      return {
-        candidates: [{
-          content: {
-            role: 'model',
-            parts: [{ text: chunk.delta || '' }]
-          },
-          index: 0
-        }]
+    if (chunk.type === 'content' || chunk.type === 'thinking') {
+      if (!chunk.delta) {
+        if (chunk.type === 'thinking') {
+          return { candidates: [{ content: { role: 'model', parts: [{ text: '', thought: true }] }, index: 0 }] }
+        }
+        return { candidates: [{ content: { role: 'model', parts: [] }, index: 0 }] }
       }
-    }
-
-    if (chunk.type === 'thinking') {
+      if (chunk.type === 'thinking') {
+        return {
+          candidates: [{
+            content: {
+              role: 'model',
+              parts: [{ text: chunk.delta, thought: true }]
+            },
+            index: 0
+          }]
+        }
+      }
       return {
         candidates: [{
           content: {
             role: 'model',
-            parts: [{ text: chunk.delta || '', thought: true }]
+            parts: [{ text: chunk.delta }]
           },
           index: 0
         }]

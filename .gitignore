@@ -4,3 +4,4 @@ node_modules
 .data
 *.log
 /providers
+.DS_Store

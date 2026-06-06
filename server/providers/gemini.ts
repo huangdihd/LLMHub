@@ -21,8 +21,7 @@ export class GeminiAdapter implements ProviderAdapter {
           parts.push({
             functionCall: {
               name: tc.name,
-              args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input,
-              thought_signature: tc.thoughtSignature || ''
+              args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input
             }
           })
         }
@@ -90,6 +89,9 @@ export class GeminiAdapter implements ProviderAdapter {
       if (request.config.thinkingConfig.includeThoughts != null) {
         payload.thinkingConfig.includeThoughts = request.config.thinkingConfig.includeThoughts
       }
+    } else if (request.tools && request.tools.length > 0) {
+      // Gemini requires thinking to be enabled for tool calls to generate thought_signature
+      payload.thinkingConfig = { thinkingBudget: 8192, includeThoughts: true }
     }
 
     if (request.tools && request.tools.length > 0) {

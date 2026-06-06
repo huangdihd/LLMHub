@@ -12,6 +12,6 @@ export default defineEventHandler(async (event: H3Event) => {
       .replace(':generateContent', '/generateContent')
       .replace(':streamGenerateContent', '/streamGenerateContent')
     event.node.req.url = newPath + query
-    ;(event as any)._url = undefined
+    delete (event as any)._url
   }
 })

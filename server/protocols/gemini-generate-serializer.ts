@@ -26,7 +26,8 @@ export class GeminiGenerateSerializer implements ProtocolSerializer {
           functionCall: {
             id: tc.id,
             name: tc.name,
-            args: typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input
+            args: typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input,
+            thought_signature: tc.thoughtSignature || ''
           }
         })
       }
@@ -109,7 +110,8 @@ export class GeminiGenerateSerializer implements ProtocolSerializer {
                 name: chunk.toolCall.name,
                 args: chunk.toolCall.inputDelta
                   ? JSON.parse(chunk.toolCall.inputDelta)
-                  : {}
+                  : {},
+                thought_signature: chunk.toolCall.thoughtSignature || ''
               }
             }]
           },

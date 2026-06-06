@@ -21,7 +21,8 @@ export class GeminiAdapter implements ProviderAdapter {
           parts.push({
             functionCall: {
               name: tc.name,
-              args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input
+              args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input,
+              thought_signature: tc.thoughtSignature || ''
             }
           })
         }
@@ -357,7 +358,8 @@ export class GeminiAdapter implements ProviderAdapter {
         toolCalls.push({
           id: part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           name: part.functionCall.name,
-          input: part.functionCall.args || {}
+          input: part.functionCall.args || {},
+          thoughtSignature: part.functionCall.thought_signature || ''
         })
       }
     }
@@ -408,7 +410,8 @@ export class GeminiAdapter implements ProviderAdapter {
             index: state._toolIndex ?? 0,
             id: part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
             name: part.functionCall.name,
-            inputDelta: JSON.stringify(part.functionCall.args || {})
+            inputDelta: JSON.stringify(part.functionCall.args || {}),
+            thoughtSignature: part.functionCall.thought_signature || ''
           }
         })
         state._toolIndex = (state._toolIndex ?? 0) + 1

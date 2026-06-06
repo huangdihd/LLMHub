@@ -81,6 +81,7 @@ export interface ToolCall {
   id: string
   name: string
   input: object
+  thoughtSignature?: string
 }
 
 export interface Usage {
@@ -102,6 +103,7 @@ export interface ToolCallDelta {
   id?: string
   name?: string
   inputDelta?: string
+  thoughtSignature?: string
 }
 
 // ============ Provider 配置 ============

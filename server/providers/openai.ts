@@ -123,7 +123,8 @@ export class OpenAIAdapter implements ProviderAdapter {
     const slashIndex = request.model?.indexOf('/')
     const modelId = slashIndex !== undefined && slashIndex !== -1 ? request.model!.slice(slashIndex + 1) : request.model
 
-    const maxTokens = request.config.maxTokens
+    const thinkingBudget = request.config.thinkingConfig?.thinkingBudget || 0
+    const maxTokens = request.config.maxTokens + thinkingBudget
 
     const payload: any = {
       model: modelId || this.config.models[0]?.id,

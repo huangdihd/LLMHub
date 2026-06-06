@@ -37,13 +37,7 @@ export default defineEventHandler(async (event) => {
     const parser = manager.getParser(`/models/X:${action}`, 'POST', {})
     if (!parser) throwFormattedError(manager.buildGatewayError('Invalid request', 400))
     const body = await readBody(event)
-    console.log('[GEMINI DEBUG] Request body type:', typeof body, 'keys:', body ? Object.keys(body) : 'null')
-    console.log('[GEMINI DEBUG] systemInstruction:', body?.systemInstruction ? typeof body.systemInstruction : 'none')
-    console.log('[GEMINI DEBUG] tools count:', body?.tools?.length || 0)
-    console.log('[GEMINI DEBUG] generationConfig:', JSON.stringify(body?.generationConfig || {}))
     request = (parser as any).parseRequest(body, fullModel)
-    console.log('[GEMINI DEBUG] Parsed model:', request.model)
-    console.log('[GEMINI DEBUG] Parsed config:', JSON.stringify(request.config))
   } catch (e: any) {
     throwFormattedError(manager.buildGatewayError(`Parse error: ${e.message}`, 400))
   }
@@ -113,15 +107,8 @@ export default defineEventHandler(async (event) => {
               doneSent = true
               const u = (uc as any).usage; if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
               event.node.res.write(`data: ${JSON.stringify(serializer!.serializeStreamChunk(uc))}\n\n`)
-              console.log('[GEMINI DEBUG] Done chunk sent, usage:', u)
             } else if (uc.type !== 'content' || uc.delta) {
-              const serialized = serializer!.serializeStreamChunk(uc)
-              event.node.res.write(`data: ${JSON.stringify(serialized)}\n\n`)
-              if (uc.type === 'thinking' && uc.delta) {
-                console.log('[GEMINI DEBUG] Thinking chunk, delta len:', uc.delta.length)
-              } else if (uc.type === 'content' && uc.delta) {
-                console.log('[GEMINI DEBUG] Content chunk, delta:', JSON.stringify(uc.delta).slice(0, 80))
-              }
+              event.node.res.write(`data: ${JSON.stringify(serializer!.serializeStreamChunk(uc))}\n\n`)
             }
           }
         } catch {}

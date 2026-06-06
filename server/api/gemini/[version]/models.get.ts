@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
     const manager = new ProviderManager()
     await manager.loadProviders()
 
-    let models = await manager.getModelsByProtocol('gemini')
+    let models = await manager.getModels()
 
     // Filter based on API Key restrictions
     const record = event.context._apiKeyRecord

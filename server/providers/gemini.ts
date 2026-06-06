@@ -24,7 +24,7 @@ export class GeminiAdapter implements ProviderAdapter {
               args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input
             }
           }
-                    fcPart.thought_signature = tc.thoughtSignature || ''
+                    if (tc.thoughtSignature) fcPart.thought_signature = tc.thoughtSignature
           parts.push(fcPart)
         }
       }
@@ -91,8 +91,6 @@ export class GeminiAdapter implements ProviderAdapter {
       if (request.config.thinkingConfig.includeThoughts != null) {
         payload.generationConfig.thinkingConfig.includeThoughts = request.config.thinkingConfig.includeThoughts
       }
-    } else if (request.tools && request.tools.length > 0) {
-      payload.generationConfig.thinkingConfig = { thinkingBudget: -1, includeThoughts: true }
     }
 
     if (request.tools && request.tools.length > 0) {
@@ -147,7 +145,7 @@ export class GeminiAdapter implements ProviderAdapter {
             }
           })
         }
-            } else if (block.type === 'tool_use' && role === 'assistant') {
+              } else if (block.type === 'tool_use' && role === 'assistant') {
         parts.push({
           functionCall: {
             id: block.toolUse.id,
@@ -155,8 +153,7 @@ export class GeminiAdapter implements ProviderAdapter {
               args: typeof block.toolUse.input === 'string'
                 ? this.safeJsonParse(block.toolUse.input || '{}')
                 : block.toolUse.input
-          },
-          thought_signature: ''
+          }
         })
       } else if (block.type === 'tool_result' && role === 'tool') {
         parts.push({

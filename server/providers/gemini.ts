@@ -18,12 +18,14 @@ export class GeminiAdapter implements ProviderAdapter {
 
       if (msg.role === 'assistant' && msg.meta?.toolCalls?.length) {
         for (const tc of msg.meta.toolCalls) {
-          parts.push({
+          const fcPart: any = {
             functionCall: {
               name: tc.name,
               args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input
             }
-          })
+          }
+          if (tc.thoughtSignature) fcPart.thought_signature = tc.thoughtSignature
+          parts.push(fcPart)
         }
       }
 
@@ -90,8 +92,7 @@ export class GeminiAdapter implements ProviderAdapter {
         payload.generationConfig.thinkingConfig.includeThoughts = request.config.thinkingConfig.includeThoughts
       }
     } else if (request.tools && request.tools.length > 0) {
-      // Gemini requires thinking for tool calls to generate thought_signature
-      payload.generationConfig.thinkingConfig = { thinkingBudget: -1 }
+      payload.generationConfig.thinkingConfig = { thinkingBudget: -1, includeThoughts: true }
     }
 
     if (request.tools && request.tools.length > 0) {
@@ -361,7 +362,7 @@ export class GeminiAdapter implements ProviderAdapter {
           id: part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           name: part.functionCall.name,
           input: part.functionCall.args || {},
-          thoughtSignature: part.functionCall.thought_signature || ''
+          thoughtSignature: part.thoughtSignature || ''
         })
       }
     }
@@ -413,7 +414,7 @@ export class GeminiAdapter implements ProviderAdapter {
             id: part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
             name: part.functionCall.name,
             inputDelta: JSON.stringify(part.functionCall.args || {}),
-            thoughtSignature: part.functionCall.thought_signature || ''
+            thoughtSignature: part.thoughtSignature || ''
           }
         })
         state._toolIndex = (state._toolIndex ?? 0) + 1

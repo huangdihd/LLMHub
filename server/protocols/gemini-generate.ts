@@ -144,7 +144,7 @@ export class GeminiGenerateParser implements ProtocolParser {
             id: part.functionCall.id,
             name: part.functionCall.name,
             inputDelta: JSON.stringify(part.functionCall.args || {}),
-            thoughtSignature: part.functionCall.thought_signature || ''
+            thoughtSignature: part.thoughtSignature || ''
           }
         }
       }

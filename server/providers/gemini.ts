@@ -24,7 +24,7 @@ export class GeminiAdapter implements ProviderAdapter {
               args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input
             }
           }
-          if (tc.thoughtSignature) fcPart.thought_signature = tc.thoughtSignature
+                    fcPart.thought_signature = tc.thoughtSignature || ''
           parts.push(fcPart)
         }
       }
@@ -147,7 +147,7 @@ export class GeminiAdapter implements ProviderAdapter {
             }
           })
         }
-      } else if (block.type === 'tool_use' && role === 'assistant') {
+            } else if (block.type === 'tool_use' && role === 'assistant') {
         parts.push({
           functionCall: {
             id: block.toolUse.id,
@@ -155,7 +155,8 @@ export class GeminiAdapter implements ProviderAdapter {
               args: typeof block.toolUse.input === 'string'
                 ? this.safeJsonParse(block.toolUse.input || '{}')
                 : block.toolUse.input
-          }
+          },
+          thought_signature: ''
         })
       } else if (block.type === 'tool_result' && role === 'tool') {
         parts.push({

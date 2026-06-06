@@ -10,5 +10,11 @@ export function sanitizeGeminiSchema(obj: any): any {
     if (!GEMINI_SUPPORTED_SCHEMA_KEYS.has(k)) continue
     cleaned[k] = sanitizeGeminiSchema(v)
   }
+  // Strip required entries that reference properties that no longer exist
+  if (cleaned.required && cleaned.properties && Array.isArray(cleaned.required)) {
+    const validProps = new Set(Object.keys(cleaned.properties))
+    cleaned.required = cleaned.required.filter((name: string) => validProps.has(name))
+    if (cleaned.required.length === 0) delete cleaned.required
+  }
   return cleaned
 }

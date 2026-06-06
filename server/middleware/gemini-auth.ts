@@ -59,7 +59,7 @@ export default defineEventHandler(async (event: H3Event) => {
 
   if (event.method === 'POST') {
     const url = getRequestURL(event).pathname
-    const modelMatch = url.match(/\/models\/([^/:]+)/)
+    const modelMatch = url.match(/\/models\/(.+?)\/(?:stream)?generateContent/i)
     let model = modelMatch ? decodeURIComponent(modelMatch[1]) : ''
 
     if (model) {

@@ -89,6 +89,9 @@ export class GeminiAdapter implements ProviderAdapter {
       if (request.config.thinkingConfig.includeThoughts != null) {
         payload.generationConfig.thinkingConfig.includeThoughts = request.config.thinkingConfig.includeThoughts
       }
+    } else if (request.tools && request.tools.length > 0) {
+      // Gemini requires thinking for tool calls to generate thought_signature
+      payload.generationConfig.thinkingConfig = { thinkingBudget: -1 }
     }
 
     if (request.tools && request.tools.length > 0) {

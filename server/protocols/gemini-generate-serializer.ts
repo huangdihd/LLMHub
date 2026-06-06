@@ -22,14 +22,13 @@ export class GeminiGenerateSerializer implements ProtocolSerializer {
 
     if (response.toolCalls && response.toolCalls.length > 0) {
       for (const tc of response.toolCalls) {
-        parts.push({
-          functionCall: {
-            id: tc.id,
-            name: tc.name,
-            args: typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input,
-            thought_signature: tc.thoughtSignature || ''
-          }
-        })
+        const fc: any = {
+          id: tc.id,
+          name: tc.name,
+          args: typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input
+        }
+        if (tc.thoughtSignature) fc.thought_signature = tc.thoughtSignature
+        parts.push({ functionCall: fc })
       }
     }
 
@@ -104,16 +103,17 @@ export class GeminiGenerateSerializer implements ProtocolSerializer {
         candidates: [{
           content: {
             role: 'model',
-            parts: [{
-              functionCall: {
+            parts: [() => {
+              const fc: any = {
                 id: chunk.toolCall.id,
                 name: chunk.toolCall.name,
                 args: chunk.toolCall.inputDelta
                   ? JSON.parse(chunk.toolCall.inputDelta)
-                  : {},
-                thought_signature: chunk.toolCall.thoughtSignature || ''
+                  : {}
               }
-            }]
+              if (chunk.toolCall.thoughtSignature) fc.thought_signature = chunk.toolCall.thoughtSignature
+              return { functionCall: fc }
+            }()]
           },
           index: 0
         }]

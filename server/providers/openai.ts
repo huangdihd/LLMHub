@@ -71,6 +71,8 @@ export class OpenAIAdapter implements ProviderAdapter {
           role: msg.role
         }
 
+        let toolUseBlocks: any[] = []
+
         if (typeof msg.content === 'string') {
           message.content = msg.content
         } else {
@@ -79,41 +81,39 @@ export class OpenAIAdapter implements ProviderAdapter {
             message.reasoning_content = thinkingBlock.thinking
           }
 
-          // 提取 tool_use 块，后续转为 tool_calls
-          const toolUseBlocks = msg.content.filter(b => b.type === 'tool_use')
+          toolUseBlocks = msg.content.filter(b => b.type === 'tool_use')
           const otherBlocks = msg.content.filter(b => b.type !== 'thinking' && b.type !== 'tool_use')
 
           const converted = this.convertContent(otherBlocks)
           message.content = converted && converted.length > 0 ? converted : null
+        }
 
-          // 合并来自 meta.toolCalls 和 content 中 tool_use 块的工具调用，去重
-          const allToolCalls = [
-            ...(msg.meta?.toolCalls || []),
-            ...toolUseBlocks.map((b: any) => ({
-              id: b.toolUse.id,
-              name: b.toolUse.name,
-              input: b.toolUse.input
-            }))
-          ]
+        const allToolCalls = [
+          ...(msg.meta?.toolCalls || []),
+          ...toolUseBlocks.map((b: any) => ({
+            id: b.toolUse.id,
+            name: b.toolUse.name,
+            input: b.toolUse.input
+          }))
+        ]
 
-          const seen = new Set<string>()
-          const uniqueToolCalls = allToolCalls.filter(tc => {
-            if (seen.has(tc.id)) return false
-            seen.add(tc.id)
-            return true
-          })
+        const seen = new Set<string>()
+        const uniqueToolCalls = allToolCalls.filter(tc => {
+          if (seen.has(tc.id)) return false
+          seen.add(tc.id)
+          return true
+        })
 
-          if (uniqueToolCalls.length > 0) {
-            message.tool_calls = uniqueToolCalls.map(tc => ({
-              id: tc.id,
-              type: 'function',
-              function: {
-                name: tc.name,
-                arguments: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input)
-              }
-            }))
-            if (!message.content) message.content = null
-          }
+        if (uniqueToolCalls.length > 0) {
+          message.tool_calls = uniqueToolCalls.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: {
+              name: tc.name,
+              arguments: typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input)
+            }
+          }))
+          if (!message.content) message.content = null
         }
 
         messages.push(message)
@@ -123,11 +123,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     const slashIndex = request.model?.indexOf('/')
     const modelId = slashIndex !== undefined && slashIndex !== -1 ? request.model!.slice(slashIndex + 1) : request.model
 
-    // OpenAI API: max_tokens includes thinking tokens (unlike Claude where thinking is separate)
-    // Use a much larger budget to ensure room for both thinking and content/tool_calls
-    const maxTokens = request.config.maxTokens > 0
-      ? Math.max(request.config.maxTokens, 16000)
-      : 16000
+    const maxTokens = request.config.maxTokens
 
     const payload: any = {
       model: modelId || this.config.models[0]?.id,

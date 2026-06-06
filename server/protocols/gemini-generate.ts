@@ -1,23 +1,5 @@
 import type { ProtocolParser, LLMRequest, LLMStreamChunk, ContentBlock } from '../core/types'
-
-const GEMINI_UNSUPPORTED_SCHEMA_KEYS = new Set([
-  '$schema', 'additionalProperties', 'propertyNames',
-  'exclusiveMinimum', 'exclusiveMaximum', 'const',
-  'minItems', 'maxItems', 'uniqueItems',
-  'minLength', 'maxLength', 'pattern', 'format',
-  'default', 'examples', 'title', 'anyOf', 'oneOf', 'allOf'
-])
-
-function sanitizeGeminiSchema(obj: any): any {
-  if (!obj || typeof obj !== 'object') return obj
-  if (Array.isArray(obj)) return obj.map(sanitizeGeminiSchema)
-  const cleaned: any = {}
-  for (const [k, v] of Object.entries(obj)) {
-    if (GEMINI_UNSUPPORTED_SCHEMA_KEYS.has(k)) continue
-    cleaned[k] = sanitizeGeminiSchema(v)
-  }
-  return cleaned
-}
+import { sanitizeGeminiSchema } from '../utils/sanitize-gemini-schema'
 
 export class GeminiGenerateParser implements ProtocolParser {
   name = 'gemini-generate'

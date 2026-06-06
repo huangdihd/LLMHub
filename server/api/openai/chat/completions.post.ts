@@ -46,6 +46,7 @@ export default defineEventHandler(async (event) => {
         let nextToolIndex = 0
         let providerState = {}
         let doneSent = false
+        let hasContentOrToolCall = false
 
         const processLine = (line: string) => {
           if (!line.startsWith('data: ')) return
@@ -78,6 +79,11 @@ export default defineEventHandler(async (event) => {
               }
 
               if (unifiedChunk.type === 'done') {
+                if (!hasContentOrToolCall) {
+                  // Ensure assistant message always has content or tool_calls
+                  const stub = serializer!.serializeStreamChunk({ type: 'content', delta: '' })
+                  event.node.res.write(`data: ${JSON.stringify(stub)}\n\n`)
+                }
                 if (doneSent) {
                   // Provider may split usage into a separate chunk — still capture
                   const u = (unifiedChunk as any).usage
@@ -92,6 +98,9 @@ export default defineEventHandler(async (event) => {
                 event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
                 event.node.res.write('data: [DONE]\n\n')
               } else if (unifiedChunk.type !== 'content' || unifiedChunk.delta) {
+                if (unifiedChunk.type === 'content' || unifiedChunk.type === 'tool_call') {
+                  hasContentOrToolCall = true
+                }
                 const serializedChunk = serializer!.serializeStreamChunk(unifiedChunk)
                 event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
               }

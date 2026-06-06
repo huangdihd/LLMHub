@@ -33,6 +33,11 @@ export class OpenAIChatSerializer implements ProtocolSerializer {
       message.content = message.content || null
     }
 
+    // Ensure assistant message always has content or tool_calls
+    if (message.content === null && !message.tool_calls) {
+      message.content = ''
+    }
+
     return {
       id: `chatcmpl-${Date.now()}`,
       object: 'chat.completion',

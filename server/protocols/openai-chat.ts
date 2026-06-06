@@ -37,7 +37,8 @@ export class OpenAIChatParser implements ProtocolParser {
             toolCalls: msg.tool_calls?.map((tc: any) => ({
               id: tc.id,
               name: tc.function.name,
-              input: safeParseChat(tc.function.arguments || '{}')
+              input: safeParseChat(tc.function.arguments || '{}'),
+              thoughtSignature: tc.thought_signature
             })),
             toolCallId: msg.tool_call_id
           }
@@ -134,7 +135,8 @@ export class OpenAIChatParser implements ProtocolParser {
           index: tc.index,
           id: tc.id,
           name: tc.function?.name,
-          inputDelta: tc.function?.arguments
+          inputDelta: tc.function?.arguments,
+          thoughtSignature: tc.thought_signature
         }
       }
     }

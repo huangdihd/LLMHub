@@ -25,6 +25,7 @@ export class OpenAIChatSerializer implements ProtocolSerializer {
       message.tool_calls = response.toolCalls.map(tc => ({
         id: tc.id,
         type: 'function',
+        thought_signature: tc.thoughtSignature,
         function: {
           name: tc.name,
           arguments: JSON.stringify(tc.input)
@@ -94,6 +95,9 @@ export class OpenAIChatSerializer implements ProtocolSerializer {
       if (chunk.toolCall.id !== undefined) {
         toolCallObj.id = chunk.toolCall.id
         toolCallObj.type = 'function'
+      }
+      if (chunk.toolCall.thoughtSignature !== undefined) {
+        toolCallObj.thought_signature = chunk.toolCall.thoughtSignature
       }
       
       toolCallObj.function = {}

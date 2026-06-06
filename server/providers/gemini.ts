@@ -1,6 +1,21 @@
 import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
 
+const GEMINI_UNSUPPORTED_SCHEMA_KEYS = new Set([
+  '$schema', 'exclusiveMinimum', 'exclusiveMaximum'
+])
+
+function sanitizeGeminiSchema(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj
+  if (Array.isArray(obj)) return obj.map(sanitizeGeminiSchema)
+  const cleaned: any = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (GEMINI_UNSUPPORTED_SCHEMA_KEYS.has(k)) continue
+    cleaned[k] = sanitizeGeminiSchema(v)
+  }
+  return cleaned
+}
+
 export class GeminiAdapter implements ProviderAdapter {
   name = 'gemini'
 
@@ -95,7 +110,7 @@ export class GeminiAdapter implements ProviderAdapter {
         functionDeclarations: request.tools.map(t => ({
           name: t.name,
           description: t.description,
-          parameters: t.parameters
+          parameters: sanitizeGeminiSchema(t.parameters)
         }))
       }]
     }

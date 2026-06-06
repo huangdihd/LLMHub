@@ -79,7 +79,7 @@ export default defineEventHandler(async (event) => {
               }
 
               if (unifiedChunk.type === 'done') {
-                if (!hasContentOrToolCall) {
+                if (!doneSent && !hasContentOrToolCall) {
                   // Ensure assistant message always has content or tool_calls
                   const stub = serializer!.serializeStreamChunk({ type: 'content', delta: '' })
                   event.node.res.write(`data: ${JSON.stringify(stub)}\n\n`)

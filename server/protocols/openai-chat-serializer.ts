@@ -53,7 +53,7 @@ export class OpenAIChatSerializer implements ProtocolSerializer {
 
   serializeStreamChunk(chunk: LLMStreamChunk): any {
     if (chunk.type === 'done') {
-      return {
+      const result: any = {
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
@@ -64,6 +64,14 @@ export class OpenAIChatSerializer implements ProtocolSerializer {
           finish_reason: chunk.finishReason === 'tool_calls' ? 'tool_calls' : 'stop'
         }]
       }
+      if (chunk.usage) {
+        result.usage = {
+          prompt_tokens: chunk.usage.promptTokens,
+          completion_tokens: chunk.usage.completionTokens,
+          total_tokens: chunk.usage.promptTokens + chunk.usage.completionTokens
+        }
+      }
+      return result
     }
 
     const delta: any = {}

@@ -312,7 +312,7 @@ onMounted(async () => {
   const origin = window.location.origin
 openaiBaseUrl.value = `${origin}/api/openai`
 claudeBaseUrl.value = `${origin}/api/claude`
-geminiBaseUrl.value = `${origin}/api/gemini/v1`
+geminiBaseUrl.value = `${origin}/api/gemini`
   try {
     const [providersData, statsData] = await Promise.all([
       $fetch('/api/hub/providers'),

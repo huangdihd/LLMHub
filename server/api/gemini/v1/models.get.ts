@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
 
     return {
       models: models.map(m => ({
-        name: `models/${m.name}`,
+        name: `models/${encodeURIComponent(m.id)}`,
         displayName: m.display_name || m.name,
         description: '',
         supportedGenerationMethods: ['generateContent', 'streamGenerateContent'],

@@ -123,14 +123,8 @@ export class OpenAIAdapter implements ProviderAdapter {
     const slashIndex = request.model?.indexOf('/')
     const modelId = slashIndex !== undefined && slashIndex !== -1 ? request.model!.slice(slashIndex + 1) : request.model
 
-    // Gemini protocol separates thinkingBudget from maxOutputTokens; gemini-cli may
-    // send only maxOutputTokens after subtracting thinkingBudget. OpenAI/DSeep count
-    // reasoning tokens in max_tokens, so add buffer when thinkingConfig is absent.
     const thinkingBudget = request.config.thinkingConfig?.thinkingBudget || 0
-    let maxTokens = request.config.maxTokens + thinkingBudget
-    if (!thinkingBudget && maxTokens < 2048) {
-      maxTokens = Math.max(maxTokens, 4096)
-    }
+    const maxTokens = request.config.maxTokens + thinkingBudget
 
     const payload: any = {
       model: modelId || this.config.models[0]?.id,

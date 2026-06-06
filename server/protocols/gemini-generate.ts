@@ -72,8 +72,13 @@ export class GeminiGenerateParser implements ProtocolParser {
     }
 
     const genConfig = body.generationConfig || {}
-    const thinkConfig = body.thinkingConfig || {}
+    const thinkConfig = body.thinkingConfig || genConfig.thinkingConfig || {}
     const modelId = modelFromUrl || body.model
+
+    const thinkingConfig = Object.keys(thinkConfig).length > 0 ? {
+      thinkingBudget: thinkConfig.thinkingBudget ?? (thinkConfig.thinkingLevel ? 8192 : undefined),
+      includeThoughts: thinkConfig.includeThoughts
+    } : undefined
 
     return {
       model: modelId,
@@ -84,10 +89,7 @@ export class GeminiGenerateParser implements ProtocolParser {
         topP: genConfig.topP,
         stop: genConfig.stopSequences,
         systemPrompt,
-        thinkingConfig: Object.keys(thinkConfig).length > 0 ? {
-          thinkingBudget: thinkConfig.thinkingBudget,
-          includeThoughts: thinkConfig.includeThoughts
-        } : undefined
+        thinkingConfig
       },
       tools: this.extractTools(body.tools),
       stream: false

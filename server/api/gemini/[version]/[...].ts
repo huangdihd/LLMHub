@@ -37,7 +37,12 @@ export default defineEventHandler(async (event) => {
     const parser = manager.getParser(`/models/X:${action}`, 'POST', {})
     if (!parser) throwFormattedError(manager.buildGatewayError('Invalid request', 400))
     const body = await readBody(event)
+    console.log('[GEMINI DEBUG] top thinkingConfig:', body.thinkingConfig ? JSON.stringify(body.thinkingConfig) : 'none')
+    console.log('[GEMINI DEBUG] genConfig.thinkingConfig:', body.generationConfig?.thinkingConfig ? JSON.stringify(body.generationConfig.thinkingConfig) : 'none')
+    console.log('[GEMINI DEBUG] genConfig keys:', Object.keys(body.generationConfig || {}))
+    console.log('[GEMINI DEBUG] all keys:', Object.keys(body))
     request = (parser as any).parseRequest(body, fullModel)
+    console.log('[GEMINI DEBUG] parsed config:', JSON.stringify(request.config))
   } catch (e: any) {
     throwFormattedError(manager.buildGatewayError(`Parse error: ${e.message}`, 400))
   }

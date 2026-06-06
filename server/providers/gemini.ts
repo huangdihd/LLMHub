@@ -2,7 +2,11 @@ import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStrea
 import { fetchWithRetry } from '../utils/fetch'
 
 const GEMINI_UNSUPPORTED_SCHEMA_KEYS = new Set([
-  '$schema', 'exclusiveMinimum', 'exclusiveMaximum'
+  '$schema', 'additionalProperties', 'propertyNames',
+  'exclusiveMinimum', 'exclusiveMaximum', 'const',
+  'minItems', 'maxItems', 'uniqueItems',
+  'minLength', 'maxLength', 'pattern', 'format',
+  'default', 'examples', 'title', 'anyOf', 'oneOf', 'allOf'
 ])
 
 function sanitizeGeminiSchema(obj: any): any {

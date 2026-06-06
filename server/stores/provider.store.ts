@@ -104,6 +104,13 @@ export class ProviderStore {
     return true
   }
 
+  /** Strip sensitive fields (api_key) for public API responses. */
+  sanitize(config: ProviderConfig): Omit<ProviderConfig, 'connection'> & { connection: Omit<ProviderConfig['connection'], 'api_key'> } {
+    const { connection, ...rest } = config
+    const { api_key, ...safeConnection } = connection
+    return { ...rest, connection: safeConnection }
+  }
+
   /** Check whether a provider exists. */
   async exists(name: string): Promise<boolean> {
     const storage = useStorage('data')

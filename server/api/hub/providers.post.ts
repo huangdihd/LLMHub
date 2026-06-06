@@ -1,6 +1,8 @@
 import type { ProviderConfig } from '../../core/types'
 import { getProviderStore } from '../../stores/provider.store'
+import { getAuthStore } from '../../stores/auth.store'
 import { ProviderLoader } from '../../providers/loader'
+import { validateBaseUrl } from '../../utils/validate-url'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -9,6 +11,14 @@ export default defineEventHandler(async (event) => {
 
     if (!body.name) {
       throw createError({ statusCode: 400, message: 'Provider name is required' })
+    }
+
+    if (body.base_url) {
+      const ssrfConfig = await getAuthStore().getSSRFConfig()
+      const result = validateBaseUrl(body.base_url, ssrfConfig)
+      if (!result.valid) {
+        throw createError({ statusCode: 400, message: `Invalid base URL: ${result.reason}` })
+      }
     }
 
     const newProvider: ProviderConfig = {
@@ -31,7 +41,7 @@ export default defineEventHandler(async (event) => {
 
     const provider = await store.create(newProvider)
     ProviderLoader.invalidateCache()
-    return { success: true, provider }
+    return { success: true, provider: store.sanitize(provider) }
   } catch (error: any) {
     if (error.statusCode) throw error
     throwFormattedError(error)

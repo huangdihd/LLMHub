@@ -24,5 +24,7 @@ export async function trackUsage(event: H3Event, tokens: number, model?: string)
   try {
     const provider = model?.includes('/') ? model.split('/')[0] : undefined
     await getAuthStore().addUsage(record, tokens, model, provider)
-  } catch {}
+  } catch (e) {
+    console.error('[LLMHub] Failed to track usage:', e)
+  }
 }

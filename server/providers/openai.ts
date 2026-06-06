@@ -358,11 +358,11 @@ export class OpenAIAdapter implements ProviderAdapter {
     }
 
     const message = choice.message
-    const toolCalls = message.tool_calls?.map((tc: any) => ({
-      id: tc.id,
-      name: tc.function.name,
-      input: JSON.parse(tc.function.arguments || '{}')
-    }))
+      const toolCalls = message.tool_calls?.map((tc: any) => ({
+        id: tc.id,
+        name: tc.function.name,
+        input: safeJsonParseChat(tc.function.arguments || '{}')
+      }))
 
     const content: ContentBlock[] = []
     if (message.reasoning_content) {
@@ -619,5 +619,13 @@ export class OpenAIAdapter implements ProviderAdapter {
       display_name: m.display_name,
       capabilities: m.capabilities
     }))
+  }
+}
+
+function safeJsonParseChat(str: string): object {
+  try {
+    return JSON.parse(str)
+  } catch {
+    return {}
   }
 }

@@ -49,11 +49,18 @@ export interface BruteForceConfig {
   ip_header: string          // '' = use direct remoteAddress
   max_attempts: number
   lockout_minutes: number
+  rate_limit_enabled: boolean
+  rate_limit_max_rpm: number // 0 = unlimited
 }
 
 export interface BruteForceEntry {
   failures: number
   locked_until: number | null
+}
+
+export interface SSRFConfig {
+  enabled: boolean
+  allowed_hosts: string[]
 }
 
 // ============================================================
@@ -235,7 +242,7 @@ export class AuthStore {
 
   async getBruteForceConfig(): Promise<BruteForceConfig> {
     const cfg = await useStorage('data').getItem<BruteForceConfig>('auth:bf-config')
-    return cfg || { enabled: false, ip_header: '', max_attempts: 5, lockout_minutes: 15 }
+    return cfg || { enabled: false, ip_header: '', max_attempts: 5, lockout_minutes: 15, rate_limit_enabled: false, rate_limit_max_rpm: 0 }
   }
 
   async setBruteForceConfig(cfg: BruteForceConfig): Promise<void> {
@@ -257,6 +264,43 @@ export class AuthStore {
 
   async clearBruteForce(ip: string): Promise<void> {
     await useStorage('data').removeItem(`auth:bf:${ip}`)
+  }
+
+  // ---- Rate Limiting (API calls) ----------------------------------
+
+  async checkRateLimit(ip: string, cfg: BruteForceConfig): Promise<{ allowed: boolean; retryAfter?: number }> {
+    if (!cfg.rate_limit_enabled || cfg.rate_limit_max_rpm <= 0) {
+      return { allowed: true }
+    }
+
+    const key = `auth:rl:${ip}`
+    const windowStart = Date.now() - 60 * 1000
+    const entry = await useStorage('data').getItem<{ count: number; windowStart: number }>(key)
+
+    if (!entry || entry.windowStart < windowStart) {
+      await useStorage('data').setItem(key, { count: 1, windowStart: Date.now() })
+      return { allowed: true }
+    }
+
+    if (entry.count >= cfg.rate_limit_max_rpm) {
+      const retryAfter = Math.ceil((entry.windowStart + 60 * 1000 - Date.now()) / 1000)
+      return { allowed: false, retryAfter }
+    }
+
+    entry.count++
+    await useStorage('data').setItem(key, entry)
+    return { allowed: true }
+  }
+
+  // ---- SSRF Protection --------------------------------------------
+
+  async getSSRFConfig(): Promise<SSRFConfig> {
+    const cfg = await useStorage('data').getItem<SSRFConfig>('auth:ssrf-config')
+    return cfg || { enabled: false, allowed_hosts: [] }
+  }
+
+  async setSSRFConfig(cfg: SSRFConfig): Promise<void> {
+    await useStorage('data').setItem('auth:ssrf-config', cfg)
   }
 
   // ---- Model Cleanup ---------------------------------------------

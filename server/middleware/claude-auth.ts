@@ -8,6 +8,16 @@ export default defineEventHandler(async (event: H3Event) => {
 
   const store = getAuthStore()
   const plainKey = extractApiKey(event)
+
+  if (event.method === 'POST') {
+    const bfConfig = await store.getBruteForceConfig()
+    const clientIp = getClientIP(event, bfConfig)
+    const rateCheck = await store.checkRateLimit(clientIp, bfConfig)
+    if (!rateCheck.allowed) {
+      return sendAuthError(event, 429, `Rate limit exceeded. Retry after ${rateCheck.retryAfter}s.`, 'rate_limit_exceeded')
+    }
+  }
+
   let record: any = null
 
   if (!plainKey) {
@@ -115,4 +125,12 @@ function sendAuthError(event: H3Event, status: number, message: string, code = '
   setResponseStatus(event, status)
   setResponseHeader(event, 'Content-Type', 'application/json')
   return send(event, JSON.stringify({ error: { message, type: 'authentication_error', code } }))
+}
+
+function getClientIP(event: H3Event, cfg: any): string {
+  if (cfg.ip_header) {
+    const val = getHeader(event, cfg.ip_header)
+    if (val) return val.split(',')[0].trim()
+  }
+  return (event as any).context?.clientAddress || '127.0.0.1'
 }

@@ -54,7 +54,8 @@ export default defineEventHandler(async (event) => {
   const token = await store.createSession()
   setCookie(event, 'llmhub_session', token, {
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'strict',
+    secure: process.env.NUXT_COOKIE_SECURE !== 'false',
     path: '/',
     maxAge: 24 * 60 * 60
   })

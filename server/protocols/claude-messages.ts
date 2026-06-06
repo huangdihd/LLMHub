@@ -95,8 +95,8 @@ export class ClaudeMessagesParser implements ProtocolParser {
             signature: part.signature
           }
         }
-        // Fallback for unknown block types (e.g. some system blocks sent inside messages)
-        return { type: 'text' as const, text: part.text || JSON.stringify(part) }
+        // Skip unknown block types silently
+        return { type: 'text' as const, text: '' }
       })
     }
 

@@ -8,6 +8,16 @@ export default defineEventHandler(async (event: H3Event) => {
 
   const store = getAuthStore()
   const plainKey = extractApiKey(event)
+
+  if (event.method === 'POST') {
+    const bfConfig = await store.getBruteForceConfig()
+    const clientIp = getClientIP(event, bfConfig)
+    const rateCheck = await store.checkRateLimit(clientIp, bfConfig)
+    if (!rateCheck.allowed) {
+      return sendAuthError(event, 429, `Rate limit exceeded. Retry after ${rateCheck.retryAfter}s.`, 'rate_limit_exceeded')
+    }
+  }
+
   let record: any = null
 
   if (!plainKey) {
@@ -34,7 +44,7 @@ export default defineEventHandler(async (event: H3Event) => {
         return
       }
     } else {
-      return sendAuthError(event, 401, 'API Key required. Provide via x-goog-api-key header, Authorization: Bearer <key>, or ?key=<key> query parameter.')
+      return sendAuthError(event, 401, 'API Key required. Provide via x-goog-api-key header or Authorization: Bearer <key>.')
     }
   } else {
     record = await store.getKeyRecord(plainKey)
@@ -99,10 +109,6 @@ function extractApiKey(event: H3Event): string {
   const authHeader = getHeader(event, 'Authorization')
   if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7).trim()
 
-  const url = getRequestURL(event)
-  const keyParam = url.searchParams.get('key')
-  if (keyParam) return keyParam.trim()
-
   return ''
 }
 
@@ -121,5 +127,13 @@ function checkAccess(record: any, model: string): boolean {
 function sendAuthError(event: H3Event, status: number, message: string, code = 'invalid_api_key') {
   setResponseStatus(event, status)
   setResponseHeader(event, 'Content-Type', 'application/json')
-  return send(event, JSON.stringify({ error: { message, code } }))
+  return send(event, JSON.stringify({ error: { message, type: 'authentication_error', code } }))
+}
+
+function getClientIP(event: H3Event, cfg: any): string {
+  if (cfg.ip_header) {
+    const val = getHeader(event, cfg.ip_header)
+    if (val) return val.split(',')[0].trim()
+  }
+  return (event as any).context?.clientAddress || '127.0.0.1'
 }

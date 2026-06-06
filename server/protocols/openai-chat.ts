@@ -37,7 +37,7 @@ export class OpenAIChatParser implements ProtocolParser {
             toolCalls: msg.tool_calls?.map((tc: any) => ({
               id: tc.id,
               name: tc.function.name,
-              input: JSON.parse(tc.function.arguments || '{}')
+              input: safeParseChat(tc.function.arguments || '{}')
             })),
             toolCallId: msg.tool_call_id
           }
@@ -140,5 +140,13 @@ export class OpenAIChatParser implements ProtocolParser {
     }
 
     return { type: 'content', delta: '' }
+  }
+}
+
+function safeParseChat(str: string): object {
+  try {
+    return JSON.parse(str)
+  } catch {
+    return {}
   }
 }

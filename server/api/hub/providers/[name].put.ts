@@ -1,6 +1,8 @@
 import type { ProviderConfig } from '../../../core/types'
 import { getProviderStore } from '../../../stores/provider.store'
+import { getAuthStore } from '../../../stores/auth.store'
 import { ProviderLoader } from '../../../providers/loader'
+import { validateBaseUrl } from '../../../utils/validate-url'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -10,6 +12,16 @@ export default defineEventHandler(async (event) => {
 
     if (!name) {
       throw createError({ statusCode: 400, message: 'Provider name is required' })
+    }
+
+    // Validate base_url if it's being changed
+    const newBaseUrl = body.base_url ?? body.connection?.base_url
+    if (newBaseUrl) {
+      const ssrfConfig = await getAuthStore().getSSRFConfig()
+      const result = validateBaseUrl(newBaseUrl, ssrfConfig)
+      if (!result.valid) {
+        throw createError({ statusCode: 400, message: `Invalid base URL: ${result.reason}` })
+      }
     }
 
     // Build the connection patch from flat or nested body fields
@@ -42,7 +54,7 @@ export default defineEventHandler(async (event) => {
     }
 
     ProviderLoader.invalidateCache()
-    return { success: true, provider: updated }
+    return { success: true, provider: store.sanitize(updated) }
   } catch (error: any) {
     if (error.statusCode) throw error
     throwFormattedError(error)

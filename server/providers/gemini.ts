@@ -20,7 +20,7 @@ export class GeminiAdapter implements ProviderAdapter {
           parts.push({
             functionCall: {
               name: tc.name,
-              args: typeof tc.input === 'string' ? JSON.parse(tc.input || '{}') : tc.input
+              args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input
             }
           })
         }
@@ -137,9 +137,9 @@ export class GeminiAdapter implements ProviderAdapter {
           functionCall: {
             id: block.toolUse.id,
             name: block.toolUse.name,
-            args: typeof block.toolUse.input === 'string'
-              ? JSON.parse(block.toolUse.input || '{}')
-              : block.toolUse.input
+              args: typeof block.toolUse.input === 'string'
+                ? this.safeJsonParse(block.toolUse.input || '{}')
+                : block.toolUse.input
           }
         })
       } else if (block.type === 'tool_result' && role === 'tool') {
@@ -439,5 +439,13 @@ export class GeminiAdapter implements ProviderAdapter {
       display_name: m.display_name,
       capabilities: m.capabilities
     }))
+  }
+
+  private safeJsonParse(str: string): object {
+    try {
+      return JSON.parse(str)
+    } catch {
+      return {}
+    }
   }
 }

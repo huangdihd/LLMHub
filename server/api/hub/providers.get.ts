@@ -4,7 +4,7 @@ export default defineEventHandler(async () => {
   try {
     const store = getProviderStore()
     const providers = await store.getAll()
-    return { providers }
+    return { providers: providers.map(p => store.sanitize(p)) }
   } catch (error: any) {
     throwFormattedError(error)
   }

@@ -40,7 +40,7 @@ export class ClaudeAdapter implements ProviderAdapter {
                 type: 'tool_use',
                 id: tc.id,
                 name: tc.name,
-                input: typeof tc.input === 'string' ? JSON.parse(tc.input || '{}') : tc.input
+                input: typeof tc.input === 'string' ? safeJsonParse(tc.input || '{}') : tc.input
               })
             }
           }
@@ -417,5 +417,13 @@ export class ClaudeAdapter implements ProviderAdapter {
       display_name: m.display_name,
       capabilities: m.capabilities
     }))
+  }
+}
+
+function safeJsonParse(str: string): object {
+  try {
+    return JSON.parse(str)
+  } catch {
+    return {}
   }
 }

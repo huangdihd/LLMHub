@@ -4,6 +4,7 @@ import { sanitizeGeminiSchema } from '../utils/sanitize-gemini-schema'
 
 export class GeminiAdapter implements ProviderAdapter {
   name = 'gemini'
+  private thoughtSignatureCache = new Map<string, string>()
 
   constructor(private config: ProviderConfig) {}
 
@@ -16,15 +17,17 @@ export class GeminiAdapter implements ProviderAdapter {
       const role = msg.role === 'assistant' ? 'model' : 'user'
       const parts = this.convertContentToParts(msg.content, msg.role)
 
-      if (msg.role === 'assistant' && msg.meta?.toolCalls?.length) {
+            if (msg.role === 'assistant' && msg.meta?.toolCalls?.length) {
         for (const tc of msg.meta.toolCalls) {
+          const thoughtSig = tc.thoughtSignature || this.thoughtSignatureCache.get(tc.id)
+          if (!thoughtSig) continue
           const fcPart: any = {
             functionCall: {
               name: tc.name,
               args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input
-            }
+            },
+            thought_signature: thoughtSig
           }
-                    if (tc.thoughtSignature) fcPart.thought_signature = tc.thoughtSignature
           parts.push(fcPart)
         }
       }
@@ -355,12 +358,15 @@ export class GeminiAdapter implements ProviderAdapter {
           content.push({ type: 'text', text: part.text })
         }
       }
-      if (part.functionCall) {
+            if (part.functionCall) {
+        const id = part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+        const thoughtSig = part.thoughtSignature || ''
+        if (thoughtSig) this.thoughtSignatureCache.set(id, thoughtSig)
         toolCalls.push({
-          id: part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          id,
           name: part.functionCall.name,
           input: part.functionCall.args || {},
-          thoughtSignature: part.thoughtSignature || ''
+          thoughtSignature: thoughtSig
         })
       }
     }
@@ -404,15 +410,18 @@ export class GeminiAdapter implements ProviderAdapter {
           chunks.push({ type: 'content', delta: part.text })
         }
       }
-      if (part.functionCall) {
+            if (part.functionCall) {
+        const id = part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+        const thoughtSig = part.thoughtSignature || ''
+        if (thoughtSig) this.thoughtSignatureCache.set(id, thoughtSig)
         chunks.push({
           type: 'tool_call',
           toolCall: {
             index: state._toolIndex ?? 0,
-            id: part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            id,
             name: part.functionCall.name,
             inputDelta: JSON.stringify(part.functionCall.args || {}),
-            thoughtSignature: part.thoughtSignature || ''
+            thoughtSignature: thoughtSig
           }
         })
         state._toolIndex = (state._toolIndex ?? 0) + 1

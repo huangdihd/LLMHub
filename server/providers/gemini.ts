@@ -29,7 +29,28 @@ export class GeminiAdapter implements ProviderAdapter {
         }
       }
 
-      if (msg.role === 'tool' && msg.meta?.toolCallId) {
+                  if (msg.role === 'user' && msg.meta?.toolCallId && Array.isArray(msg.content)) {
+        const toolResults = (msg.content as ContentBlock[]).filter((b: any) => b.type === 'tool_result')
+        if (toolResults.length > 0) {
+          parts.length = 0
+          for (const tr of toolResults) {
+            let toolName = 'unknown'
+            for (const prev of request.messages) {
+              if (prev.meta?.toolCalls) {
+                const match = prev.meta.toolCalls.find(tc => tc.id === tr.toolResult!.toolUseId)
+                if (match) { toolName = match.name; break }
+              }
+            }
+            parts.push({
+              functionResponse: {
+                id: tr.toolResult!.toolUseId,
+                name: toolName,
+                response: { output: tr.toolResult!.content || '' }
+              }
+            })
+          }
+        }
+      } else if (msg.role === 'tool' && msg.meta?.toolCallId) {
         const textContent = typeof msg.content === 'string'
           ? msg.content
           : (msg.content as any[])
@@ -156,7 +177,7 @@ export class GeminiAdapter implements ProviderAdapter {
           },
           thought_signature: 'skip_thought_signature_validator'
         })
-      } else if (block.type === 'tool_result' && role === 'tool') {
+            } else if (block.type === 'tool_result' && (role === 'tool' || role === 'user')) {
         parts.push({
           functionResponse: {
             id: block.toolResult.toolUseId,

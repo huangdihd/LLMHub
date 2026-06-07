@@ -7,8 +7,7 @@ export class GeminiAdapter implements ProviderAdapter {
 
   constructor(private config: ProviderConfig) {}
 
-    toProviderRequest(request: LLMRequest): any {
-    console.log('[LLMHub DEBUG] request has tools:', request.tools?.length || 0)
+      toProviderRequest(request: LLMRequest): any {
     const contents: any[] = []
 
     for (const msg of request.messages) {

@@ -233,8 +233,7 @@ export default defineEventHandler(async (event) => {
             const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk, providerState)
             const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
 
-            for (const unifiedChunk of unifiedChunks) {
-              console.log('[LLMHub DEBUG] chunk', unifiedChunk.type, JSON.stringify(unifiedChunk).slice(0, 120))
+                        for (const unifiedChunk of unifiedChunks) {
               handleChunk(unifiedChunk)
             }
           } catch(e) {}

@@ -234,6 +234,7 @@ export default defineEventHandler(async (event) => {
             const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
 
             for (const unifiedChunk of unifiedChunks) {
+              console.log('[LLMHub DEBUG] chunk', unifiedChunk.type, JSON.stringify(unifiedChunk).slice(0, 120))
               handleChunk(unifiedChunk)
             }
           } catch(e) {}

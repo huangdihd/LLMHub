@@ -405,7 +405,8 @@ export class GeminiAdapter implements ProviderAdapter {
           chunks.push({ type: 'content', delta: part.text })
         }
       }
-                              if (part.functionCall) {
+                                    if (part.functionCall) {
+        state._hasToolCall = true
         chunks.push({
           type: 'tool_call',
           toolCall: {
@@ -420,8 +421,8 @@ export class GeminiAdapter implements ProviderAdapter {
       }
     }
 
-        if (candidate.finishReason) {
-      const hasToolCall = chunks.some(c => c.type === 'tool_call')
+            if (candidate.finishReason) {
+      const hasToolCall = chunks.some(c => c.type === 'tool_call') || state._hasToolCall
       chunks.push({
         type: 'done',
         finishReason: hasToolCall ? 'tool_calls' : this.mapFinishReason(candidate.finishReason),

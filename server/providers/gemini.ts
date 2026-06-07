@@ -93,7 +93,11 @@ export class GeminiAdapter implements ProviderAdapter {
       }
     }
 
-    if (request.tools && request.tools.length > 0) {
+            if (request.tools && request.tools.length > 0) {
+      const rawParams = JSON.stringify(request.tools[0].parameters).slice(0, 500)
+      const sanitizedParams = sanitizeGeminiSchema(request.tools[0].parameters)
+      console.log('[LLMHub DEBUG] raw params:', rawParams)
+      console.log('[LLMHub DEBUG] sanitized params:', JSON.stringify(sanitizedParams).slice(0, 500))
       payload.tools = [{
         functionDeclarations: request.tools.map(t => ({
           name: t.name,

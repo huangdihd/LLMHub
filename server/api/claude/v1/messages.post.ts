@@ -134,11 +134,10 @@ export default defineEventHandler(async (event) => {
             const serializedChunk = serializer.serializeStreamChunk(unifiedChunk)
             serializedChunk.index = blockIndex
             writeSSE('content_block_delta', serializedChunk)
-          } else if (unifiedChunk.type === 'tool_call') {
+                    } else if (unifiedChunk.type === 'tool_call') {
             flushThinkingBuffer()
 
             const toolCall = unifiedChunk.toolCall
-            // Buffer tool_use start when name arrives before id (mimo upstream behavior)
             if (toolCall?.name && !toolCall?.id) {
               pendingToolUseName = toolCall.name
               return
@@ -156,6 +155,16 @@ export default defineEventHandler(async (event) => {
               blockStarted = true
               isWritingTool = true
               pendingToolUseName = null
+
+              // Gemini may return full args in the same chunk; emit delta immediately
+              if (toolCall?.inputDelta) {
+                const deltaChunk = serializer.serializeStreamChunk({
+                  type: 'tool_call',
+                  toolCall: { inputDelta: toolCall.inputDelta }
+                })
+                deltaChunk.index = blockIndex
+                writeSSE('content_block_delta', deltaChunk)
+              }
             } else {
               // Handle pending tool_use (name arrived before id)
               if (pendingToolUseName && !isWritingTool) {

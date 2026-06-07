@@ -184,8 +184,7 @@ export default defineEventHandler(async (event) => {
               serializedChunk.index = blockIndex
               writeSSE('content_block_delta', serializedChunk)
             }
-                    } else if (unifiedChunk.type === 'done') {
-            console.log('[LLMHub DEBUG] done chunk finishReason:', unifiedChunk.finishReason)
+                              } else if (unifiedChunk.type === 'done') {
             if (streamDone) {
               // Some providers split usage into a separate chunk — capture if available
               const u = (unifiedChunk as any).usage

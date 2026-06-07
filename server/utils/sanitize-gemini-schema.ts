@@ -1,5 +1,9 @@
 const GEMINI_SUPPORTED_SCHEMA_KEYS = new Set([
-  'type', 'properties', 'required', 'description', 'enum', 'items', 'nullable'
+  'anyOf', 'default', 'description', 'enum', 'example', 'format',
+  'items', 'maxItems', 'maxLength', 'maxProperties', 'maximum',
+  'minItems', 'minLength', 'minProperties', 'minimum',
+  'nullable', 'pattern', 'properties', 'propertyOrdering',
+  'required', 'title', 'type'
 ])
 
 export function sanitizeGeminiSchema(obj: any, isProperties: boolean = false): any {

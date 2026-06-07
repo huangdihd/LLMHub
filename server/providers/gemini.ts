@@ -366,7 +366,7 @@ export class GeminiAdapter implements ProviderAdapter {
       }
     }
 
-    const finishReason = this.mapFinishReason(candidate.finishReason)
+        const finishReason = toolCalls.length > 0 ? 'tool_calls' : this.mapFinishReason(candidate.finishReason)
 
     return {
       content: content.length > 0 ? content : '',
@@ -420,10 +420,11 @@ export class GeminiAdapter implements ProviderAdapter {
       }
     }
 
-    if (candidate.finishReason) {
+        if (candidate.finishReason) {
+      const hasToolCall = chunks.some(c => c.type === 'tool_call')
       chunks.push({
         type: 'done',
-        finishReason: this.mapFinishReason(candidate.finishReason),
+        finishReason: hasToolCall ? 'tool_calls' : this.mapFinishReason(candidate.finishReason),
         usage: chunk.usageMetadata ? {
           promptTokens: chunk.usageMetadata.promptTokenCount || 0,
           completionTokens: chunk.usageMetadata.candidatesTokenCount || 0

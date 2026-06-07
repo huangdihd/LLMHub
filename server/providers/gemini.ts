@@ -405,7 +405,8 @@ export class GeminiAdapter implements ProviderAdapter {
           chunks.push({ type: 'content', delta: part.text })
         }
       }
-                  if (part.functionCall) {
+                        if (part.functionCall) {
+        console.log('[LLMHub DEBUG] functionCall from Gemini:', JSON.stringify(part.functionCall))
         chunks.push({
           type: 'tool_call',
           toolCall: {

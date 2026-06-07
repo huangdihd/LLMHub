@@ -134,7 +134,8 @@ export default defineEventHandler(async (event) => {
             const serializedChunk = serializer.serializeStreamChunk(unifiedChunk)
             serializedChunk.index = blockIndex
             writeSSE('content_block_delta', serializedChunk)
-                    } else if (unifiedChunk.type === 'tool_call') {
+                              } else if (unifiedChunk.type === 'tool_call') {
+            console.log('[LLMHub DEBUG] tool_call chunk:', JSON.stringify(unifiedChunk.toolCall))
             flushThinkingBuffer()
 
             const toolCall = unifiedChunk.toolCall

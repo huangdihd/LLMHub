@@ -28,7 +28,7 @@ export class GeminiGenerateSerializer implements ProtocolSerializer {
           args: typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input
         }
         const part: any = { functionCall: fc }
-        if (tc.thoughtSignature) part.thought_signature = tc.thoughtSignature
+                        if (tc.thoughtSignature) part.thought_signature = tc.thoughtSignature
         parts.push(part)
       }
     }
@@ -113,7 +113,7 @@ export class GeminiGenerateSerializer implements ProtocolSerializer {
                   : {}
               }
               const part: any = { functionCall: fc }
-              if (chunk.toolCall.thoughtSignature) part.thought_signature = chunk.toolCall.thoughtSignature
+                                          if (chunk.toolCall.thoughtSignature) part.thought_signature = chunk.toolCall.thoughtSignature
               return part
             })()]
           },

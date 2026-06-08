@@ -120,7 +120,7 @@
             <UInput v-model="form.version" placeholder="2023-06-01" />
           </UFormGroup>
 
-          <UFormGroup v-if="form.protocol === 'claude'">
+          <UFormGroup>
             <UCheckbox v-model="form.normalize_cch" label="Normalize cch in system prompt to 00000 (improves upstream cache hit rate)" />
           </UFormGroup>
         </div>

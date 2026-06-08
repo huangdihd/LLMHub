@@ -9,7 +9,7 @@ import type {
 } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
 
-const CCH_REGEX = /\bcch=[^;\s]+/g
+const CCH_REGEX = /;\s*cch=\w+;/g
 
 export class ClaudeAdapter implements ProviderAdapter {
   name = 'claude'
@@ -99,7 +99,7 @@ export class ClaudeAdapter implements ProviderAdapter {
     if (!this.config.normalize_cch || !systemPrompt) {
       return systemPrompt
     }
-    const result = systemPrompt.replace(CCH_REGEX, 'cch=00000')
+    const result = systemPrompt.replace(CCH_REGEX, '; cch=00000;')
     console.log('[LLMHub] CCH normalize: matched=' + (systemPrompt.match(CCH_REGEX)?.[0] || 'none') + ' -> ' + (result.match(/cch=\S+/)?.[0] || 'none'))
     return result
   }

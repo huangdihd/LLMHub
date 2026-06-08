@@ -1,4 +1,7 @@
 import { ProviderManager } from '../../../providers/manager'
+import { getProviderStore } from '../../../stores/provider.store'
+
+const CCH_REGEX = /;\s*cch=\w+;/g
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -25,6 +28,14 @@ export default defineEventHandler(async (event) => {
 
     if (!adapter) {
       throw new Error(`Adapter not found for model: ${request.model}`)
+    }
+
+    // Apply CCH normalization before adapter formats the request
+    if (resolved.providerName && request.config.systemPrompt) {
+      const providerConfig = await getProviderStore().get(resolved.providerName)
+      if (providerConfig?.normalize_cch) {
+        request.config.systemPrompt = request.config.systemPrompt.replace(CCH_REGEX, '; cch=00000;')
+      }
     }
 
     if (request.stream && adapter) {

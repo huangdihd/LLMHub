@@ -9,7 +9,7 @@ import type {
 } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
 
-const CCH_REGEX = /;\s*cch=\w+/g
+const CCH_REGEX = /\bcch=[^;\s]+/g
 
 export class ClaudeAdapter implements ProviderAdapter {
   name = 'claude'
@@ -81,7 +81,7 @@ export class ClaudeAdapter implements ProviderAdapter {
       model: modelId || this.config.models[0]?.id,
       max_tokens: request.config.maxTokens,
       system: (this.config.normalize_cch && request.config.systemPrompt)
-        ? request.config.systemPrompt.replace(CCH_REGEX, '; cch=00000')
+        ? request.config.systemPrompt.replace(CCH_REGEX, 'cch=00000')
         : request.config.systemPrompt,
       messages,
       temperature: request.config.temperature,

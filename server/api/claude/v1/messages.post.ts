@@ -23,12 +23,14 @@ export default defineEventHandler(async (event) => {
 
   try {
     await incrementCalls()
-    const resolved = manager.resolveAdapter(request.model || '', 'claude-messages', request.stream, event.context._apiKeyRecord?.name)
+    const resolved = manager.resolveAdapter(request.model || '', 'claude-messages', request.stream)
     const adapter = resolved?.adapter
 
     if (!adapter) {
       throw new Error(`Adapter not found for model: ${request.model}`)
     }
+
+    console.log(`[LLMHub] ${new Date().toISOString()} key=${event.context._apiKeyRecord?.name || 'unknown'} model=${request.model} provider=${resolved.providerName}(${adapter.name}) stream=${request.stream ?? false}`)
 
     // Apply CCH normalization before adapter formats the request
     if (resolved.providerName && request.config.systemPrompt) {

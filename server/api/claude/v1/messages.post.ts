@@ -35,6 +35,7 @@ export default defineEventHandler(async (event) => {
       const providerConfig = await getProviderStore().get(resolved.providerName)
       if (providerConfig?.normalize_cch) {
         request.config.systemPrompt = request.config.systemPrompt.replace(CCH_REGEX, '; cch=00000;')
+        console.log(`[LLMHub] CCH normalized for key=${event.context._apiKeyRecord?.name || 'unknown'}, provider=${resolved.providerName}`)
       }
     }
 

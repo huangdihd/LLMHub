@@ -128,9 +128,9 @@ export class ProviderStore {
    * so every stored document follows the canonical shape.
    */
   private normalise(config: ProviderConfig): ProviderConfig {
-    const { name, display_name, protocol, enabled, use_custom_models, connection, models, defaults } = config
+    const { name, display_name, protocol, enabled, use_custom_models, normalize_cch, connection, models, defaults } = config
 
-    return {
+    const clean: ProviderConfig = {
       name,
       display_name: display_name || name,
       protocol: protocol || 'openai',
@@ -147,6 +147,12 @@ export class ProviderStore {
       models: models ?? [],
       ...(defaults ? { defaults } : {})
     }
+
+    if (normalize_cch !== undefined) {
+      clean.normalize_cch = normalize_cch
+    }
+
+    return clean
   }
 }
 

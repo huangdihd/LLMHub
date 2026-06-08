@@ -113,6 +113,7 @@ export interface ProviderConfig {
   protocol: 'openai' | 'claude' | 'gemini'
   enabled: boolean
   use_custom_models: boolean
+  normalize_cch?: boolean
   connection: {
     api_key: string
     base_url: string

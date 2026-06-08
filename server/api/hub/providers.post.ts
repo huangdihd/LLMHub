@@ -36,7 +36,8 @@ export default defineEventHandler(async (event) => {
         version: body.version || ''
         },
       models: body.models || [],
-      defaults: body.defaults || { temperature: 0.7, max_tokens: 4096 }
+      defaults: body.defaults || { temperature: 0.7, max_tokens: 4096 },
+      ...(body.normalize_cch !== undefined ? { normalize_cch: body.normalize_cch } : {})
     }
 
     const provider = await store.create(newProvider)

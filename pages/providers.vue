@@ -19,6 +19,9 @@
                 <UBadge :color="provider.enabled ? 'green' : 'red'" variant="subtle" size="sm">
                   {{ provider.enabled ? 'Enabled' : 'Disabled' }}
                 </UBadge>
+                <UBadge v-if="provider.normalize_cch" color="blue" variant="subtle" size="sm">
+                  CCH normalized
+                </UBadge>
               </h3>
             </div>
             <div class="flex items-center space-x-2">
@@ -116,6 +119,10 @@
           <UFormGroup v-if="form.protocol === 'claude'" label="API Version">
             <UInput v-model="form.version" placeholder="2023-06-01" />
           </UFormGroup>
+
+          <UFormGroup v-if="form.protocol === 'claude'">
+            <UCheckbox v-model="form.normalize_cch" label="Normalize cch in system prompt to 00000 (improves upstream cache hit rate)" />
+          </UFormGroup>
         </div>
 
         <template #footer>
@@ -150,7 +157,8 @@ const form = reactive({
   timeout: 30000,
   enable_timeout: true,
   max_retries: 3,
-  version: '2023-06-01'
+  version: '2023-06-01',
+  normalize_cch: false
 })
 
 onMounted(async () => {
@@ -190,6 +198,7 @@ function editProvider(provider: any) {
   form.enable_timeout = provider.connection.enable_timeout ?? true
   form.max_retries = provider.connection.max_retries || 3
   form.version = provider.connection.version || '2023-06-01'
+  form.normalize_cch = provider.normalize_cch || false
   isModalOpen.value = true
 }
 
@@ -206,6 +215,7 @@ function resetForm() {
   form.enable_timeout = true
   form.max_retries = 3
   form.version = '2023-06-01'
+  form.normalize_cch = false
 }
 
 function closeModal() {
@@ -231,7 +241,8 @@ async function saveProvider() {
       enable_timeout: form.enable_timeout,
       max_retries: form.max_retries,
       version: form.version,
-      models
+      models,
+      normalize_cch: form.normalize_cch
     }
 
     if (editingProvider.value) {

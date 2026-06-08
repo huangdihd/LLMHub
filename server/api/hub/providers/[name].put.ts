@@ -42,6 +42,7 @@ export default defineEventHandler(async (event) => {
       ...(body.protocol !== undefined ? { protocol: body.protocol } : {}),
       ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
       ...(body.use_custom_models !== undefined ? { use_custom_models: body.use_custom_models } : {}),
+      ...(body.normalize_cch !== undefined ? { normalize_cch: body.normalize_cch } : {}),
       ...(body.models !== undefined ? { models: body.models } : {}),
       ...(body.defaults !== undefined ? { defaults: body.defaults } : {}),
       ...(Object.keys(connectionPatch).length > 0 ? { connection: connectionPatch } : {})

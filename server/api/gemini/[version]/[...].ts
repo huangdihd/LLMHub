@@ -12,12 +12,24 @@ export default defineEventHandler(async (event) => {
   } else if (rawPath.endsWith(':streamGenerateContent')) {
     action = 'streamGenerateContent'
     modelEncoded = rawPath.slice('models/'.length, -':streamGenerateContent'.length)
+  } else if (rawPath.endsWith(':embedContent')) {
+    action = 'embedContent'
+    modelEncoded = rawPath.slice('models/'.length, -':embedContent'.length)
+  } else if (rawPath.endsWith(':batchEmbedContents')) {
+    action = 'batchEmbedContents'
+    modelEncoded = rawPath.slice('models/'.length, -':batchEmbedContents'.length)
   } else if (rawPath.endsWith('/generateContent')) {
     action = 'generateContent'
     modelEncoded = rawPath.slice('models/'.length, -'/generateContent'.length)
   } else if (rawPath.endsWith('/streamGenerateContent')) {
     action = 'streamGenerateContent'
     modelEncoded = rawPath.slice('models/'.length, -'/streamGenerateContent'.length)
+  } else if (rawPath.endsWith('/embedContent')) {
+    action = 'embedContent'
+    modelEncoded = rawPath.slice('models/'.length, -'/embedContent'.length)
+  } else if (rawPath.endsWith('/batchEmbedContents')) {
+    action = 'batchEmbedContents'
+    modelEncoded = rawPath.slice('models/'.length, -'/batchEmbedContents'.length)
   }
 
   if (!action || !modelEncoded || method !== 'POST') {
@@ -31,6 +43,52 @@ export default defineEventHandler(async (event) => {
 
   const resolvedModel = (event as any).context?._resolvedModel
   const fullModel = resolvedModel || model
+
+  // ===== Embeddings: embedContent / batchEmbedContents =====
+  if (action === 'embedContent' || action === 'batchEmbedContents') {
+    let body: any
+    try {
+      body = await readBody(event)
+    } catch (e: any) {
+      throwFormattedError(manager.buildGatewayError(`Parse error: ${e.message}`, 400))
+    }
+
+    let input: Array<string | number[]>
+    let dimensions: number | undefined
+    let taskType: string | undefined
+    let title: string | undefined
+
+    if (action === 'embedContent') {
+      input = [geminiContentToText(body?.content)]
+      dimensions = typeof body?.outputDimensionality === 'number' ? body.outputDimensionality : undefined
+      taskType = body?.taskType
+      title = body?.title
+    } else {
+      const requests = Array.isArray(body?.requests) ? body.requests : []
+      input = requests.map((r: any) => geminiContentToText(r?.content))
+      const first = requests[0] || {}
+      dimensions = typeof first.outputDimensionality === 'number' ? first.outputDimensionality : undefined
+      taskType = first.taskType
+      title = first.title
+    }
+
+    if (input.length === 0) {
+      throwFormattedError(manager.buildGatewayError('No content provided to embed', 400))
+    }
+
+    try {
+      incrementCalls().catch(() => {})
+      const result = await manager.embed({ model: fullModel, input, dimensions, taskType, title })
+      trackUsage(event, result.usage.totalTokens || 0, fullModel)
+
+      if (action === 'embedContent') {
+        return { embedding: { values: result.embeddings[0] || [] } }
+      }
+      return { embeddings: result.embeddings.map(values => ({ values })) }
+    } catch (e: any) {
+      throwFormattedError(e)
+    }
+  }
 
   let request
   try {

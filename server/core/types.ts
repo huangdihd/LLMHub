@@ -89,6 +89,30 @@ export interface Usage {
   completionTokens: number
 }
 
+// ============ 统一嵌入请求 ============
+export interface EmbeddingRequest {
+  model?: string
+  /** 归一化后的待嵌入输入，每个元素为一段文本或 token 序列 */
+  input: Array<string | number[]>
+  /** 输出维度（OpenAI: dimensions / Gemini: outputDimensionality） */
+  dimensions?: number
+  /** 客户端期望的编码格式，仅 OpenAI 协议出口使用 */
+  encodingFormat?: 'float' | 'base64'
+  /** Gemini 透传字段 */
+  taskType?: string
+  title?: string
+}
+
+// ============ 统一嵌入响应 ============
+export interface EmbeddingResponse {
+  embeddings: number[][]
+  model?: string
+  usage: {
+    promptTokens: number
+    totalTokens: number
+  }
+}
+
 // ============ 流式响应 ============
 export interface LLMStreamChunk {
   type: 'content' | 'thinking' | 'tool_call' | 'done' | 'error'
@@ -177,5 +201,6 @@ export interface ProviderAdapter {
   callStream(request: any): ReadableStream
   fromProviderResponse(response: any): LLMResponse
   fromProviderStreamChunk(chunk: any, state?: any): LLMStreamChunk | LLMStreamChunk[]
+  embed(request: EmbeddingRequest): Promise<EmbeddingResponse>
   getModels(): ModelInfo[]
 }

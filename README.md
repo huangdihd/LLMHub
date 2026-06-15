@@ -53,6 +53,7 @@ Navigate to **API Keys** page to create keys for your applications:
 POST /api/openai/chat/completions
 POST /api/openai/completions
 POST /api/openai/responses
+POST /api/openai/embeddings
 GET  /api/openai/models
 ```
 
@@ -69,8 +70,12 @@ GET  /api/claude/v1/models
 ```
 POST /api/gemini/v1/models/:model/generateContent
 POST /api/gemini/v1/models/:model/streamGenerateContent
+POST /api/gemini/v1/models/:model:embedContent
+POST /api/gemini/v1/models/:model:batchEmbedContents
 GET  /api/gemini/v1/models
 ```
+
+> Embeddings are routed to OpenAI- or Gemini-protocol providers; requests to a Claude-protocol provider return `501 embeddings_unavailable`.
 
 ### Usage Example
 
@@ -92,7 +97,27 @@ curl http://localhost:3000/api/gemini/v1/models/gemini-2.5-flash:generateContent
   -H "x-goog-api-key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"contents": [{"role": "user", "parts": [{"text": "Hello"}]}]}'
+
+# OpenAI Embeddings (input accepts a string or an array of strings)
+curl http://localhost:3000/api/openai/embeddings \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "Gemini/gemini-embedding-001", "input": ["hello", "world"], "dimensions": 768}'
+
+# Gemini Embeddings (single)
+curl http://localhost:3000/api/gemini/v1/models/Gemini%2Fgemini-embedding-001:embedContent \
+  -H "x-goog-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"content": {"parts": [{"text": "hello"}]}}'
+
+# Gemini Embeddings (batch)
+curl http://localhost:3000/api/gemini/v1/models/Gemini%2Fgemini-embedding-001:batchEmbedContents \
+  -H "x-goog-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"requests": [{"content": {"parts": [{"text": "hello"}]}}, {"content": {"parts": [{"text": "world"}]}}]}'
 ```
+
+> **Cross-protocol & model IDs**: Embedding requests carry a `provider/model` ID (e.g. `Gemini/gemini-embedding-001`) and are routed to that provider regardless of the request protocol — so the OpenAI `/embeddings` endpoint can target a Gemini-protocol provider and vice versa. Both `encoding_format: float` (default) and `base64` are supported on the OpenAI endpoint, plus an optional `dimensions` field (mapped to Gemini's `outputDimensionality`). Note: Gemini's batch embedding API does not report token usage, so `usage` is `0` when routed through a Gemini provider.
 
 ## Architecture
 

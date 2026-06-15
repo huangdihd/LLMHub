@@ -1,4 +1,4 @@
-import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock } from '../core/types'
+import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock, EmbeddingRequest, EmbeddingResponse } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
 
 export class OpenAIAdapter implements ProviderAdapter {
@@ -612,6 +612,60 @@ export class OpenAIAdapter implements ProviderAdapter {
     return { type: 'content', delta: '' }
   }
 
+  async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    const slashIndex = request.model?.indexOf('/')
+    const modelId = slashIndex !== undefined && slashIndex !== -1
+      ? request.model!.slice(slashIndex + 1)
+      : request.model
+
+    const payload: any = {
+      model: modelId || this.config.models[0]?.id,
+      input: request.input,
+      // 统一向上游请求 float，出口序列化阶段再按客户端需要编码
+      encoding_format: 'float'
+    }
+    if (request.dimensions != null) payload.dimensions = request.dimensions
+
+    const url = `${this.config.connection.base_url}/embeddings`
+    const response = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.config.connection.api_key}`,
+        'Connection': 'close'
+      },
+      body: JSON.stringify(payload)
+    }, this.config.connection)
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '')
+      let errorObj: any
+      try {
+        errorObj = JSON.parse(errorBody)
+      } catch {
+        errorObj = { message: errorBody || response.statusText }
+      }
+      const err: any = new Error(JSON.stringify(errorObj))
+      err._providerError = true
+      err._statusCode = response.status
+      err._errorBody = errorObj
+      err._source = this.config.name
+      throw err
+    }
+
+    const data: any = await response.json()
+    const items = (data.data || []).slice().sort((a: any, b: any) => (a.index ?? 0) - (b.index ?? 0))
+
+    return {
+      embeddings: items.map((d: any) => decodeOpenAIEmbedding(d.embedding)),
+      model: data.model || modelId,
+      usage: {
+        promptTokens: data.usage?.prompt_tokens || 0,
+        totalTokens: data.usage?.total_tokens || data.usage?.prompt_tokens || 0
+      }
+    }
+  }
+
   getModels(): ModelInfo[] {
     return this.config.models.map(m => ({
       id: `${this.config.name}/${m.id}`,
@@ -621,6 +675,16 @@ export class OpenAIAdapter implements ProviderAdapter {
       capabilities: m.capabilities
     }))
   }
+}
+
+/** 上游可能返回 float 数组或 base64 字符串，统一解码为 number[] */
+function decodeOpenAIEmbedding(embedding: any): number[] {
+  if (Array.isArray(embedding)) return embedding
+  if (typeof embedding === 'string') {
+    const buf = Buffer.from(embedding, 'base64')
+    return Array.from(new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4)))
+  }
+  return []
 }
 
 function safeJsonParseChat(str: string): object {

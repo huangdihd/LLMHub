@@ -1,4 +1,4 @@
-import type { ProviderAdapter, ProtocolParser, ProtocolSerializer, ModelInfo, LLMRequest, LLMResponse } from '../core/types'
+import type { ProviderAdapter, ProtocolParser, ProtocolSerializer, ModelInfo, LLMRequest, LLMResponse, EmbeddingRequest, EmbeddingResponse } from '../core/types'
 import { ProviderLoader } from './loader'
 import { OpenAIAdapter } from './openai'
 import { ClaudeAdapter } from './claude'
@@ -145,5 +145,30 @@ export class ProviderManager {
     const providerRequest = adapter.toProviderRequest(request)
     const providerResponse = await adapter.call(providerRequest)
     return adapter.fromProviderResponse(providerResponse)
+  }
+
+  async embed(request: EmbeddingRequest, providerName?: string): Promise<EmbeddingResponse> {
+    let targetProvider = providerName
+
+    if (!targetProvider && request.model) {
+      try {
+        const parsed = this.parseModelId(request.model)
+        targetProvider = parsed.provider
+      } catch (e) {
+        const firstAdapter = this.adapters.keys().next().value
+        if (firstAdapter) targetProvider = firstAdapter
+      }
+    }
+
+    if (!targetProvider) {
+      throw this.buildGatewayError('No provider available', 503)
+    }
+
+    const adapter = this.adapters.get(targetProvider)
+    if (!adapter) {
+      throw this.buildGatewayError(`Provider not found: ${targetProvider}`, 404)
+    }
+
+    return adapter.embed(request)
   }
 }

@@ -5,7 +5,9 @@ import type {
   LLMResponse,
   LLMStreamChunk,
   ModelInfo,
-  ContentBlock
+  ContentBlock,
+  EmbeddingRequest,
+  EmbeddingResponse
 } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
 
@@ -407,6 +409,20 @@ export class ClaudeAdapter implements ProviderAdapter {
     // Default to an empty content chunk if nothing matched, 
     // but handleChunk should ideally skip if delta is empty.
     return { type: 'content', delta: '' }
+  }
+
+  async embed(_request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    // Claude (Anthropic) 原生不提供 embeddings 接口，直接返回不可用
+    const err: any = new Error('Embeddings are not supported by the Claude provider')
+    err._providerError = false
+    err._statusCode = 501
+    err._errorBody = {
+      message: 'Embeddings are not supported by the Claude provider. Use an OpenAI- or Gemini-protocol provider instead.',
+      type: 'not_supported',
+      code: 'embeddings_unavailable'
+    }
+    err._source = this.config.name
+    throw err
   }
 
   getModels(): ModelInfo[] {

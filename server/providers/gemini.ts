@@ -1,4 +1,4 @@
-import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock } from '../core/types'
+import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock, EmbeddingRequest, EmbeddingResponse } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
 import { sanitizeGeminiSchema } from '../utils/sanitize-gemini-schema'
 
@@ -475,6 +475,60 @@ export class GeminiAdapter implements ProviderAdapter {
         return 'error'
       default:
         return 'stop'
+    }
+  }
+
+  async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    const slashIndex = request.model?.indexOf('/')
+    const modelId = slashIndex !== undefined && slashIndex !== -1
+      ? request.model!.slice(slashIndex + 1)
+      : (request.model || this.config.models[0]?.id || '')
+
+    const toText = (i: string | number[]) => (typeof i === 'string' ? i : JSON.stringify(i))
+
+    const requests = request.input.map(item => {
+      const req: any = {
+        model: `models/${modelId}`,
+        content: { parts: [{ text: toText(item) }] }
+      }
+      if (request.taskType) req.taskType = request.taskType
+      if (request.title) req.title = request.title
+      if (request.dimensions != null) req.outputDimensionality = request.dimensions
+      return req
+    })
+
+    const url = `${this.config.connection.base_url}/v1beta/models/${modelId}:batchEmbedContents`
+    const response = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': this.config.connection.api_key
+      },
+      body: JSON.stringify({ requests })
+    }, this.config.connection)
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '')
+      let errorObj: any
+      try {
+        errorObj = JSON.parse(errorBody)
+      } catch {
+        errorObj = { message: errorBody || response.statusText }
+      }
+      const err: any = new Error(JSON.stringify(errorObj))
+      err._providerError = true
+      err._statusCode = response.status
+      err._errorBody = errorObj
+      err._source = this.config.name
+      throw err
+    }
+
+    const data: any = await response.json()
+    return {
+      embeddings: (data.embeddings || []).map((e: any) => e.values || []),
+      model: modelId,
+      // batchEmbedContents 不返回 token 用量
+      usage: { promptTokens: 0, totalTokens: 0 }
     }
   }
 

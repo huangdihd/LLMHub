@@ -1,39 +1,39 @@
 <template>
-  <UContainer class="py-6 max-w-4xl">
-    <UCard class="flex flex-col h-[calc(100vh-8rem)]" :ui="{ body: { base: 'flex-1 overflow-hidden flex flex-col', padding: 'p-0 sm:p-0' } }">
+  <UContainer class="py-3 sm:py-6 max-w-4xl px-2 sm:px-6">
+    <UCard class="flex flex-col h-[calc(100dvh-6.5rem)] sm:h-[calc(100dvh-8rem)]" :ui="{ body: { base: 'flex-1 overflow-hidden flex flex-col', padding: 'p-0 sm:p-0' }, header: { padding: 'px-3 py-3 sm:px-6 sm:py-5' }, footer: { padding: 'px-3 py-3 sm:px-6 sm:py-4' } }">
       <template #header>
         <div class="space-y-3">
           <!-- Auth Selection -->
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <USelectMenu
               v-model="selectedAuthId"
               :options="authOptions"
               value-attribute="id"
               option-attribute="label"
-              class="w-48"
+              class="w-full sm:w-48"
               @update:model-value="onAuthModeChange"
             >
               <template #leading>
                 <UIcon name="i-heroicons-shield-check" class="w-4 h-4 text-primary" />
               </template>
             </USelectMenu>
-            
+
             <UInput
               v-if="selectedAuthId === 'custom'"
               v-model="apiKey"
               type="password"
               placeholder="Enter Custom API Key"
               icon="i-heroicons-key"
-              class="flex-1"
+              class="flex-1 min-w-0"
               size="sm"
               @update:model-value="onApiKeyChange"
             />
-            <div v-else class="flex-1 flex items-center px-3 py-1 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 text-xs text-gray-500 italic">
+            <div v-else class="flex-1 min-w-0 flex items-center px-3 py-1 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 text-xs text-gray-500 italic">
               {{ selectedAuthId === 'session' ? 'Using Admin Session Permissions' : 'Using Pre-defined Token Permissions' }}
             </div>
 
-            <UBadge v-if="apiKey || selectedAuthId === 'session'" color="green" variant="soft" size="sm">Auth Set</UBadge>
-            <UBadge v-else color="gray" variant="soft" size="sm">Auth Required</UBadge>
+            <UBadge v-if="apiKey || selectedAuthId === 'session'" color="green" variant="soft" size="sm" class="flex-shrink-0">Auth Set</UBadge>
+            <UBadge v-else color="gray" variant="soft" size="sm" class="flex-shrink-0">Auth Required</UBadge>
           </div>
           <!-- Model + Endpoint -->
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -46,16 +46,16 @@
               class="w-full sm:w-64"
               searchable
             />
-            <div class="flex items-center gap-4 w-full sm:w-auto">
+            <div class="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
               <USelectMenu
                 v-model="selectedEndpoint"
                 :options="endpoints"
                 value-attribute="value"
                 option-attribute="label"
-                class="flex-1 sm:w-64"
+                class="flex-1 min-w-0 sm:w-64"
               />
-              <UCheckbox v-if="!isGeminiEndpoint" v-model="useStream" label="Stream" />
-              <UBadge v-if="isGeminiEndpoint" :color="isGeminiStream ? 'green' : 'gray'" variant="soft" size="sm">
+              <UCheckbox v-if="!isGeminiEndpoint" v-model="useStream" label="Stream" class="flex-shrink-0" />
+              <UBadge v-if="isGeminiEndpoint" :color="isGeminiStream ? 'green' : 'gray'" variant="soft" size="sm" class="flex-shrink-0">
                 {{ isGeminiStream ? 'Stream (forced)' : 'No Stream (forced)' }}
               </UBadge>
             </div>

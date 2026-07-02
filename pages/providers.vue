@@ -1,8 +1,8 @@
 <template>
   <UContainer class="py-8 max-w-5xl">
-    <div class="flex justify-between items-center mb-6">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
       <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Provider Configuration</h2>
-      <UButton color="primary" @click="openAddModal">Add Provider</UButton>
+      <UButton color="primary" class="self-start sm:self-auto" @click="openAddModal">Add Provider</UButton>
     </div>
 
     <div v-if="loading" class="flex justify-center py-12">
@@ -12,9 +12,9 @@
     <div v-else class="space-y-6">
       <UCard v-for="provider in providers" :key="provider.name">
         <template #header>
-          <div class="flex justify-between items-start">
-            <div>
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+          <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+            <div class="min-w-0">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
                 {{ provider.display_name }}
                 <UBadge :color="provider.enabled ? 'green' : 'red'" variant="subtle" size="sm">
                   {{ provider.enabled ? 'Enabled' : 'Disabled' }}
@@ -24,7 +24,7 @@
                 </UBadge>
               </h3>
             </div>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-2 flex-shrink-0">
               <UButton color="gray" variant="ghost" icon="i-heroicons-pencil-square" @click="editProvider(provider)">Edit</UButton>
               <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="deleteProvider(provider.name)">Delete</UButton>
             </div>
@@ -38,7 +38,7 @@
           </div>
           <div>
             <span class="text-gray-500 dark:text-gray-400">Base URL:</span>
-            <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ provider.connection.base_url }}</span>
+            <span class="ml-2 font-medium text-gray-900 dark:text-white break-all">{{ provider.connection.base_url }}</span>
           </div>
           <div class="sm:col-span-2">
             <span class="text-gray-500 dark:text-gray-400">API Key:</span>
@@ -61,7 +61,7 @@
         </template>
 
         <div class="space-y-4">
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <UFormGroup label="Name">
               <UInput v-model="form.name" :disabled="!!editingProvider" placeholder="openai" />
             </UFormGroup>
@@ -70,7 +70,7 @@
             </UFormGroup>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <UFormGroup label="Protocol">
               <USelect v-model="form.protocol" :options="[{ label: 'OpenAI', value: 'openai' }, { label: 'Claude', value: 'claude' }, { label: 'Gemini', value: 'gemini' }]" />
             </UFormGroup>
@@ -104,7 +104,7 @@
             <UInput v-model="form.api_key" type="password" placeholder="sk-..." />
           </UFormGroup>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <UFormGroup label="Timeout (ms)">
               <div class="flex items-center gap-2">
                 <UInput v-model.number="form.timeout" type="number" class="flex-1" :disabled="!form.enable_timeout" />

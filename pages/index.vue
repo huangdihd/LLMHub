@@ -1,18 +1,18 @@
 <template>
   <UContainer class="py-8 max-w-6xl">
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
       <div>
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h2>
         <p class="text-gray-500 dark:text-gray-400 mt-1">Overview of your LLMHub gateway</p>
       </div>
-      <div class="flex gap-3">
+      <div class="flex flex-wrap gap-3">
         <UButton to="/providers" icon="i-heroicons-cog-6-tooth" color="gray" variant="solid">Manage Providers</UButton>
         <UButton to="/chat" icon="i-heroicons-chat-bubble-left-right" color="primary">New Chat</UButton>
       </div>
     </div>
 
     <!-- Quick Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
       <UCard :ui="{ body: { padding: 'p-6 sm:p-6' } }">
         <div class="flex items-center">
           <div class="p-3 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">

@@ -102,14 +102,14 @@
         </template>
 
         <div class="space-y-3">
-          <div v-for="entry in locked" :key="entry.ip" class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-800">
+          <div v-for="entry in locked" :key="entry.ip" class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-800">
             <div>
-              <code class="text-sm font-mono text-gray-900 dark:text-white">{{ entry.ip }}</code>
+              <code class="text-sm font-mono text-gray-900 dark:text-white break-all">{{ entry.ip }}</code>
               <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {{ entry.failures }} / {{ config.max_attempts }} failed attempts
               </div>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 flex-shrink-0">
               <span class="text-sm text-gray-500 dark:text-gray-400">
                 Unlocks in {{ formatLockout(entry.locked_until) }}
               </span>

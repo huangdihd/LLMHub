@@ -1,11 +1,11 @@
 <template>
   <UContainer class="py-8 max-w-4xl">
-    <div class="flex justify-between items-center mb-6">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
       <div>
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white">API Keys</h2>
         <p class="text-gray-500 dark:text-gray-400 mt-1">Manage API keys for LLM endpoint access</p>
       </div>
-      <UButton color="primary" icon="i-heroicons-plus" @click="openCreateModal">Create Key</UButton>
+      <UButton color="primary" icon="i-heroicons-plus" class="self-start sm:self-auto" @click="openCreateModal">Create Key</UButton>
     </div>
 
     <div v-if="loading" class="flex justify-center py-12">
@@ -15,9 +15,9 @@
     <div v-else class="space-y-4">
       <UCard v-for="key in keys" :key="key.id">
         <template #header>
-          <div class="flex justify-between items-center">
-            <div class="flex items-center gap-2">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ key.name }}</h3>
+          <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap min-w-0">
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white truncate">{{ key.name }}</h3>
               <UBadge v-if="Number(key.monthly_limit) > 0" :color="Number(key.tokens_used) >= Number(key.monthly_limit) ? 'red' : 'green'" variant="soft">
                 {{ key.tokens_used.toLocaleString() }} / {{ key.monthly_limit.toLocaleString() }} tokens
               </UBadge>
@@ -26,14 +26,14 @@
                 Auto: {{ key.fallback_strategy.name || 'auto' }}
               </UBadge>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-shrink-0">
               <UButton color="gray" variant="ghost" icon="i-heroicons-pencil-square" @click="openEditModal(key)">Edit</UButton>
               <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="deleteKey(key)">Delete</UButton>
             </div>
           </div>
         </template>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm mb-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-sm mb-4">
           <div>
             <span class="text-gray-500 dark:text-gray-400">Calls:</span>
             <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ key.call_count }}</span>
@@ -221,7 +221,7 @@
                     <span v-else class="font-mono text-sm">{{ entry.model }}</span>
                   </template>
                 </USelectMenu>
-                <UInput v-model.number="entry.limit" type="number" min="0" step="10000" placeholder="Limit" class="w-32" />
+                <UInput v-model.number="entry.limit" type="number" min="0" step="10000" placeholder="Limit" class="w-24 sm:w-32" />
                 <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="form.modelQuotaList.splice(i, 1)" />
               </div>
               <UButton color="blue" variant="soft" size="sm" @click="form.modelQuotaList.push({ model: '', limit: 0 })">
@@ -251,7 +251,7 @@
                     <span v-else class="font-mono text-sm">{{ entry.provider }}</span>
                   </template>
                 </USelectMenu>
-                <UInput v-model.number="entry.limit" type="number" min="0" step="100000" placeholder="Limit" class="w-32" />
+                <UInput v-model.number="entry.limit" type="number" min="0" step="100000" placeholder="Limit" class="w-24 sm:w-32" />
                 <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="form.providerQuotaList.splice(i, 1)" />
               </div>
               <UButton color="blue" variant="soft" size="sm" @click="form.providerQuotaList.push({ provider: '', limit: 0 })">

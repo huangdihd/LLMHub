@@ -1,6 +1,6 @@
 <template>
   <UContainer class="py-8 max-w-5xl">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
       <div>
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Model List</h2>
         <p class="text-gray-500 dark:text-gray-400 mt-1">{{ totalModels }} models across {{ providerGroups.length }} providers</p>
@@ -11,7 +11,7 @@
           v-model="search"
           icon="i-heroicons-magnifying-glass-20-solid"
           placeholder="Search models..."
-          class="w-64"
+          class="flex-1 sm:flex-none sm:w-64"
         />
       </div>
     </div>
@@ -48,18 +48,18 @@
           <div
             v-for="model in group.models"
             :key="model.id"
-            class="flex items-center justify-between py-3 first:pt-0 last:pb-0 px-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded transition-colors"
+            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 first:pt-0 last:pb-0 px-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded transition-colors"
           >
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <code class="text-sm font-mono font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                <code class="text-sm font-mono font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded break-all">
                   {{ model.id }}
                 </code>
                 <span class="text-sm text-gray-500 dark:text-gray-400">{{ model.display_name }}</span>
               </div>
             </div>
 
-            <div class="flex items-center gap-2 ml-4 flex-shrink-0">
+            <div class="flex items-center gap-2 flex-wrap sm:ml-4 flex-shrink-0">
               <UTooltip v-if="model.capabilities?.tools" text="Tool Calling">
                 <UBadge color="green" variant="soft" size="xs">
                   <UIcon name="i-heroicons-wrench-screwdriver" class="w-3 h-3 mr-0.5" />

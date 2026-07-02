@@ -9,13 +9,11 @@
               LLMHub
             </h1>
           </div>
-          <div class="flex items-center space-x-2">
-            <UButton to="/" variant="ghost" color="gray">Home</UButton>
-            <UButton to="/models" variant="ghost" color="gray">Models</UButton>
-            <UButton to="/api-keys" variant="ghost" color="gray">API Keys</UButton>
-            <UButton to="/providers" variant="ghost" color="gray">Providers</UButton>
-            <UButton to="/security" variant="ghost" color="gray">Security</UButton>
-            <UButton to="/chat" variant="ghost" color="gray">Chat</UButton>
+          <!-- Desktop nav -->
+          <div class="hidden md:flex items-center space-x-2">
+            <UButton v-for="link in navLinks" :key="link.to" :to="link.to" variant="ghost" color="gray">
+              {{ link.label }}
+            </UButton>
             <UButton v-if="!authenticated" to="/login" variant="ghost" color="gray" icon="i-heroicons-lock-closed">
               Login
             </UButton>
@@ -35,6 +33,64 @@
               </template>
             </ClientOnly>
           </div>
+          <!-- Mobile controls -->
+          <div class="flex md:hidden items-center gap-1">
+            <ClientOnly>
+              <UButton
+                :icon="isDark ? 'i-heroicons-moon-20-solid' : 'i-heroicons-sun-20-solid'"
+                color="gray"
+                variant="ghost"
+                aria-label="Theme"
+                @click="isDark = !isDark"
+              />
+              <template #fallback>
+                <div class="w-8 h-8" />
+              </template>
+            </ClientOnly>
+            <UButton
+              :icon="mobileMenuOpen ? 'i-heroicons-x-mark' : 'i-heroicons-bars-3'"
+              color="gray"
+              variant="ghost"
+              aria-label="Menu"
+              @click="mobileMenuOpen = !mobileMenuOpen"
+            />
+          </div>
+        </div>
+        <!-- Mobile menu -->
+        <div v-if="mobileMenuOpen" class="md:hidden pb-4 border-t border-gray-200 dark:border-gray-700 pt-2 space-y-1">
+          <UButton
+            v-for="link in navLinks"
+            :key="link.to"
+            :to="link.to"
+            variant="ghost"
+            color="gray"
+            block
+            class="justify-start"
+          >
+            {{ link.label }}
+          </UButton>
+          <UButton
+            v-if="!authenticated"
+            to="/login"
+            variant="ghost"
+            color="gray"
+            block
+            class="justify-start"
+            icon="i-heroicons-lock-closed"
+          >
+            Login
+          </UButton>
+          <UButton
+            v-else
+            color="gray"
+            variant="ghost"
+            block
+            class="justify-start"
+            icon="i-heroicons-arrow-right-on-rectangle"
+            @click="doLogout"
+          >
+            Logout
+          </UButton>
         </div>
       </UContainer>
     </nav>
@@ -43,7 +99,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+
+const navLinks = [
+  { label: 'Home', to: '/' },
+  { label: 'Models', to: '/models' },
+  { label: 'API Keys', to: '/api-keys' },
+  { label: 'Providers', to: '/providers' },
+  { label: 'Security', to: '/security' },
+  { label: 'Chat', to: '/chat' },
+]
+
+const mobileMenuOpen = ref(false)
+const route = useRoute()
+watch(() => route.fullPath, () => { mobileMenuOpen.value = false })
 
 const colorMode = useColorMode()
 const isDark = computed({

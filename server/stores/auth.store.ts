@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { generateTOTPSecret, verifyTOTP } from '../utils/totp'
 
 // ============================================================
 // Types
@@ -61,6 +62,11 @@ export interface BruteForceEntry {
 export interface SSRFConfig {
   enabled: boolean
   allowed_hosts: string[]
+}
+
+export interface TOTPConfig {
+  enabled: boolean
+  secret: string
 }
 
 // ============================================================
@@ -290,6 +296,35 @@ export class AuthStore {
     entry.count++
     await useStorage('data').setItem(key, entry)
     return { allowed: true }
+  }
+
+  // ---- TOTP (Two-Factor Auth) --------------------------------------
+
+  async getTOTPConfig(): Promise<TOTPConfig> {
+    const cfg = await useStorage('data').getItem<TOTPConfig>('auth:totp')
+    return cfg || { enabled: false, secret: '' }
+  }
+
+  /** Generate a pending secret; it only takes effect after confirmTOTPSetup. */
+  async beginTOTPSetup(): Promise<string> {
+    const secret = generateTOTPSecret()
+    await useStorage('data').setItem('auth:totp-pending', { secret, created_at: Date.now() })
+    return secret
+  }
+
+  /** Verify a code against the pending secret and activate TOTP. */
+  async confirmTOTPSetup(code: string): Promise<boolean> {
+    const pending = await useStorage('data').getItem<{ secret: string }>('auth:totp-pending')
+    if (!pending?.secret) return false
+    if (!verifyTOTP(pending.secret, code)) return false
+    await useStorage('data').setItem('auth:totp', { enabled: true, secret: pending.secret })
+    await useStorage('data').removeItem('auth:totp-pending')
+    return true
+  }
+
+  async disableTOTP(): Promise<void> {
+    await useStorage('data').removeItem('auth:totp')
+    await useStorage('data').removeItem('auth:totp-pending')
   }
 
   // ---- SSRF Protection --------------------------------------------

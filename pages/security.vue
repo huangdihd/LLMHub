@@ -90,6 +90,59 @@
         </div>
       </UCard>
 
+      <UCard class="mb-6">
+        <template #header>
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+              <UIcon name="i-heroicons-device-phone-mobile" class="w-5 h-5 text-primary" />
+              Two-Factor Authentication (TOTP)
+            </h3>
+            <UBadge :color="totpEnabled ? 'green' : 'gray'" variant="soft">
+              {{ totpEnabled ? 'Enabled' : 'Disabled' }}
+            </UBadge>
+          </div>
+        </template>
+
+        <div class="space-y-4">
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            Require a 6-digit code from an authenticator app (Google Authenticator, 1Password, etc.) in addition to the admin password when logging in.
+          </p>
+
+          <!-- Not enabled, not in setup -->
+          <div v-if="!totpEnabled && !totpSetup">
+            <UButton color="primary" :loading="totpLoading" @click="startTotpSetup">
+              Enable Two-Factor Auth
+            </UButton>
+          </div>
+
+          <!-- Setup flow -->
+          <div v-else-if="totpSetup" class="space-y-4">
+            <div class="flex flex-col sm:flex-row gap-4 items-start">
+              <div class="bg-white p-2 rounded-lg w-40 h-40 flex-shrink-0 mx-auto sm:mx-0" v-html="totpSetup.qrSvg" />
+              <div class="space-y-2 text-sm min-w-0">
+                <p class="text-gray-700 dark:text-gray-300">1. Scan the QR code with your authenticator app, or enter the secret manually:</p>
+                <code class="block text-xs font-mono bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded select-all break-all">{{ totpSetup.secret }}</code>
+                <p class="text-gray-700 dark:text-gray-300">2. Enter the 6-digit code shown in the app to confirm:</p>
+                <div class="flex flex-wrap items-center gap-2">
+                  <UInput v-model="totpCode" placeholder="000000" inputmode="numeric" maxlength="6" class="w-28" />
+                  <UButton color="primary" :loading="totpLoading" @click="confirmTotpSetup">Confirm</UButton>
+                  <UButton color="gray" variant="ghost" @click="cancelTotpSetup">Cancel</UButton>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Enabled -->
+          <div v-else class="space-y-2">
+            <p class="text-sm text-gray-700 dark:text-gray-300">To disable, enter a current code from your authenticator app:</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <UInput v-model="totpCode" placeholder="000000" inputmode="numeric" maxlength="6" class="w-28" />
+              <UButton color="red" variant="soft" :loading="totpLoading" @click="disableTotp">Disable Two-Factor Auth</UButton>
+            </div>
+          </div>
+        </div>
+      </UCard>
+
       <UCard v-if="locked.length > 0" class="mb-6">
         <template #header>
           <div class="flex items-center justify-between">
@@ -133,6 +186,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { renderSVG } from 'uqr'
 
 const toast = useToast()
 const loading = ref(true)
@@ -158,9 +212,73 @@ const ssrfAllowedHostsText = ref('')
 
 const locked = ref<{ ip: string; failures: number; locked_until: number }[]>([])
 
+const totpEnabled = ref(false)
+const totpLoading = ref(false)
+const totpCode = ref('')
+const totpSetup = ref<{ secret: string; qrSvg: string } | null>(null)
+
 onMounted(async () => {
-  await loadConfig()
+  await Promise.all([loadConfig(), loadTotpStatus()])
 })
+
+async function loadTotpStatus() {
+  try {
+    const data = await $fetch('/api/hub/totp') as any
+    totpEnabled.value = data.enabled ?? false
+  } catch (e: any) {
+    if (e?.statusCode === 401) return navigateTo('/login')
+  }
+}
+
+async function startTotpSetup() {
+  totpLoading.value = true
+  try {
+    const data = await $fetch('/api/hub/totp/setup', { method: 'POST' }) as any
+    totpSetup.value = { secret: data.secret, qrSvg: renderSVG(data.uri) }
+    totpCode.value = ''
+  } catch (e: any) {
+    if (e?.statusCode === 401) return navigateTo('/login')
+    toast.add({ title: 'Error', description: 'Failed to start TOTP setup', color: 'red' })
+  } finally {
+    totpLoading.value = false
+  }
+}
+
+function cancelTotpSetup() {
+  totpSetup.value = null
+  totpCode.value = ''
+}
+
+async function confirmTotpSetup() {
+  totpLoading.value = true
+  try {
+    await $fetch('/api/hub/totp/enable', { method: 'POST', body: { code: totpCode.value.trim() } })
+    totpEnabled.value = true
+    totpSetup.value = null
+    totpCode.value = ''
+    toast.add({ title: 'Two-factor auth enabled', icon: 'i-heroicons-check-circle', color: 'green', timeout: 2000 })
+  } catch (e: any) {
+    if (e?.statusCode === 401) return navigateTo('/login')
+    toast.add({ title: 'Invalid code', description: 'Check your authenticator app and try again', color: 'red' })
+  } finally {
+    totpLoading.value = false
+  }
+}
+
+async function disableTotp() {
+  totpLoading.value = true
+  try {
+    await $fetch('/api/hub/totp/disable', { method: 'POST', body: { code: totpCode.value.trim() } })
+    totpEnabled.value = false
+    totpCode.value = ''
+    toast.add({ title: 'Two-factor auth disabled', icon: 'i-heroicons-check-circle', color: 'green', timeout: 2000 })
+  } catch (e: any) {
+    if (e?.statusCode === 401) return navigateTo('/login')
+    toast.add({ title: 'Invalid code', description: 'Check your authenticator app and try again', color: 'red' })
+  } finally {
+    totpLoading.value = false
+  }
+}
 
 async function loadConfig() {
   refreshing.value = true

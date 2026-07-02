@@ -22,6 +22,16 @@
           />
         </UFormGroup>
 
+        <UFormGroup v-if="isSetup && totpEnabled" label="Two-Factor Code">
+          <UInput
+            v-model="totpCode"
+            placeholder="000000"
+            autocomplete="one-time-code"
+            inputmode="numeric"
+            maxlength="6"
+          />
+        </UFormGroup>
+
         <UButton type="submit" color="primary" block :loading="loading">
           {{ isSetup ? 'Log In' : 'Set Password' }}
         </UButton>
@@ -36,6 +46,8 @@
 import { ref, onMounted } from 'vue'
 
 const password = ref('')
+const totpCode = ref('')
+const totpEnabled = ref(false)
 const error = ref('')
 const loading = ref(false)
 const isSetup = ref(false)
@@ -44,6 +56,7 @@ onMounted(async () => {
   try {
     const res = await $fetch('/api/auth/status')
     isSetup.value = (res as any).initialized
+    totpEnabled.value = (res as any).totp_enabled ?? false
   } catch {}
 })
 
@@ -52,7 +65,9 @@ async function submit() {
   loading.value = true
   try {
     if (isSetup.value) {
-      await $fetch('/api/auth/login', { method: 'POST', body: { password: password.value } })
+      const body: Record<string, string> = { password: password.value }
+      if (totpCode.value.trim()) body.totp_code = totpCode.value.trim()
+      await $fetch('/api/auth/login', { method: 'POST', body })
     } else {
       await $fetch('/api/auth/setup', { method: 'POST', body: { password: password.value } })
       isSetup.value = true
@@ -64,7 +79,7 @@ async function submit() {
     window.location.href = redirect
   } catch (e: any) {
     if (e?.statusCode === 429) {
-      error.value = e.data?.error?.message || 'Too many attempts. Please try again later.'
+      error.value = e.data?.error?.message || e.data?.data?.error?.message || 'Too many attempts. Please try again later.'
     } else {
       error.value = e.data?.message || 'Something went wrong.'
     }

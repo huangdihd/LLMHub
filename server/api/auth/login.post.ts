@@ -1,6 +1,7 @@
 import { setCookie, getHeader } from 'h3'
 import { getAuthStore } from '../../stores/auth.store'
 import type { BruteForceConfig } from '../../stores/auth.store'
+import { verifyTOTP } from '../../utils/totp'
 
 function getClientIP(event: any, cfg: BruteForceConfig): string {
   if (cfg.ip_header) {
@@ -33,17 +34,22 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const { password } = await readBody(event)
+  const { password, totp_code } = await readBody(event)
   if (!password) {
     throw createError({ statusCode: 400, message: 'Password required.' })
   }
 
-  const valid = await store.verifyPassword(password)
-  if (!valid) {
+  // Evaluate both factors unconditionally so the response and behavior never
+  // reveal which one failed (or whether TOTP is enabled at all).
+  const passwordOk = await store.verifyPassword(password)
+  const totp = await store.getTOTPConfig()
+  const totpOk = totp.enabled ? verifyTOTP(totp.secret, String(totp_code ?? '')) : true
+
+  if (!passwordOk || !totpOk) {
     if (cfg.enabled) {
       await store.recordFailedAttempt(ip, cfg)
     }
-    throw createError({ statusCode: 401, message: 'Invalid password.' })
+    throw createError({ statusCode: 401, message: 'Invalid credentials.' })
   }
 
   // Success — clear brute force

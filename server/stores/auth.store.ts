@@ -75,6 +75,16 @@ export interface TOTPConfig {
 
 const SESSION_TTL = 24 * 60 * 60 * 1000
 
+// The api-keys record is one JSON file rewritten in full on every usage
+// update (fire-and-forget from the routes). The fs write is not atomic, so
+// an unserialized read can see a half-written file and reject a valid key.
+let keysLock: Promise<unknown> = Promise.resolve()
+function withKeysLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = keysLock.then(fn, fn)
+  keysLock = run.catch(() => {})
+  return run
+}
+
 export class AuthStore {
   // ---- API Keys --------------------------------------------------
 
@@ -376,11 +386,13 @@ export class AuthStore {
   // ---- Internal --------------------------------------------------
 
   private async readKeys(): Promise<ApiKeyRecord[]> {
-    return (await useStorage('data').getItem<ApiKeyRecord[]>('auth:api-keys')) || []
+    return withKeysLock(async () =>
+      (await useStorage('data').getItem<ApiKeyRecord[]>('auth:api-keys')) || []
+    )
   }
 
   private async writeKeys(keys: ApiKeyRecord[]): Promise<void> {
-    await useStorage('data').setItem('auth:api-keys', keys)
+    await withKeysLock(() => useStorage('data').setItem('auth:api-keys', keys))
   }
 
   private monthKey(): string {

@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "provider": "Gemini",
+    "protocol": "gemini",
+    "scenario": "truncated",
+    "kind": "sync",
+    "model": "gemini-2.5-flash-lite",
+    "url_path": "/v1beta/models/gemini-2.5-flash-lite:generateContent",
+    "recorded_at": "2026-07-07T15:52:52.985Z",
+    "request_body": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Count from 1 to 100, one number per line."
+            }
+          ]
+        }
+      ],
+      "generationConfig": {
+        "maxOutputTokens": 8,
+        "temperature": 0,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    }
+  },
+  "status": 200,
+  "content_type": "application/json; charset=UTF-8",
+  "body": {
+    "candidates": [
+      {
+        "content": {
+          "parts": [
+            {
+              "text": "1\n2\n3\n4\n"
+            }
+          ],
+          "role": "model"
+        },
+        "finishReason": "MAX_TOKENS",
+        "index": 0
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 16,
+      "candidatesTokenCount": 7,
+      "totalTokenCount": 23,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 16
+        }
+      ],
+      "serviceTier": "standard"
+    },
+    "modelVersion": "gemini-2.5-flash-lite",
+    "responseId": "1CBNateLH_GHz7IPk5Lt-AY"
+  },
+  "duration_ms": 942
+}

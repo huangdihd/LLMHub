@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "provider": "Gemini",
+    "protocol": "gemini",
+    "scenario": "text",
+    "kind": "sync",
+    "model": "gemini-2.5-flash-lite",
+    "url_path": "/v1beta/models/gemini-2.5-flash-lite:generateContent",
+    "recorded_at": "2026-07-07T15:52:49.790Z",
+    "request_body": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Say hello in one short sentence."
+            }
+          ]
+        }
+      ],
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "temperature": 0,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    }
+  },
+  "status": 200,
+  "content_type": "application/json; charset=UTF-8",
+  "body": {
+    "candidates": [
+      {
+        "content": {
+          "parts": [
+            {
+              "text": "Hello!"
+            }
+          ],
+          "role": "model"
+        },
+        "finishReason": "STOP",
+        "index": 0
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 8,
+      "candidatesTokenCount": 2,
+      "totalTokenCount": 10,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 8
+        }
+      ],
+      "serviceTier": "standard"
+    },
+    "modelVersion": "gemini-2.5-flash-lite",
+    "responseId": "0SBNau_VHYmHz7IPk6uY8Ac"
+  },
+  "duration_ms": 2540
+}

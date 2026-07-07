@@ -1,0 +1,85 @@
+{
+  "meta": {
+    "provider": "deepseek",
+    "protocol": "openai",
+    "scenario": "tool-call",
+    "kind": "sync",
+    "model": "deepseek-chat",
+    "url_path": "/chat/completions",
+    "recorded_at": "2026-07-07T15:52:36.755Z",
+    "request_body": {
+      "model": "deepseek-chat",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is the weather in Beijing right now? Use the tool."
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Get the current weather for a city",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string",
+                  "description": "City name"
+                }
+              },
+              "required": [
+                "city"
+              ]
+            }
+          }
+        }
+      ],
+      "max_tokens": 200,
+      "temperature": 0
+    }
+  },
+  "status": 200,
+  "content_type": "application/json",
+  "body": {
+    "id": "50b44b19-ea0c-44d9-ace5-ebab23a4bacd",
+    "object": "chat.completion",
+    "created": 1783439557,
+    "model": "deepseek-v4-flash",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [
+            {
+              "index": 0,
+              "id": "call_00_ubU0AM78XZodyIDbzCQO7890",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\": \"Beijing\"}"
+              }
+            }
+          ]
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 294,
+      "completion_tokens": 44,
+      "total_tokens": 338,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 294
+    },
+    "system_fingerprint": "fp_8b330d02d0_prod0820_fp8_kvcache_20260402"
+  },
+  "duration_ms": 774
+}

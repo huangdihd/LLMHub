@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "provider": "mimo_claude",
+    "protocol": "claude",
+    "scenario": "truncated",
+    "kind": "sync",
+    "model": "mimo-v2.5",
+    "url_path": "/anthropic/v1/messages",
+    "recorded_at": "2026-07-07T15:52:46.847Z",
+    "request_body": {
+      "model": "mimo-v2.5",
+      "max_tokens": 8,
+      "messages": [
+        {
+          "role": "user",
+          "content": "Count from 1 to 100, one number per line."
+        }
+      ]
+    }
+  },
+  "status": 200,
+  "content_type": "application/json",
+  "body": {
+    "id": "d3706664a8ab4b1781c455372935401c",
+    "type": "message",
+    "role": "assistant",
+    "model": "mimo-v2.5",
+    "stop_reason": "max_tokens",
+    "content": [
+      {
+        "type": "thinking",
+        "thinking": "The user wants me to count from",
+        "signature": ""
+      }
+    ],
+    "usage": {
+      "input_tokens": 70,
+      "output_tokens": 8,
+      "cache_read_input_tokens": 192
+    }
+  },
+  "duration_ms": 519
+}

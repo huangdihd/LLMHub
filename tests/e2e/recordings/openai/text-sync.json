@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "provider": "deepseek",
+    "protocol": "openai",
+    "scenario": "text",
+    "kind": "sync",
+    "model": "deepseek-chat",
+    "url_path": "/chat/completions",
+    "recorded_at": "2026-07-07T15:52:35.107Z",
+    "request_body": {
+      "model": "deepseek-chat",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say hello in one short sentence."
+        }
+      ],
+      "max_tokens": 50,
+      "temperature": 0
+    }
+  },
+  "status": 200,
+  "content_type": "application/json",
+  "body": {
+    "id": "8ba15889-b892-4f82-be55-dfb545112d51",
+    "object": "chat.completion",
+    "created": 1783439555,
+    "model": "deepseek-v4-flash",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Hello!"
+        },
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 11,
+      "completion_tokens": 2,
+      "total_tokens": 13,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 11
+    },
+    "system_fingerprint": "fp_8b330d02d0_prod0820_fp8_kvcache_20260402"
+  },
+  "duration_ms": 1054
+}

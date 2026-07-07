@@ -1,0 +1,102 @@
+{
+  "meta": {
+    "provider": "mimo_claude",
+    "protocol": "claude",
+    "scenario": "truncated",
+    "kind": "stream",
+    "model": "mimo-v2.5",
+    "url_path": "/anthropic/v1/messages",
+    "recorded_at": "2026-07-07T15:52:47.086Z",
+    "request_body": {
+      "model": "mimo-v2.5",
+      "max_tokens": 8,
+      "messages": [
+        {
+          "role": "user",
+          "content": "Count from 1 to 100, one number per line."
+        }
+      ],
+      "stream": true
+    }
+  },
+  "status": 200,
+  "content_type": "text/event-stream",
+  "raw_chunks": [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_8ab01d06beda4cc0aa5785de\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":70,\"output_tokens\":0,\"cache_read_input_tokens\":192}}}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"The user is\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" asking me to count\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"\"},\"index\":0}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"},\"usage\":{\"input_tokens\":70,\"output_tokens\":8,\"cache_read_input_tokens\":192}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+  ],
+  "raw_sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_8ab01d06beda4cc0aa5785de\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":70,\"output_tokens\":0,\"cache_read_input_tokens\":192}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"The user is\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" asking me to count\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"\"},\"index\":0}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"},\"usage\":{\"input_tokens\":70,\"output_tokens\":8,\"cache_read_input_tokens\":192}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+  "events": [
+    {
+      "type": "message_start",
+      "message": {
+        "id": "msg_8ab01d06beda4cc0aa5785de",
+        "type": "message",
+        "role": "assistant",
+        "model": "mimo-v2.5",
+        "content": [],
+        "usage": {
+          "input_tokens": 70,
+          "output_tokens": 0,
+          "cache_read_input_tokens": 192
+        }
+      }
+    },
+    {
+      "type": "content_block_start",
+      "index": 0,
+      "content_block": {
+        "type": "thinking",
+        "thinking": "",
+        "signature": ""
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": "The user is"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " asking me to count"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "signature_delta",
+        "signature": ""
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_stop",
+      "index": 0
+    },
+    {
+      "type": "message_delta",
+      "delta": {
+        "stop_reason": "max_tokens"
+      },
+      "usage": {
+        "input_tokens": 70,
+        "output_tokens": 8,
+        "cache_read_input_tokens": 192
+      }
+    },
+    {
+      "type": "message_stop"
+    }
+  ],
+  "duration_ms": 401
+}

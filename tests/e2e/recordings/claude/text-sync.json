@@ -1,0 +1,47 @@
+{
+  "meta": {
+    "provider": "mimo_claude",
+    "protocol": "claude",
+    "scenario": "text",
+    "kind": "sync",
+    "model": "mimo-v2.5",
+    "url_path": "/anthropic/v1/messages",
+    "recorded_at": "2026-07-07T15:52:42.518Z",
+    "request_body": {
+      "model": "mimo-v2.5",
+      "max_tokens": 64,
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say hello in one short sentence."
+        }
+      ]
+    }
+  },
+  "status": 200,
+  "content_type": "application/json",
+  "body": {
+    "id": "4657305aec104806a0204d4ecb361494",
+    "type": "message",
+    "role": "assistant",
+    "model": "mimo-v2.5",
+    "stop_reason": "end_turn",
+    "content": [
+      {
+        "type": "text",
+        "text": "你好！很高兴见到你！😊"
+      },
+      {
+        "type": "thinking",
+        "thinking": "The user is asking me to say hello in one short sentence. This is a simple and straightforward request. I'll greet them warmly and concisely.",
+        "signature": ""
+      }
+    ],
+    "usage": {
+      "input_tokens": 62,
+      "output_tokens": 41,
+      "cache_read_input_tokens": 192
+    }
+  },
+  "duration_ms": 1125
+}

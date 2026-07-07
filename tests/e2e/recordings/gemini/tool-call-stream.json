@@ -1,0 +1,97 @@
+{
+  "meta": {
+    "provider": "Gemini",
+    "protocol": "gemini",
+    "scenario": "tool-call",
+    "kind": "stream",
+    "model": "gemini-2.5-flash-lite",
+    "url_path": "/v1beta/models/gemini-2.5-flash-lite:streamGenerateContent?alt=sse",
+    "recorded_at": "2026-07-07T15:52:52.044Z",
+    "request_body": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "What is the weather in Beijing right now? Use the tool."
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "get_weather",
+              "description": "Get the current weather for a city",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string",
+                    "description": "City name"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "generationConfig": {
+        "maxOutputTokens": 300,
+        "temperature": 0,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    }
+  },
+  "status": 200,
+  "content_type": "text/event-stream",
+  "raw_chunks": [
+    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"get_weather\",\"args\": {\"city\": \"Beijing\"}}}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0,\"finishMessage\": \"Model generated function call(s).\"}],\"usageMetadata\": {\"promptTokenCount\": 54,\"candidatesTokenCount\": 15,\"totalTokenCount\": 69,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 54}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"0yBNarzbJuCfz7IP6L6HgQ0\"}\r\n\r\n"
+  ],
+  "raw_sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"get_weather\",\"args\": {\"city\": \"Beijing\"}}}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0,\"finishMessage\": \"Model generated function call(s).\"}],\"usageMetadata\": {\"promptTokenCount\": 54,\"candidatesTokenCount\": 15,\"totalTokenCount\": 69,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 54}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"0yBNarzbJuCfz7IP6L6HgQ0\"}\r\n\r\n",
+  "events": [
+    {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "functionCall": {
+                  "name": "get_weather",
+                  "args": {
+                    "city": "Beijing"
+                  }
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "finishReason": "STOP",
+          "index": 0,
+          "finishMessage": "Model generated function call(s)."
+        }
+      ],
+      "usageMetadata": {
+        "promptTokenCount": 54,
+        "candidatesTokenCount": 15,
+        "totalTokenCount": 69,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 54
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "modelVersion": "gemini-2.5-flash-lite",
+      "responseId": "0yBNarzbJuCfz7IP6L6HgQ0"
+    }
+  ],
+  "duration_ms": 883
+}

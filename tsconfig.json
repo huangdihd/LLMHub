@@ -1,6 +1,7 @@
 {
   "extends": "./.nuxt/tsconfig.json",
   "exclude": [
-    "references/**/*"
+    "references/**/*",
+    "tests/**/*"
   ]
 }

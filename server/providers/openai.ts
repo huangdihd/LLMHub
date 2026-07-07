@@ -375,7 +375,7 @@ export class OpenAIAdapter implements ProviderAdapter {
 
     return {
       content: content.length > 0 ? content : (message.content || ''),
-      finishReason: choice.finish_reason === 'tool_calls' ? 'tool_calls' : 'stop',
+      finishReason: mapOpenAIFinishReason(choice.finish_reason),
       toolCalls,
       usage: {
         promptTokens: response.usage?.prompt_tokens || 0,
@@ -418,7 +418,7 @@ export class OpenAIAdapter implements ProviderAdapter {
         state.dsml_buffer = ''
       }
 
-      let finishReason = choice.finish_reason === 'tool_calls' ? 'tool_calls' : 'stop'
+      let finishReason: string = mapOpenAIFinishReason(choice.finish_reason)
       if (state.dsml_in_tool_calls) {
          finishReason = 'tool_calls'
       }
@@ -685,6 +685,12 @@ function decodeOpenAIEmbedding(embedding: any): number[] {
     return Array.from(new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4)))
   }
   return []
+}
+
+function mapOpenAIFinishReason(reason: string | undefined): 'stop' | 'length' | 'tool_calls' {
+  if (reason === 'tool_calls' || reason === 'function_call') return 'tool_calls'
+  if (reason === 'length') return 'length'
+  return 'stop'
 }
 
 function safeJsonParseChat(str: string): object {

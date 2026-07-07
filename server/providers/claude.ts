@@ -328,7 +328,7 @@ export class ClaudeAdapter implements ProviderAdapter {
 
     return {
       content,
-      finishReason: response.stop_reason === 'tool_use' ? 'tool_calls' : 'stop',
+      finishReason: mapClaudeStopReason(response.stop_reason),
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       usage: {
         promptTokens: response.usage?.input_tokens || 0,
@@ -398,7 +398,7 @@ export class ClaudeAdapter implements ProviderAdapter {
         delete state._outputTokens
         return {
           type: 'done',
-          finishReason: chunk.delta.stop_reason === 'tool_use' ? 'tool_calls' : 'stop',
+          finishReason: mapClaudeStopReason(chunk.delta.stop_reason),
           usage: { promptTokens, completionTokens }
         }
       }
@@ -434,6 +434,12 @@ export class ClaudeAdapter implements ProviderAdapter {
       capabilities: m.capabilities
     }))
   }
+}
+
+function mapClaudeStopReason(reason: string | undefined): 'stop' | 'length' | 'tool_calls' {
+  if (reason === 'tool_use') return 'tool_calls'
+  if (reason === 'max_tokens') return 'length'
+  return 'stop'
 }
 
 function safeJsonParse(str: string): object {

@@ -37,16 +37,19 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // Anthropic list format: type:'model', created_at, has_more / first_id / last_id
+    const data = models.map(m => ({
+      type: 'model',
+      id: m.id,
+      display_name: m.display_name,
+      created_at: new Date().toISOString()
+    }))
+
     return {
-      object: 'list',
-      data: models.map(m => ({
-        id: m.id,
-        object: 'model',
-        created: Math.floor(Date.now() / 1000),
-        owned_by: m.provider,
-        display_name: m.display_name,
-        capabilities: m.capabilities
-      }))
+      data,
+      has_more: false,
+      first_id: data[0]?.id ?? null,
+      last_id: data[data.length - 1]?.id ?? null
     }
   } catch (error: any) {
     throwFormattedError(error)

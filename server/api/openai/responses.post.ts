@@ -1,4 +1,6 @@
 import { ProviderManager } from '../../providers/manager'
+import { OpenAIResponsesSerializer } from '../../protocols/openai-responses-serializer'
+import type { ResponsesStreamEvent } from '../../protocols/openai-responses-serializer'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -35,62 +37,83 @@ export default defineEventHandler(async (event) => {
         }
       }, 15000)
 
+      // Streaming serialization is stateful (item ids, output_index, sequence_number)
+      const serializer = new OpenAIResponsesSerializer()
+      const writeEvents = (events: ResponsesStreamEvent[]) => {
+        for (const e of events) {
+          event.node.res.write(`event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`)
+        }
+      }
+
+      writeEvents(serializer.startEvents())
+
       try {
         const stream = adapter.callStream(providerRequest)
         const reader = stream.getReader()
         const decoder = new TextDecoder()
-        let buffer = ''
-        let streamUsage: any = null
+
+        let lineBuffer = ''
+        let providerState = {}
+        let doneSent = false
+
+        const processLine = (line: string) => {
+          if (!line.startsWith('data: ')) return
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') {
+            if (!doneSent) {
+              doneSent = true
+              trackUsage(event, 0, request.model)
+              writeEvents(serializer.serializeStreamChunk({ type: 'done' }))
+            }
+            return
+          }
+          if (!data) return
+          try {
+            const originalChunk = JSON.parse(data)
+            const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk, providerState)
+            const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
+
+            for (const unifiedChunk of unifiedChunks) {
+              if (unifiedChunk.type === 'done') {
+                const u = unifiedChunk.usage
+                if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
+                if (doneSent) continue
+                doneSent = true
+                if (!u) trackUsage(event, 0, request.model)
+                writeEvents(serializer.serializeStreamChunk(unifiedChunk))
+              } else if ((unifiedChunk.type !== 'content' && unifiedChunk.type !== 'thinking') || unifiedChunk.delta) {
+                writeEvents(serializer.serializeStreamChunk(unifiedChunk))
+              }
+            }
+          } catch (e) {}
+        }
 
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-
+          lineBuffer += decoder.decode(value, { stream: true })
+          const lines = lineBuffer.split('\n')
+          lineBuffer = lines.pop() || ''
           for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed || !trimmed.startsWith('data: ')) {
-              event.node.res.write(line + '\n')
-              continue
-            }
-            const data = trimmed.slice(6).trim()
-            if (data === '[DONE]') {
-              event.node.res.write('data: [DONE]\n\n')
-              continue
-            }
-            if (!data) continue
-
-            try {
-              const chunk = JSON.parse(data)
-              if (chunk.usage) streamUsage = chunk.usage
-            } catch (e) {}
-
-            event.node.res.write(`data: ${data}\n\n`)
+            processLine(line)
           }
         }
+        if (lineBuffer.trim()) processLine(lineBuffer.trim())
 
-        if (buffer.trim() && buffer.trim().startsWith('data: ')) {
-          const d = buffer.trim().slice(6).trim()
-          if (d !== '[DONE]') {
-            try {
-              const chunk = JSON.parse(d)
-              if (chunk.usage) streamUsage = chunk.usage
-            } catch (e) {}
-          }
-          event.node.res.write(`data: ${d}\n\n`)
-        }
-
-        if (streamUsage) {
-          trackUsage(event, (streamUsage.prompt_tokens || 0) + (streamUsage.completion_tokens || streamUsage.total_tokens || 0), request.model)
-        } else {
+        // Upstream ended without a terminal chunk — still close the response
+        if (!doneSent) {
+          doneSent = true
           trackUsage(event, 0, request.model)
+          writeEvents(serializer.serializeStreamChunk({ type: 'done' }))
         }
       } catch (streamError: any) {
         const resp = formatErrorResponse(streamError)
-        event.node.res.write(`data: ${JSON.stringify(resp)}\n\n`)
+        event.node.res.write(`event: error\ndata: ${JSON.stringify({
+          type: 'error',
+          code: resp.error?.code || null,
+          message: resp.error?.message || 'Stream error',
+          param: null
+        })}\n\n`)
       } finally {
         clearInterval(keepAliveTimer)
         event.node.res.end()
@@ -101,7 +124,7 @@ export default defineEventHandler(async (event) => {
 
     const response = await manager.callLLM(request)
 
-    const serializer = manager.getSerializer('openai-chat')
+    const serializer = manager.getSerializer('openai-responses')
     if (!serializer) {
       throw manager.buildGatewayError('Serializer not found', 500)
     }

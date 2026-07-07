@@ -1,5 +1,11 @@
 import type { ProtocolSerializer, LLMResponse, LLMStreamChunk } from '../core/types'
 
+function mapClaudeStopReason(reason: string | undefined): string {
+  if (reason === 'tool_calls') return 'tool_use'
+  if (reason === 'length') return 'max_tokens'
+  return 'end_turn'
+}
+
 export class ClaudeMessagesSerializer implements ProtocolSerializer {
   name = 'claude-messages'
 
@@ -37,7 +43,7 @@ export class ClaudeMessagesSerializer implements ProtocolSerializer {
       role: 'assistant',
       content,
       model: 'llmhub',
-      stop_reason: response.finishReason === 'tool_calls' ? 'tool_use' : 'end_turn',
+      stop_reason: mapClaudeStopReason(response.finishReason),
       usage: {
         input_tokens: response.usage.promptTokens,
         output_tokens: response.usage.completionTokens
@@ -50,7 +56,7 @@ export class ClaudeMessagesSerializer implements ProtocolSerializer {
       return {
         type: 'message_delta',
         delta: {
-          stop_reason: chunk.finishReason === 'tool_calls' ? 'tool_use' : 'end_turn'
+          stop_reason: mapClaudeStopReason(chunk.finishReason)
         },
         usage: {
           output_tokens: chunk.usage?.completionTokens || 0

@@ -36,61 +36,68 @@ export default defineEventHandler(async (event) => {
       }, 15000)
 
       try {
+        const serializer = manager.getSerializer('openai-completion')
         const stream = adapter.callStream(providerRequest)
         const reader = stream.getReader()
         const decoder = new TextDecoder()
-        let buffer = ''
-        let streamUsage: any = null
+
+        let lineBuffer = ''
+        let providerState = {}
+        let doneSent = false
+
+        const processLine = (line: string) => {
+          if (!line.startsWith('data: ')) return
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') {
+            if (!doneSent) {
+              doneSent = true
+              const doneChunk = serializer!.serializeStreamChunk({ type: 'done' })
+              event.node.res.write(`data: ${JSON.stringify(doneChunk)}\n\n`)
+            }
+            event.node.res.write('data: [DONE]\n\n')
+            return
+          }
+          if (!data) return
+          try {
+            const originalChunk = JSON.parse(data)
+            const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk, providerState)
+            const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
+
+            for (const unifiedChunk of unifiedChunks) {
+              if (unifiedChunk.type === 'done') {
+                const u = unifiedChunk.usage
+                if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
+                if (doneSent) continue
+                doneSent = true
+                const serializedChunk = serializer!.serializeStreamChunk(unifiedChunk)
+                event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
+                event.node.res.write('data: [DONE]\n\n')
+              } else if (unifiedChunk.type === 'content' && unifiedChunk.delta) {
+                const serializedChunk = serializer!.serializeStreamChunk(unifiedChunk)
+                event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
+              }
+              // thinking / tool_call chunks have no representation in legacy completions
+            }
+          } catch (e) {}
+        }
 
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-
+          lineBuffer += decoder.decode(value, { stream: true })
+          const lines = lineBuffer.split('\n')
+          lineBuffer = lines.pop() || ''
           for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed || !trimmed.startsWith('data: ')) {
-              event.node.res.write(line + '\n')
-              continue
-            }
-            const data = trimmed.slice(6).trim()
-            if (data === '[DONE]') {
-              event.node.res.write('data: [DONE]\n\n')
-              continue
-            }
-            if (!data) continue
-
-            try {
-              const chunk = JSON.parse(data)
-              // Capture usage from the last chunk
-              if (chunk.usage) {
-                streamUsage = chunk.usage
-              }
-            } catch (e) {}
-
-            event.node.res.write(`data: ${data}\n\n`)
+            processLine(line)
           }
         }
+        if (lineBuffer.trim()) processLine(lineBuffer.trim())
 
-        // Write remaining buffer and track usage
-        if (buffer.trim() && buffer.trim().startsWith('data: ')) {
-          const d = buffer.trim().slice(6).trim()
-          if (d !== '[DONE]') {
-            try {
-              const chunk = JSON.parse(d)
-              if (chunk.usage) streamUsage = chunk.usage
-            } catch (e) {}
-          }
-          event.node.res.write(`data: ${d}\n\n`)
-        }
-
-        if (streamUsage) {
-          trackUsage(event, (streamUsage.prompt_tokens || 0) + (streamUsage.completion_tokens || streamUsage.total_tokens || 0), request.model)
-        } else {
-          trackUsage(event, 0, request.model)
+        if (!doneSent) {
+          doneSent = true
+          const doneChunk = serializer!.serializeStreamChunk({ type: 'done' })
+          event.node.res.write(`data: ${JSON.stringify(doneChunk)}\n\n`)
+          event.node.res.write('data: [DONE]\n\n')
         }
       } catch (streamError: any) {
         const resp = formatErrorResponse(streamError)
@@ -105,7 +112,7 @@ export default defineEventHandler(async (event) => {
 
     const response = await manager.callLLM(request)
 
-    const serializer = manager.getSerializer('openai-chat')
+    const serializer = manager.getSerializer('openai-completion')
     if (!serializer) {
       throw manager.buildGatewayError('Serializer not found', 500)
     }

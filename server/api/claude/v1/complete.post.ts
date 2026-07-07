@@ -31,66 +31,74 @@ export default defineEventHandler(async (event) => {
 
       const keepAliveTimer = setInterval(() => {
         if (!event.node.res.writableEnded) {
-          event.node.res.write(': ping\n\n')
+          event.node.res.write(`event: ping\ndata: {"type":"ping"}\n\n`)
         }
       }, 15000)
 
       try {
+        const serializer = manager.getSerializer('claude-completion')
         const stream = adapter.callStream(providerRequest)
         const reader = stream.getReader()
         const decoder = new TextDecoder()
-        let buffer = ''
-        let streamUsage: any = null
+
+        let lineBuffer = ''
+        let providerState = {}
+        let doneSent = false
+
+        const writeCompletion = (data: any) => {
+          event.node.res.write(`event: completion\ndata: ${JSON.stringify(data)}\n\n`)
+        }
+
+        const processLine = (line: string) => {
+          if (!line.startsWith('data: ')) return
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') {
+            if (!doneSent) {
+              doneSent = true
+              writeCompletion(serializer!.serializeStreamChunk({ type: 'done' }))
+            }
+            return
+          }
+          if (!data) return
+          try {
+            const originalChunk = JSON.parse(data)
+            const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk, providerState)
+            const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
+
+            for (const unifiedChunk of unifiedChunks) {
+              if (unifiedChunk.type === 'done') {
+                const u = unifiedChunk.usage
+                if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
+                if (doneSent) continue
+                doneSent = true
+                writeCompletion(serializer!.serializeStreamChunk(unifiedChunk))
+              } else if (unifiedChunk.type === 'content' && unifiedChunk.delta) {
+                writeCompletion(serializer!.serializeStreamChunk(unifiedChunk))
+              }
+              // thinking / tool_call chunks have no representation in legacy completions
+            }
+          } catch (e) {}
+        }
 
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-
+          lineBuffer += decoder.decode(value, { stream: true })
+          const lines = lineBuffer.split('\n')
+          lineBuffer = lines.pop() || ''
           for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed) continue
-
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6).trim()
-              if (!data) continue
-              try {
-                const chunk = JSON.parse(data)
-                if (chunk.usage) streamUsage = chunk.usage
-              } catch (e) {}
-              event.node.res.write(`data: ${data}\n\n`)
-            } else {
-              event.node.res.write(line + '\n')
-            }
+            processLine(line)
           }
         }
+        if (lineBuffer.trim()) processLine(lineBuffer.trim())
 
-        if (buffer.trim()) {
-          if (buffer.startsWith('data: ')) {
-            const d = buffer.slice(6).trim()
-            if (d) {
-              try {
-                const chunk = JSON.parse(d)
-                if (chunk.usage) streamUsage = chunk.usage
-              } catch (e) {}
-            }
-            event.node.res.write(`data: ${d}\n\n`)
-          } else {
-            event.node.res.write(buffer)
-          }
-        }
-
-        if (streamUsage) {
-          trackUsage(event, (streamUsage.prompt_tokens || streamUsage.input_tokens || 0) + (streamUsage.completion_tokens || streamUsage.output_tokens || 0), request.model)
-        } else {
-          trackUsage(event, 0, request.model)
+        if (!doneSent) {
+          doneSent = true
+          writeCompletion(serializer!.serializeStreamChunk({ type: 'done' }))
         }
       } catch (streamError: any) {
         const resp = formatErrorResponse(streamError)
-        event.node.res.write(`data: ${JSON.stringify(resp)}\n\n`)
+        event.node.res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: resp.error })}\n\n`)
       } finally {
         clearInterval(keepAliveTimer)
         event.node.res.end()
@@ -101,7 +109,7 @@ export default defineEventHandler(async (event) => {
 
     const response = await manager.callLLM(request)
 
-    const serializer = manager.getSerializer('claude-messages')
+    const serializer = manager.getSerializer('claude-completion')
     if (!serializer) {
       throw manager.buildGatewayError('Serializer not found', 500)
     }

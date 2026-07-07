@@ -10,7 +10,10 @@ import { ClaudeMessagesParser } from '../protocols/claude-messages'
 import { ClaudeCompletionParser } from '../protocols/claude-completion'
 import { GeminiGenerateParser } from '../protocols/gemini-generate'
 import { OpenAIChatSerializer } from '../protocols/openai-chat-serializer'
+import { OpenAIResponsesSerializer } from '../protocols/openai-responses-serializer'
+import { OpenAICompletionSerializer } from '../protocols/openai-completion-serializer'
 import { ClaudeMessagesSerializer } from '../protocols/claude-messages-serializer'
+import { ClaudeCompletionSerializer } from '../protocols/claude-completion-serializer'
 import { GeminiGenerateSerializer } from '../protocols/gemini-generate-serializer'
 
 export class ProviderManager {
@@ -32,7 +35,10 @@ export class ProviderManager {
     ]
 
     this.serializers.set('openai-chat', new OpenAIChatSerializer())
+    this.serializers.set('openai-responses', new OpenAIResponsesSerializer())
+    this.serializers.set('openai-completion', new OpenAICompletionSerializer())
     this.serializers.set('claude-messages', new ClaudeMessagesSerializer())
+    this.serializers.set('claude-completion', new ClaudeCompletionSerializer())
     this.serializers.set('gemini-generate', new GeminiGenerateSerializer())
   }
 

@@ -117,7 +117,10 @@ export default defineEventHandler(async (event) => {
   }
 
   // streamGenerateContent
+  // With ?alt=sse the reply is an SSE stream; without it the official API
+  // returns one JSON array of GenerateContentResponse chunks.
   request.stream = true
+  const useSSE = getQuery(event).alt === 'sse'
   try {
     incrementCalls().catch(() => {})
     const resolved = manager.resolveAdapter(request.model || '', 'gemini-generate', true)
@@ -126,17 +129,27 @@ export default defineEventHandler(async (event) => {
     const adapter = resolved.adapter
     const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
 
-    setResponseHeaders(event, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no'
-    })
-    event.node.res.flushHeaders()
+    let keepAliveTimer: any = null
+    const collected: any[] = []
 
-    const keepAliveTimer = setInterval(() => {
-      if (!event.node.res.writableEnded) event.node.res.write(': ping\n\n')
-    }, 15000)
+    if (useSSE) {
+      setResponseHeaders(event, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      })
+      event.node.res.flushHeaders()
+
+      keepAliveTimer = setInterval(() => {
+        if (!event.node.res.writableEnded) event.node.res.write(': ping\n\n')
+      }, 15000)
+    }
+
+    const emit = (serialized: any) => {
+      if (useSSE) event.node.res.write(`data: ${JSON.stringify(serialized)}\n\n`)
+      else collected.push(serialized)
+    }
 
     try {
       const serializer = manager.getSerializer('gemini-generate')
@@ -151,7 +164,7 @@ export default defineEventHandler(async (event) => {
         if (!line.startsWith('data: ')) return
         const data = line.slice(6).trim()
         if (data === '[DONE]') {
-          if (!doneSent) { doneSent = true; event.node.res.write(`data: ${JSON.stringify(serializer!.serializeStreamChunk({ type: 'done' }))}\n\n`) }
+          if (!doneSent) { doneSent = true; emit(serializer!.serializeStreamChunk({ type: 'done' })) }
           return
         }
         if (!data) return
@@ -164,9 +177,9 @@ export default defineEventHandler(async (event) => {
               if (doneSent) { const u = (uc as any).usage; if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model); return }
               doneSent = true
               const u = (uc as any).usage; if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
-              event.node.res.write(`data: ${JSON.stringify(serializer!.serializeStreamChunk(uc))}\n\n`)
+              emit(serializer!.serializeStreamChunk(uc))
             } else if (uc.type !== 'content' || uc.delta) {
-              event.node.res.write(`data: ${JSON.stringify(serializer!.serializeStreamChunk(uc))}\n\n`)
+              emit(serializer!.serializeStreamChunk(uc))
             }
           }
         } catch {}
@@ -182,12 +195,14 @@ export default defineEventHandler(async (event) => {
       }
       if (lineBuffer.trim()) processLine(lineBuffer.trim())
     } catch (e: any) {
-      if (!event.node.res.headersSent) throwFormattedError(manager.buildGatewayError(e.message, 500))
+      if (!useSSE || !event.node.res.headersSent) throwFormattedError(manager.buildGatewayError(e.message, 500))
       else event.node.res.write(`data: ${JSON.stringify({ error: { message: e.message } })}\n\n`)
     } finally {
-      clearInterval(keepAliveTimer)
-      if (!event.node.res.writableEnded) event.node.res.end()
+      if (keepAliveTimer) clearInterval(keepAliveTimer)
+      if (useSSE && !event.node.res.writableEnded) event.node.res.end()
     }
+
+    if (!useSSE) return collected
     return
   } catch (e: any) {
     throwFormattedError(e)

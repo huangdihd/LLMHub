@@ -1,7 +1,17 @@
 import type { ProtocolSerializer, LLMResponse, LLMStreamChunk } from '../core/types'
 
+function mapChatFinishReason(reason: string | undefined): string {
+  if (reason === 'tool_calls') return 'tool_calls'
+  if (reason === 'length') return 'length'
+  return 'stop'
+}
+
 export class OpenAIChatSerializer implements ProtocolSerializer {
   name = 'openai-chat'
+
+  // One id shared by every chunk of a stream, as the OpenAI API does
+  private chatId = `chatcmpl-${Date.now()}${Math.random().toString(36).slice(2, 8)}`
+  private createdAt = Math.floor(Date.now() / 1000)
 
   serializeResponse(response: LLMResponse): any {
     const message: any = {
@@ -39,14 +49,14 @@ export class OpenAIChatSerializer implements ProtocolSerializer {
     }
 
     return {
-      id: `chatcmpl-${Date.now()}`,
+      id: this.chatId,
       object: 'chat.completion',
-      created: Math.floor(Date.now() / 1000),
+      created: this.createdAt,
       model: 'llmhub',
       choices: [{
         index: 0,
         message,
-        finish_reason: response.finishReason === 'tool_calls' ? 'tool_calls' : 'stop'
+        finish_reason: mapChatFinishReason(response.finishReason)
       }],
       usage: {
         prompt_tokens: response.usage.promptTokens,
@@ -59,14 +69,14 @@ export class OpenAIChatSerializer implements ProtocolSerializer {
   serializeStreamChunk(chunk: LLMStreamChunk): any {
     if (chunk.type === 'done') {
       const result: any = {
-        id: `chatcmpl-${Date.now()}`,
+        id: this.chatId,
         object: 'chat.completion.chunk',
-        created: Math.floor(Date.now() / 1000),
+        created: this.createdAt,
         model: 'llmhub',
         choices: [{
           index: 0,
           delta: {},
-          finish_reason: chunk.finishReason === 'tool_calls' ? 'tool_calls' : 'stop'
+          finish_reason: mapChatFinishReason(chunk.finishReason)
         }]
       }
       if (chunk.usage) {
@@ -110,9 +120,9 @@ export class OpenAIChatSerializer implements ProtocolSerializer {
     }
 
     return {
-      id: `chatcmpl-${Date.now()}`,
+      id: this.chatId,
       object: 'chat.completion.chunk',
-      created: Math.floor(Date.now() / 1000),
+      created: this.createdAt,
       model: 'llmhub',
       choices: [{
         index: 0,

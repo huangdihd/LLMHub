@@ -24,11 +24,15 @@ export class ClaudeCompletionParser implements ProtocolParser {
   }
 
   parseStreamChunk(chunk: any): LLMStreamChunk {
-    if (chunk.type === 'completion_stop') {
-      return { type: 'done' }
-    }
-
-    if (chunk.type === 'completion_delta') {
+    // Legacy Text Completions streams a single event type: 'completion'
+    // { type: 'completion', completion: '...', stop_reason: null | 'stop_sequence' | 'max_tokens' }
+    if (chunk.type === 'completion') {
+      if (chunk.stop_reason) {
+        return {
+          type: 'done',
+          finishReason: chunk.stop_reason === 'max_tokens' ? 'length' : 'stop'
+        }
+      }
       return { type: 'content', delta: chunk.completion || '' }
     }
 

@@ -11,7 +11,7 @@ const ROOT = path.resolve(import.meta.dirname, '../..')
 const OUT_DIR = path.join(ROOT, 'tests/e2e/recordings')
 
 const providers = {}
-for (const name of ['deepseek', 'mimo_claude', 'Gemini']) {
+for (const name of ['deepseek', 'mimo_claude', 'Gemini', 'siliconflow']) {
   providers[name] = JSON.parse(fs.readFileSync(path.join(ROOT, '.data/providers', name), 'utf8'))
 }
 
@@ -65,6 +65,23 @@ const scenarios = [
     messages: [{ role: 'user', content: 'What is 17 + 25? Answer with just the number.' }],
     max_tokens: 2000, stream: true, stream_options: { include_usage: true }
   })],
+  // Second turn of a tool call: the tool result goes back upstream
+  ...['sync', 'stream'].map(kind => ['openai', 'tool-result', kind, () => ({
+    model: 'deepseek-chat',
+    messages: [
+      { role: 'user', content: 'What is the weather in Beijing right now? Use the tool.' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 'call_e2e_1', type: 'function', function: { name: 'get_weather', arguments: '{"city":"Beijing"}' } }] },
+      { role: 'tool', tool_call_id: 'call_e2e_1', content: '{"temp_c": 31, "condition": "sunny"}' }
+    ],
+    tools: [{ type: 'function', function: { name: 'get_weather', description: WEATHER_TOOL_DESC, parameters: WEATHER_PARAMS } }],
+    max_tokens: 100, ...openaiBase,
+    ...(kind === 'stream' ? { stream: true, stream_options: { include_usage: true } } : {})
+  })]),
+  ['openai', 'embeddings', 'sync', () => ({
+    model: 'BAAI/bge-m3',
+    input: ['hello world', 'goodbye world'],
+    encoding_format: 'float'
+  })],
 
   // ===== Claude protocol (mimo_claude) =====
   ['claude', 'text', 'sync', () => ({
@@ -102,6 +119,17 @@ const scenarios = [
     messages: [{ role: 'user', content: 'Count from 1 to 100, one number per line.' }],
     stream: true
   })],
+  ...['sync', 'stream'].map(kind => ['claude', 'tool-result', kind, () => ({
+    model: 'mimo-v2.5',
+    max_tokens: 150,
+    messages: [
+      { role: 'user', content: 'What is the weather in Beijing right now? Use the tool.' },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_e2e_1', name: 'get_weather', input: { city: 'Beijing' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_e2e_1', content: '{"temp_c": 31, "condition": "sunny"}' }] }
+    ],
+    tools: [{ name: 'get_weather', description: WEATHER_TOOL_DESC, input_schema: WEATHER_PARAMS }],
+    ...(kind === 'stream' ? { stream: true } : {})
+  })]),
 
   // ===== Gemini protocol =====
   ['gemini', 'text', 'sync', () => ({
@@ -129,12 +157,35 @@ const scenarios = [
   ['gemini', 'truncated', 'stream', () => ({
     contents: [{ role: 'user', parts: [{ text: 'Count from 1 to 100, one number per line.' }] }],
     generationConfig: { maxOutputTokens: 8, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+  })],
+  ...['sync', 'stream'].map(kind => ['gemini', 'tool-result', kind, () => ({
+    contents: [
+      { role: 'user', parts: [{ text: 'What is the weather in Beijing right now? Use the tool.' }] },
+      { role: 'model', parts: [{ functionCall: { name: 'get_weather', args: { city: 'Beijing' } } }] },
+      { role: 'user', parts: [{ functionResponse: { name: 'get_weather', response: { output: '{"temp_c": 31, "condition": "sunny"}' } } }] }
+    ],
+    tools: [{ functionDeclarations: [{ name: 'get_weather', description: WEATHER_TOOL_DESC, parameters: WEATHER_PARAMS }] }],
+    generationConfig: { maxOutputTokens: 150, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+  })]),
+  ['gemini', 'embeddings', 'sync', () => ({
+    requests: [
+      { model: 'models/gemini-embedding-001', content: { parts: [{ text: 'hello world' }] } },
+      { model: 'models/gemini-embedding-001', content: { parts: [{ text: 'goodbye world' }] } }
+    ]
   })]
 ]
 
 // ---------------------------------------------------------------------------
-function buildCall(protocol, kind, body) {
+function buildCall(protocol, kind, body, scenario) {
   if (protocol === 'openai') {
+    if (scenario === 'embeddings') {
+      const c = providers.siliconflow.connection
+      return {
+        url: `${c.base_url}/embeddings`,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${c.api_key}` },
+        provider: 'siliconflow'
+      }
+    }
     const c = providers.deepseek.connection
     return {
       url: `${c.base_url}/chat/completions`,
@@ -152,18 +203,23 @@ function buildCall(protocol, kind, body) {
   }
   // gemini
   const c = providers.Gemini.connection
+  const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': c.api_key }
+  if (scenario === 'embeddings') {
+    return {
+      url: `${c.base_url}/v1beta/models/gemini-embedding-001:batchEmbedContents`,
+      headers, provider: 'Gemini', model: 'gemini-embedding-001'
+    }
+  }
   const model = 'gemini-2.5-flash-lite'
   const action = kind === 'stream' ? 'streamGenerateContent?alt=sse' : 'generateContent'
   return {
     url: `${c.base_url}/v1beta/models/${model}:${action}`,
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': c.api_key },
-    provider: 'Gemini',
-    model
+    headers, provider: 'Gemini', model
   }
 }
 
 async function record(protocol, scenario, kind, body) {
-  const call = buildCall(protocol, kind, body)
+  const call = buildCall(protocol, kind, body, scenario)
   const started = Date.now()
   const res = await fetch(call.url, {
     method: 'POST',

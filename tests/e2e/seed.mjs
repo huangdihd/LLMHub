@@ -14,7 +14,7 @@ const MOCK_PORT = Number(process.env.MOCK_PORT || 4000)
 export const E2E_API_KEY = 'llmhub-e2e-test-key'
 const E2E_KEY_ID = '_e2e-key'
 
-const MODELS = ['text', 'tool-call', 'truncated', 'reasoning', 'no-done']
+const MODELS = ['text', 'tool-call', 'tool-result', 'truncated', 'reasoning', 'no-done', 'embeddings']
   .map(id => ({ id, display_name: `mock ${id}`, capabilities: { tools: true, streaming: true } }))
 
 const providerConfigs = [

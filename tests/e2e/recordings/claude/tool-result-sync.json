@@ -1,0 +1,88 @@
+{
+  "meta": {
+    "provider": "mimo_claude",
+    "protocol": "claude",
+    "scenario": "tool-result",
+    "kind": "sync",
+    "model": "mimo-v2.5",
+    "url_path": "/anthropic/v1/messages",
+    "recorded_at": "2026-07-09T02:49:05.523Z",
+    "request_body": {
+      "model": "mimo-v2.5",
+      "max_tokens": 150,
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is the weather in Beijing right now? Use the tool."
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_e2e_1",
+              "name": "get_weather",
+              "input": {
+                "city": "Beijing"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "toolu_e2e_1",
+              "content": "{\"temp_c\": 31, \"condition\": \"sunny\"}"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Get the current weather for a city",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string",
+                "description": "City name"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "status": 200,
+  "content_type": "application/json",
+  "body": {
+    "id": "e9001473003f47d0b6aedf9e30d8fe58",
+    "type": "message",
+    "role": "assistant",
+    "model": "mimo-v2.5",
+    "stop_reason": "max_tokens",
+    "content": [
+      {
+        "type": "text",
+        "text": "Right now in Beijing, it's sunny with a temperature of 31°C. That"
+      },
+      {
+        "type": "thinking",
+        "thinking": "The weather function returned a JSON object with temp_c: 31 and condition: sunny. I should present this information in a natural, conversational way. Let me also consider if I should ask follow-up questions. The user asked for the weather right now, which I have. I could offer more information like humidity, wind, or forecast, but I don't have those tools. I could mention that I only have current conditions. Also, I should note that the tool didn't provide time or location details, but the user asked for Beijing. I'll just report what I have. Let me respond in a warm, conversational style.",
+        "signature": ""
+      }
+    ],
+    "usage": {
+      "input_tokens": 105,
+      "output_tokens": 150,
+      "cache_read_input_tokens": 448
+    }
+  },
+  "duration_ms": 2377
+}

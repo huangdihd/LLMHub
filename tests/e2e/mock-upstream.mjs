@@ -43,6 +43,52 @@ function notFound(res, msg) {
   res.end(JSON.stringify({ error: { message: msg, type: 'mock_not_found' } }))
 }
 
+function badRequest(res, msg) {
+  res.writeHead(400, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify({ error: { message: `mock validation failed: ${msg}`, type: 'mock_bad_request' } }))
+}
+
+// For tool-result scenarios the gateway must have translated the client's tool
+// result into THIS upstream's wire format — validate it strictly so a broken
+// transform fails the e2e test instead of silently replaying a canned answer.
+function validateToolResultRequest(protocol, body) {
+  if (protocol === 'openai') {
+    const assistant = (body.messages || []).find(m => m.role === 'assistant' && m.tool_calls?.length)
+    if (!assistant) return 'no assistant message with tool_calls'
+    if (assistant.tool_calls[0].function?.name !== 'get_weather') return 'tool_calls[0] name mismatch'
+    const toolMsg = (body.messages || []).find(m => m.role === 'tool')
+    if (!toolMsg) return 'no role:"tool" message'
+    if (!toolMsg.tool_call_id) return 'tool message missing tool_call_id'
+    if (toolMsg.tool_call_id !== assistant.tool_calls[0].id) return 'tool_call_id does not match the assistant call'
+    if (!toolMsg.content) return 'tool message missing content'
+    return null
+  }
+  if (protocol === 'claude') {
+    const assistant = (body.messages || []).find(m =>
+      Array.isArray(m.content) && m.content.some(b => b.type === 'tool_use'))
+    if (!assistant) return 'no assistant message with a tool_use block'
+    const toolUse = assistant.content.find(b => b.type === 'tool_use')
+    if (toolUse.name !== 'get_weather') return 'tool_use name mismatch'
+    const resultMsg = (body.messages || []).find(m =>
+      Array.isArray(m.content) && m.content.some(b => b.type === 'tool_result'))
+    if (!resultMsg) return 'no tool_result block'
+    const result = resultMsg.content.find(b => b.type === 'tool_result')
+    if (result.tool_use_id !== toolUse.id) return 'tool_result tool_use_id does not match tool_use id'
+    return null
+  }
+  // gemini
+  const modelTurn = (body.contents || []).find(c => c.parts?.some(p => p.functionCall))
+  if (!modelTurn) return 'no functionCall part'
+  const fc = modelTurn.parts.find(p => p.functionCall).functionCall
+  if (fc.name !== 'get_weather') return 'functionCall name mismatch'
+  const responseTurn = (body.contents || []).find(c => c.parts?.some(p => p.functionResponse))
+  if (!responseTurn) return 'no functionResponse part'
+  const fr = responseTurn.parts.find(p => p.functionResponse).functionResponse
+  if (fr.name !== 'get_weather') return `functionResponse name is "${fr.name}", expected "get_weather"`
+  if (!fr.response) return 'functionResponse missing response payload'
+  return null
+}
+
 const server = http.createServer((req, res) => {
   let raw = ''
   req.on('data', c => { raw += c })
@@ -50,23 +96,36 @@ const server = http.createServer((req, res) => {
     try {
       const u = new URL(req.url, 'http://mock')
       let protocol, scenario, kind
+      const body = raw ? JSON.parse(raw) : {}
 
       if (u.pathname === '/openai/chat/completions') {
-        const body = JSON.parse(raw || '{}')
         protocol = 'openai'
         scenario = body.model
         kind = body.stream ? 'stream' : 'sync'
+      } else if (u.pathname === '/openai/embeddings') {
+        protocol = 'openai'
+        scenario = 'embeddings'
+        kind = 'sync'
       } else if (u.pathname === '/claude/v1/messages') {
-        const body = JSON.parse(raw || '{}')
         protocol = 'claude'
         scenario = body.model
         kind = body.stream ? 'stream' : 'sync'
       } else {
-        const m = u.pathname.match(/^\/gemini\/v1beta\/models\/([^:]+):(generateContent|streamGenerateContent)$/)
+        const m = u.pathname.match(/^\/gemini\/v1beta\/models\/(.+):(generateContent|streamGenerateContent|embedContent|batchEmbedContents)$/)
         if (!m) return notFound(res, `unknown path: ${u.pathname}`)
         protocol = 'gemini'
         scenario = decodeURIComponent(m[1])
-        kind = m[2] === 'streamGenerateContent' ? 'stream' : 'sync'
+        if (m[2] === 'embedContent' || m[2] === 'batchEmbedContents') {
+          scenario = 'embeddings'
+          kind = 'sync'
+        } else {
+          kind = m[2] === 'streamGenerateContent' ? 'stream' : 'sync'
+        }
+      }
+
+      if (scenario === 'tool-result') {
+        const problem = validateToolResultRequest(protocol, body)
+        if (problem) return badRequest(res, `${protocol} tool-result request: ${problem}`)
       }
 
       // Handwritten edge case: upstream closes the stream without sending [DONE]

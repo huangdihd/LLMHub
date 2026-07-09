@@ -54,6 +54,7 @@ test('function_call items merge into one assistant message with parsed arguments
   assert.equal(tool.role, 'tool')
   assert.equal(tool.content, 'sunny')
   assert.equal(tool.meta.toolCallId, 'call_1')
+  assert.equal(tool.meta.name, 'get_weather')
 })
 
 test('input_image with string image_url (Responses format)', () => {

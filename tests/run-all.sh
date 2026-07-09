@@ -9,7 +9,8 @@ BUILD_DIR="${TMPDIR:-/tmp}/llmhub-test-build"
 rm -rf "$BUILD_DIR"
 
 echo "== compiling adapters (tsc) =="
-npx tsc server/providers/openai.ts server/providers/claude.ts \
+npx tsc server/providers/openai.ts server/providers/claude.ts server/providers/gemini.ts \
+  server/protocols/gemini-generate.ts server/protocols/gemini-generate-serializer.ts \
   --outDir "$BUILD_DIR" \
   --module commonjs --target es2022 --moduleResolution node \
   --esModuleInterop --skipLibCheck

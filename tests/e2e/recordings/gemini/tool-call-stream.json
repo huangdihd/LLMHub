@@ -6,7 +6,7 @@
     "kind": "stream",
     "model": "gemini-2.5-flash-lite",
     "url_path": "/v1beta/models/gemini-2.5-flash-lite:streamGenerateContent?alt=sse",
-    "recorded_at": "2026-07-07T15:52:52.044Z",
+    "recorded_at": "2026-07-09T02:49:12.428Z",
     "request_body": {
       "contents": [
         {
@@ -52,9 +52,9 @@
   "status": 200,
   "content_type": "text/event-stream",
   "raw_chunks": [
-    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"get_weather\",\"args\": {\"city\": \"Beijing\"}}}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0,\"finishMessage\": \"Model generated function call(s).\"}],\"usageMetadata\": {\"promptTokenCount\": 54,\"candidatesTokenCount\": 15,\"totalTokenCount\": 69,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 54}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"0yBNarzbJuCfz7IP6L6HgQ0\"}\r\n\r\n"
+    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"get_weather\",\"args\": {\"city\": \"Beijing\"}}}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0,\"finishMessage\": \"Model generated function call(s).\"}],\"usageMetadata\": {\"promptTokenCount\": 54,\"candidatesTokenCount\": 15,\"totalTokenCount\": 69,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 54}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"KAxPatDzBNjQz7IPq_rNuQM\"}\r\n\r\n"
   ],
-  "raw_sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"get_weather\",\"args\": {\"city\": \"Beijing\"}}}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0,\"finishMessage\": \"Model generated function call(s).\"}],\"usageMetadata\": {\"promptTokenCount\": 54,\"candidatesTokenCount\": 15,\"totalTokenCount\": 69,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 54}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"0yBNarzbJuCfz7IP6L6HgQ0\"}\r\n\r\n",
+  "raw_sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"get_weather\",\"args\": {\"city\": \"Beijing\"}}}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0,\"finishMessage\": \"Model generated function call(s).\"}],\"usageMetadata\": {\"promptTokenCount\": 54,\"candidatesTokenCount\": 15,\"totalTokenCount\": 69,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 54}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"KAxPatDzBNjQz7IPq_rNuQM\"}\r\n\r\n",
   "events": [
     {
       "candidates": [
@@ -90,8 +90,8 @@
         "serviceTier": "standard"
       },
       "modelVersion": "gemini-2.5-flash-lite",
-      "responseId": "0yBNarzbJuCfz7IP6L6HgQ0"
+      "responseId": "KAxPatDzBNjQz7IPq_rNuQM"
     }
   ],
-  "duration_ms": 883
+  "duration_ms": 583
 }

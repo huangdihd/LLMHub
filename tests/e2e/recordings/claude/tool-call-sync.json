@@ -6,7 +6,7 @@
     "kind": "sync",
     "model": "mimo-v2.5",
     "url_path": "/anthropic/v1/messages",
-    "recorded_at": "2026-07-07T15:52:45.044Z",
+    "recorded_at": "2026-07-09T02:49:00.437Z",
     "request_body": {
       "model": "mimo-v2.5",
       "max_tokens": 300,
@@ -39,7 +39,7 @@
   "status": 200,
   "content_type": "application/json",
   "body": {
-    "id": "5e76021d67b14e65a3e146fe01ea1de8",
+    "id": "14f44f2292ab409da5b9e88ced948c2c",
     "type": "message",
     "role": "assistant",
     "model": "mimo-v2.5",
@@ -47,12 +47,12 @@
     "content": [
       {
         "type": "thinking",
-        "thinking": "The user wants to know the current weather in Beijing and specifically asks me to use the tool. I have a function called `get_weather` that takes a city name as an argument. I will call this function with \"Beijing\" as the parameter.",
+        "thinking": "The user wants to know the current weather in Beijing and is asking me to use the tool. I have access to a `get_weather` tool that can retrieve the current weather for a city. I should use this tool to get the weather for Beijing. Let me call the tool with the city parameter set to \"Beijing\".",
         "signature": ""
       },
       {
         "type": "tool_use",
-        "id": "call_7a9817d9b1794338a6fdbe0d",
+        "id": "call_54046cb419bd426599c9f718",
         "name": "get_weather",
         "input": {
           "city": "Beijing"
@@ -61,9 +61,9 @@
     ],
     "usage": {
       "input_tokens": 311,
-      "output_tokens": 75,
+      "output_tokens": 90,
       "cache_read_input_tokens": 192
     }
   },
-  "duration_ms": 1273
+  "duration_ms": 1577
 }

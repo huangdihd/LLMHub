@@ -6,7 +6,7 @@
     "kind": "stream",
     "model": "gemini-2.5-flash-lite",
     "url_path": "/v1beta/models/gemini-2.5-flash-lite:streamGenerateContent?alt=sse",
-    "recorded_at": "2026-07-07T15:52:50.403Z",
+    "recorded_at": "2026-07-09T02:49:09.953Z",
     "request_body": {
       "contents": [
         {
@@ -30,10 +30,10 @@
   "status": 200,
   "content_type": "text/event-stream",
   "raw_chunks": [
-    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"Hello\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8,\"candidatesTokenCount\": 1,\"totalTokenCount\": 9,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"0iBNapybEJaHz7IPqcCDwQs\"}\r\n\r\n",
-    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"!\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8,\"candidatesTokenCount\": 2,\"totalTokenCount\": 10,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"0iBNapybEJaHz7IPqcCDwQs\"}\r\n\r\n"
+    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"Hello\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8,\"candidatesTokenCount\": 1,\"totalTokenCount\": 9,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"JQxPap_oK5O7qtsP6L3wiAM\"}\r\n\r\n",
+    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"!\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8,\"candidatesTokenCount\": 2,\"totalTokenCount\": 10,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"JQxPap_oK5O7qtsP6L3wiAM\"}\r\n\r\n"
   ],
-  "raw_sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"Hello\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8,\"candidatesTokenCount\": 1,\"totalTokenCount\": 9,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"0iBNapybEJaHz7IPqcCDwQs\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"!\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8,\"candidatesTokenCount\": 2,\"totalTokenCount\": 10,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"0iBNapybEJaHz7IPqcCDwQs\"}\r\n\r\n",
+  "raw_sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"Hello\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8,\"candidatesTokenCount\": 1,\"totalTokenCount\": 9,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"JQxPap_oK5O7qtsP6L3wiAM\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"!\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 8,\"candidatesTokenCount\": 2,\"totalTokenCount\": 10,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 8}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"JQxPap_oK5O7qtsP6L3wiAM\"}\r\n\r\n",
   "events": [
     {
       "candidates": [
@@ -62,7 +62,7 @@
         "serviceTier": "standard"
       },
       "modelVersion": "gemini-2.5-flash-lite",
-      "responseId": "0iBNapybEJaHz7IPqcCDwQs"
+      "responseId": "JQxPap_oK5O7qtsP6L3wiAM"
     },
     {
       "candidates": [
@@ -92,8 +92,8 @@
         "serviceTier": "standard"
       },
       "modelVersion": "gemini-2.5-flash-lite",
-      "responseId": "0iBNapybEJaHz7IPqcCDwQs"
+      "responseId": "JQxPap_oK5O7qtsP6L3wiAM"
     }
   ],
-  "duration_ms": 662
+  "duration_ms": 547
 }

@@ -188,10 +188,14 @@ function onApiKeyChange(val: string) {
   loadModels()
 }
 
+// Typing an API key fires one request per keystroke; only the latest
+// request may write the result, or a stale 401 can wipe a fresh list
+let loadModelsSeq = 0
 async function loadModels() {
+  const seq = ++loadModelsSeq
   try {
     const headers: Record<string, string> = {}
-    
+
     if (selectedAuthId.value !== 'session' && selectedAuthId.value !== 'custom') {
       headers['X-LLMHub-Key-ID'] = selectedAuthId.value
     } else if (apiKey.value) {
@@ -201,6 +205,7 @@ async function loadModels() {
     // If using session and no impersonation/custom key, try hub models first
     if (selectedAuthId.value === 'session' && hasSession.value) {
       const hubRes = await $fetch('/api/hub/models').catch(() => null)
+      if (seq !== loadModelsSeq) return
       if (hubRes && (hubRes as any).models) {
         models.value = (hubRes as any).models.map((m: any) => ({ id: m.id }))
         return
@@ -208,8 +213,10 @@ async function loadModels() {
     }
 
     const data = await $fetch('/api/openai/models', { headers })
+    if (seq !== loadModelsSeq) return
     models.value = ((data as any).data || []).map((m: any) => ({ id: m.id }))
   } catch (e) {
+    if (seq !== loadModelsSeq) return
     console.error('Failed to load models:', e)
     models.value = []
   }

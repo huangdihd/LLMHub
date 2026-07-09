@@ -12,12 +12,16 @@ export class OpenAIResponsesParser implements ProtocolParser {
     let systemPrompt: string | undefined
     const parsedMessages: any[] = []
 
+    // call_id → tool name, so tool results keep their name (Gemini needs it)
+    const toolNameById: Record<string, string> = {}
+
     const appendToolCall = (item: any) => {
       const call = {
         id: item.call_id || item.id,
         name: item.name,
         input: safeParseResponses(item.arguments || '{}')
       }
+      if (call.id && call.name) toolNameById[call.id] = call.name
       const last = parsedMessages[parsedMessages.length - 1]
       if (last && last.role === 'assistant' && last.meta?.toolCalls) {
         last.meta.toolCalls.push(call)
@@ -38,7 +42,7 @@ export class OpenAIResponsesParser implements ProtocolParser {
           parsedMessages.push({
             role: 'tool',
             content: typeof item.output === 'string' ? item.output : this.flattenText(item.output),
-            meta: { toolCallId: item.call_id }
+            meta: { toolCallId: item.call_id, name: toolNameById[item.call_id] }
           })
           continue
         }

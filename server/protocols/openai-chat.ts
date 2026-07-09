@@ -11,10 +11,15 @@ export class OpenAIChatParser implements ProtocolParser {
     const messages = body.messages || []
     let systemPrompt: string | undefined
     const parsedMessages: any[] = []
+    // tool_call_id → tool name, so tool results keep their name (Gemini needs it)
+    const toolNameById: Record<string, string> = {}
 
     for (const msg of messages) {
-      if (msg.role === 'system') {
-        systemPrompt = typeof msg.content === 'string' ? msg.content : msg.content.map((c: any) => c.text || '').join('')
+      if (msg.role === 'system' || msg.role === 'developer') {
+        const text = typeof msg.content === 'string'
+          ? msg.content
+          : (Array.isArray(msg.content) ? msg.content.map((c: any) => c.text || '').join('') : '')
+        systemPrompt = systemPrompt ? `${systemPrompt}\n${text}` : text
       } else {
         let content = this.parseContent(msg.content)
         
@@ -30,6 +35,10 @@ export class OpenAIChatParser implements ProtocolParser {
           content = blocks
         }
 
+        for (const tc of msg.tool_calls || []) {
+          if (tc.id && tc.function?.name) toolNameById[tc.id] = tc.function.name
+        }
+
         parsedMessages.push({
           role: msg.role,
           content,
@@ -39,7 +48,8 @@ export class OpenAIChatParser implements ProtocolParser {
               name: tc.function.name,
               input: safeParseChat(tc.function.arguments || '{}')
             })),
-            toolCallId: msg.tool_call_id
+            toolCallId: msg.tool_call_id,
+            name: msg.tool_call_id ? toolNameById[msg.tool_call_id] : undefined
           }
         })
       }

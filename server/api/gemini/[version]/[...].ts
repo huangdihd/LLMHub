@@ -178,8 +178,10 @@ export default defineEventHandler(async (event) => {
               doneSent = true
               const u = (uc as any).usage; if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
               emit(serializer!.serializeStreamChunk(uc))
-            } else if (uc.type !== 'content' || uc.delta) {
-              emit(serializer!.serializeStreamChunk(uc))
+            } else {
+              // Serializer buffers partial tool-call args and returns null for them
+              const serialized = serializer!.serializeStreamChunk(uc)
+              if (serialized) emit(serialized)
             }
           }
         } catch {}
@@ -194,6 +196,12 @@ export default defineEventHandler(async (event) => {
         for (const l of lines) processLine(l)
       }
       if (lineBuffer.trim()) processLine(lineBuffer.trim())
+
+      // Upstream ended without a terminal chunk — still close the response
+      if (!doneSent) {
+        doneSent = true
+        emit(serializer!.serializeStreamChunk({ type: 'done' }))
+      }
     } catch (e: any) {
       if (!useSSE || !event.node.res.headersSent) throwFormattedError(manager.buildGatewayError(e.message, 500))
       else event.node.res.write(`data: ${JSON.stringify({ error: { message: e.message } })}\n\n`)

@@ -44,6 +44,7 @@ export class ClaudeMessagesSerializer implements ProtocolSerializer {
       content,
       model: 'llmhub',
       stop_reason: mapClaudeStopReason(response.finishReason),
+      stop_sequence: null,
       usage: {
         input_tokens: response.usage.promptTokens,
         output_tokens: response.usage.completionTokens

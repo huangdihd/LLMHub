@@ -17,6 +17,11 @@ export class GeminiGenerateParser implements ProtocolParser {
       systemPrompt = this.extractText(body.systemInstruction)
     }
 
+    // functionResponse carries no id in the Gemini protocol (matching is by
+    // name/order) — remember the ids we minted for functionCalls so the
+    // result can reference the same id on id-based upstreams
+    const lastCallIdByName: Record<string, string> = {}
+
     for (const content of contents) {
       const role = content.role === 'model' ? 'assistant' : (content.role || 'user')
       const parts = content.parts || []
@@ -44,15 +49,18 @@ export class GeminiGenerateParser implements ProtocolParser {
           })
         }
         if (part.functionCall) {
-          toolCalls.push({
+          const call = {
             id: part.functionCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
             name: part.functionCall.name,
             input: part.functionCall.args || {}
-          })
+          }
+          if (call.name) lastCallIdByName[call.name] = call.id
+          toolCalls.push(call)
         }
         if (part.functionResponse) {
-          toolCallId = part.functionResponse.id
           toolCallName = part.functionResponse.name
+          toolCallId = part.functionResponse.id
+            || (toolCallName ? lastCallIdByName[toolCallName] : undefined)
           const resp = part.functionResponse.response
           if (resp) {
             const output = resp.output || resp.error || JSON.stringify(resp)
@@ -62,7 +70,8 @@ export class GeminiGenerateParser implements ProtocolParser {
       }
 
       parsedMessages.push({
-        role,
+        // Tool results flow through the adapters' unified 'tool' role path
+        role: toolCallId ? 'tool' : role,
         content: contentBlocks.length > 0 ? contentBlocks : '',
         meta: {
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,

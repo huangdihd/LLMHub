@@ -6,7 +6,7 @@
     "kind": "sync",
     "model": "mimo-v2.5",
     "url_path": "/anthropic/v1/messages",
-    "recorded_at": "2026-07-09T02:49:02.679Z",
+    "recorded_at": "2026-07-09T08:38:17.853Z",
     "request_body": {
       "model": "mimo-v2.5",
       "max_tokens": 8,
@@ -21,7 +21,7 @@
   "status": 200,
   "content_type": "application/json",
   "body": {
-    "id": "1c9bcdcffb9a4f0ebcccea557e4bbe5d",
+    "id": "12046c6a4d1d4bdeb47a29dbc1110de6",
     "type": "message",
     "role": "assistant",
     "model": "mimo-v2.5",
@@ -29,7 +29,7 @@
     "content": [
       {
         "type": "thinking",
-        "thinking": "The user is asking me to count",
+        "thinking": "The user wants me to count from",
         "signature": ""
       }
     ],
@@ -39,5 +39,5 @@
       "cache_read_input_tokens": 192
     }
   },
-  "duration_ms": 670
+  "duration_ms": 513
 }

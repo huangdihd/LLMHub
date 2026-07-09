@@ -6,7 +6,7 @@
     "kind": "stream",
     "model": "mimo-v2.5",
     "url_path": "/anthropic/v1/messages",
-    "recorded_at": "2026-07-09T02:49:06.259Z",
+    "recorded_at": "2026-07-09T08:38:22.252Z",
     "request_body": {
       "model": "mimo-v2.5",
       "max_tokens": 150,
@@ -63,68 +63,48 @@
   "status": 200,
   "content_type": "text/event-stream",
   "raw_chunks": [
-    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1342453ed5b843c49e1563f4\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":41,\"output_tokens\":0,\"cache_read_input_tokens\":512}}}\n\n",
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_edcb2a9f3a164fd89bffe1ca\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":41,\"output_tokens\":0,\"cache_read_input_tokens\":512}}}\n\n",
     "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"I\"},\"index\":0}\n\n",
     "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" need\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to respond\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to the user\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" about the weather in\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" Beijing using\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" the tool result\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". The\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" tool returned\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\":\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" temp_c\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\": 31\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", condition: sunny\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". I should provide\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a helpful\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" response.\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" Let\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"'s see\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to provide\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" convers\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"ational\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" response\"},\"index\":0}\n\n",
     "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\".\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" The user asked\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" \\\"What is the\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" weather in Beijing\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" right now?\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" Use the tool.\\\"\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" I used\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" the tool and got\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" the result. I\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" should present\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" it\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" in\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a clear\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" and\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" friendly way. Possibly\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" mention the\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" temperature and condition\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". I\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" could\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" also\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" add a brief\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" comment about the weather\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". Let's respond\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" The weather in Beijing\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" is currently\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" 3\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"1°C and sunny\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". I should\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" mention this\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" in a friendly\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" way. Let me\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" respond\"},\"index\":0}\n\n",
     "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\".\"},\"index\":0}\n\n",
     "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"\"},\"index\":0}\n\n",
-    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
-    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"The current\"},\"index\":1}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" weather in Beijing is\"},\"index\":1}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" **s\"},\"index\":1}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"unny** with\"},\"index\":1}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" a temperature of **\"},\"index\":1}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"31°C**\"},\"index\":1}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\".\"},\"index\":1}\n\n",
-    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":41,\"output_tokens\":125,\"cache_read_input_tokens\":512}}\n\n",
-    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"The weather\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" in Beijing right now\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" is **31\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"°C (\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"88\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"°F)** with\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" **sunny**\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" conditions.\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" It's a bright\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" and warm day out\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" there! ☀\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"️\"},\"index\":1}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n",
+    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":41,\"output_tokens\":74,\"cache_read_input_tokens\":512}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
   ],
-  "raw_sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1342453ed5b843c49e1563f4\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":41,\"output_tokens\":0,\"cache_read_input_tokens\":512}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"I\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" need\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to respond\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to the user\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" about the weather in\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" Beijing using\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" the tool result\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". The\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" tool returned\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\":\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" temp_c\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\": 31\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", condition: sunny\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". I should provide\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a helpful\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" response.\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" Let\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"'s see\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\".\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" The user asked\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" \\\"What is the\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" weather in Beijing\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" right now?\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" Use the tool.\\\"\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" I used\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" the tool and got\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" the result. I\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" should present\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" it\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" in\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a clear\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" and\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" friendly way. Possibly\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" mention the\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" temperature and condition\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". I\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" could\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" also\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" add a brief\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" comment about the weather\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". Let's respond\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\".\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"\"},\"index\":0}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"The current\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" weather in Beijing is\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" **s\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"unny** with\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" a temperature of **\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"31°C**\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\".\"},\"index\":1}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":41,\"output_tokens\":125,\"cache_read_input_tokens\":512}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+  "raw_sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_edcb2a9f3a164fd89bffe1ca\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":41,\"output_tokens\":0,\"cache_read_input_tokens\":512}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"I\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" need\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to provide\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" convers\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"ational\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" response\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\".\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" The weather in Beijing\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" is currently\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" 3\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"1°C and sunny\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". I should\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" mention this\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" in a friendly\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" way. Let me\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" respond\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\".\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"\"},\"index\":0}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"The weather\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" in Beijing right now\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" is **31\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"°C (\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"88\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"°F)** with\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" **sunny**\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" conditions.\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" It's a bright\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" and warm day out\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" there! ☀\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"️\"},\"index\":1}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":41,\"output_tokens\":74,\"cache_read_input_tokens\":512}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
   "events": [
     {
       "type": "message_start",
       "message": {
-        "id": "msg_1342453ed5b843c49e1563f4",
+        "id": "msg_edcb2a9f3a164fd89bffe1ca",
         "type": "message",
         "role": "assistant",
         "model": "mimo-v2.5",
@@ -165,7 +145,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " to respond"
+        "thinking": " to provide"
       },
       "index": 0
     },
@@ -173,7 +153,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " to the user"
+        "thinking": " a"
       },
       "index": 0
     },
@@ -181,7 +161,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " about the weather in"
+        "thinking": " convers"
       },
       "index": 0
     },
@@ -189,7 +169,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " Beijing using"
+        "thinking": "ational"
       },
       "index": 0
     },
@@ -197,95 +177,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " the tool result"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": ". The"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " tool returned"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": ":"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " temp_c"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": ": 31"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": ", condition: sunny"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": ". I should provide"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " a helpful"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " response."
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " Let"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": "'s see"
+        "thinking": " response"
       },
       "index": 0
     },
@@ -301,7 +193,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " The user asked"
+        "thinking": " The weather in Beijing"
       },
       "index": 0
     },
@@ -309,7 +201,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " \"What is the"
+        "thinking": " is currently"
       },
       "index": 0
     },
@@ -317,7 +209,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " weather in Beijing"
+        "thinking": " 3"
       },
       "index": 0
     },
@@ -325,7 +217,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " right now?"
+        "thinking": "1°C and sunny"
       },
       "index": 0
     },
@@ -333,7 +225,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " Use the tool.\""
+        "thinking": ". I should"
       },
       "index": 0
     },
@@ -341,7 +233,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " I used"
+        "thinking": " mention this"
       },
       "index": 0
     },
@@ -349,7 +241,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " the tool and got"
+        "thinking": " in a friendly"
       },
       "index": 0
     },
@@ -357,7 +249,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " the result. I"
+        "thinking": " way. Let me"
       },
       "index": 0
     },
@@ -365,111 +257,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " should present"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " it"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " in"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " a clear"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " and"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " friendly way. Possibly"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " mention the"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " temperature and condition"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": ". I"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " could"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " also"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " add a brief"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " comment about the weather"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": ". Let's respond"
+        "thinking": " respond"
       },
       "index": 0
     },
@@ -505,7 +293,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "text_delta",
-        "text": "The current"
+        "text": "The weather"
       },
       "index": 1
     },
@@ -513,7 +301,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "text_delta",
-        "text": " weather in Beijing is"
+        "text": " in Beijing right now"
       },
       "index": 1
     },
@@ -521,7 +309,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "text_delta",
-        "text": " **s"
+        "text": " is **31"
       },
       "index": 1
     },
@@ -529,7 +317,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "text_delta",
-        "text": "unny** with"
+        "text": "°C ("
       },
       "index": 1
     },
@@ -537,7 +325,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "text_delta",
-        "text": " a temperature of **"
+        "text": "88"
       },
       "index": 1
     },
@@ -545,7 +333,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "text_delta",
-        "text": "31°C**"
+        "text": "°F)** with"
       },
       "index": 1
     },
@@ -553,7 +341,47 @@
       "type": "content_block_delta",
       "delta": {
         "type": "text_delta",
-        "text": "."
+        "text": " **sunny**"
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": " conditions."
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": " It's a bright"
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": " and warm day out"
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": " there! ☀"
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": "️"
       },
       "index": 1
     },
@@ -568,7 +396,7 @@
       },
       "usage": {
         "input_tokens": 41,
-        "output_tokens": 125,
+        "output_tokens": 74,
         "cache_read_input_tokens": 512
       }
     },
@@ -576,5 +404,5 @@
       "type": "message_stop"
     }
   ],
-  "duration_ms": 2390
+  "duration_ms": 1502
 }

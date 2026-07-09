@@ -6,7 +6,7 @@
     "kind": "sync",
     "model": "deepseek-chat",
     "url_path": "/chat/completions",
-    "recorded_at": "2026-07-09T02:48:48.514Z",
+    "recorded_at": "2026-07-09T08:37:52.958Z",
     "request_body": {
       "model": "deepseek-chat",
       "messages": [
@@ -22,9 +22,9 @@
   "status": 200,
   "content_type": "application/json",
   "body": {
-    "id": "cd6f9b08-e3fd-4d02-8dfa-5588bbe5d744",
+    "id": "250ad32d-1655-4f06-92f0-52cc5abf31c5",
     "object": "chat.completion",
-    "created": 1783565328,
+    "created": 1783586272,
     "model": "deepseek-v4-flash",
     "choices": [
       {
@@ -49,5 +49,5 @@
     },
     "system_fingerprint": "fp_8b330d02d0_prod0820_fp8_kvcache_20260402"
   },
-  "duration_ms": 1188
+  "duration_ms": 1763
 }

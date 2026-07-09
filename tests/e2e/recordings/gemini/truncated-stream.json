@@ -6,7 +6,7 @@
     "kind": "stream",
     "model": "gemini-2.5-flash-lite",
     "url_path": "/v1beta/models/gemini-2.5-flash-lite:streamGenerateContent?alt=sse",
-    "recorded_at": "2026-07-09T02:49:13.603Z",
+    "recorded_at": "2026-07-09T08:38:36.030Z",
     "request_body": {
       "contents": [
         {
@@ -30,10 +30,10 @@
   "status": 200,
   "content_type": "text/event-stream",
   "raw_chunks": [
-    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"1\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16,\"candidatesTokenCount\": 1,\"totalTokenCount\": 17,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"KQxPaoOFFsDRz7IP1r-N8Q0\"}\r\n\r\n",
-    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\\n2\\n3\\n4\\n\"}],\"role\": \"model\"},\"finishReason\": \"MAX_TOKENS\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16,\"candidatesTokenCount\": 6,\"totalTokenCount\": 22,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"KQxPaoOFFsDRz7IP1r-N8Q0\"}\r\n\r\n"
+    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"1\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16,\"candidatesTokenCount\": 1,\"totalTokenCount\": 17,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"C15Paqe4INWJ6dkPxazXsAY\"}\r\n\r\n",
+    "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\\n2\\n3\\n4\\n\"}],\"role\": \"model\"},\"finishReason\": \"MAX_TOKENS\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16,\"candidatesTokenCount\": 6,\"totalTokenCount\": 22,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"C15Paqe4INWJ6dkPxazXsAY\"}\r\n\r\n"
   ],
-  "raw_sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"1\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16,\"candidatesTokenCount\": 1,\"totalTokenCount\": 17,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"KQxPaoOFFsDRz7IP1r-N8Q0\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\\n2\\n3\\n4\\n\"}],\"role\": \"model\"},\"finishReason\": \"MAX_TOKENS\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16,\"candidatesTokenCount\": 6,\"totalTokenCount\": 22,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"KQxPaoOFFsDRz7IP1r-N8Q0\"}\r\n\r\n",
+  "raw_sse": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"1\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16,\"candidatesTokenCount\": 1,\"totalTokenCount\": 17,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"C15Paqe4INWJ6dkPxazXsAY\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\\n2\\n3\\n4\\n\"}],\"role\": \"model\"},\"finishReason\": \"MAX_TOKENS\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 16,\"candidatesTokenCount\": 6,\"totalTokenCount\": 22,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 16}],\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash-lite\",\"responseId\": \"C15Paqe4INWJ6dkPxazXsAY\"}\r\n\r\n",
   "events": [
     {
       "candidates": [
@@ -62,7 +62,7 @@
         "serviceTier": "standard"
       },
       "modelVersion": "gemini-2.5-flash-lite",
-      "responseId": "KQxPaoOFFsDRz7IP1r-N8Q0"
+      "responseId": "C15Paqe4INWJ6dkPxazXsAY"
     },
     {
       "candidates": [
@@ -92,8 +92,8 @@
         "serviceTier": "standard"
       },
       "modelVersion": "gemini-2.5-flash-lite",
-      "responseId": "KQxPaoOFFsDRz7IP1r-N8Q0"
+      "responseId": "C15Paqe4INWJ6dkPxazXsAY"
     }
   ],
-  "duration_ms": 546
+  "duration_ms": 848
 }

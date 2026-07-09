@@ -49,3 +49,6 @@ done
 
 echo "== running SDK tests =="
 node tests/e2e/sdk.test.mjs
+
+echo "== running chat-page client contract tests =="
+node tests/e2e/chat-clients.test.mjs

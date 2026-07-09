@@ -86,12 +86,12 @@ const scenarios = [
   // ===== Claude protocol (mimo_claude) =====
   ['claude', 'text', 'sync', () => ({
     model: 'mimo-v2.5',
-    max_tokens: 64,
+    max_tokens: 200,
     messages: [{ role: 'user', content: 'Say hello in one short sentence.' }]
   })],
   ['claude', 'text', 'stream', () => ({
     model: 'mimo-v2.5',
-    max_tokens: 64,
+    max_tokens: 200,
     messages: [{ role: 'user', content: 'Say hello in one short sentence.' }],
     stream: true
   })],

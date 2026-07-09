@@ -6,10 +6,10 @@
     "kind": "stream",
     "model": "mimo-v2.5",
     "url_path": "/anthropic/v1/messages",
-    "recorded_at": "2026-07-09T02:48:57.903Z",
+    "recorded_at": "2026-07-09T08:38:12.806Z",
     "request_body": {
       "model": "mimo-v2.5",
-      "max_tokens": 64,
+      "max_tokens": 200,
       "messages": [
         {
           "role": "user",
@@ -22,42 +22,72 @@
   "status": 200,
   "content_type": "text/event-stream",
   "raw_chunks": [
-    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1974f7395b9f4d99b87ecefd\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":62,\"output_tokens\":0,\"cache_read_input_tokens\":192}}}\n\n",
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_e6a09005a00c45fea6897316\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":62,\"output_tokens\":0,\"cache_read_input_tokens\":192}}}\n\n",
     "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Hmm\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", the user wants\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a simple greeting in\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" one short sentence.\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" They\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" didn\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"'t specify\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" language or any\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" particular style\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", so I'll\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" keep it straightforward and\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" friendly. \\n\\nSince\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", the user just\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" asked\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" me\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to say hello in\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" one short sentence\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". That\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"'s straightforward\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\".\"},\"index\":0}\n\n",
     "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" I\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"'m MiMo,\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" I'll\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" use\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" should\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" keep it friendly\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" and warm as\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" per my guidelines\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". \\n\\nI can\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" greet\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" them\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" directly\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" and add\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a slight\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" personal\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" touch to\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" make it feel more\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" natural\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". Maybe\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" mention\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" my\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" name to\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" reinforce my identity.\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" \\n\\nThe response should\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" be concise\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" but\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" not\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" robotic\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". \\\"Hello there\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"! Mi\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Mo here\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", nice\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to meet you.\\\"\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" feels\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" right—it's short\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", friendly\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", and includes my\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" name. \\n\\n\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"No need to over\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"complicate it since\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" the request\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" is simple. Just\"},\"index\":0}\n\n",
     "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" warm and\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" convers\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"ational tone as\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" per my\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" guidelines. A cheerful\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" hello\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" with a mention\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" of being\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" happy\"},\"index\":0}\n\n",
-    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"\"},\"index\":0}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"},\"usage\":{\"input_tokens\":62,\"output_tokens\":64,\"cache_read_input_tokens\":192}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" quick\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", pleasant\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" greeting.\"},\"index\":0}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"\"},\"index\":0}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" there! MiMo\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" here, nice to\"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" meet you. \"},\"index\":1}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"😊\"},\"index\":1}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":62,\"output_tokens\":133,\"cache_read_input_tokens\":192}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
   ],
-  "raw_sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1974f7395b9f4d99b87ecefd\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":62,\"output_tokens\":0,\"cache_read_input_tokens\":192}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Hmm\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", the user wants\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a simple greeting in\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" one short sentence.\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" They\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" didn\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"'t specify\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" language or any\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" particular style\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", so I'll\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" keep it straightforward and\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" friendly. \\n\\nSince\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" I\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"'m MiMo,\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" I'll\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" use\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" warm and\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" convers\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"ational tone as\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" per my\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" guidelines. A cheerful\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" hello\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" with a mention\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" of being\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" happy\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"\"},\"index\":0}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"},\"usage\":{\"input_tokens\":62,\"output_tokens\":64,\"cache_read_input_tokens\":192}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+  "raw_sse": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_e6a09005a00c45fea6897316\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5\",\"content\":[],\"usage\":{\"input_tokens\":62,\"output_tokens\":0,\"cache_read_input_tokens\":192}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Hmm\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", the user just\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" asked\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" me\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to say hello in\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" one short sentence\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". That\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"'s straightforward\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\".\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" I\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" should\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" keep it friendly\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" and warm as\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" per my guidelines\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". \\n\\nI can\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" greet\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" them\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" directly\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" and add\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a slight\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" personal\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" touch to\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" make it feel more\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" natural\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". Maybe\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" mention\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" my\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" name to\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" reinforce my identity.\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" \\n\\nThe response should\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" be concise\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" but\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" not\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" robotic\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\". \\\"Hello there\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"! Mi\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Mo here\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", nice\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" to meet you.\\\"\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" feels\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" right—it's short\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", friendly\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", and includes my\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" name. \\n\\n\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"No need to over\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"complicate it since\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" the request\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" is simple. Just\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" a\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" quick\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\", pleasant\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\" greeting.\"},\"index\":0}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"signature_delta\",\"signature\":\"\"},\"index\":0}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" there! MiMo\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" here, nice to\"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\" meet you. \"},\"index\":1}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"😊\"},\"index\":1}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":62,\"output_tokens\":133,\"cache_read_input_tokens\":192}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
   "events": [
     {
       "type": "message_start",
       "message": {
-        "id": "msg_1974f7395b9f4d99b87ecefd",
+        "id": "msg_e6a09005a00c45fea6897316",
         "type": "message",
         "role": "assistant",
         "model": "mimo-v2.5",
@@ -90,7 +120,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": ", the user wants"
+        "thinking": ", the user just"
       },
       "index": 0
     },
@@ -98,7 +128,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " a simple greeting in"
+        "thinking": " asked"
       },
       "index": 0
     },
@@ -106,7 +136,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " one short sentence."
+        "thinking": " me"
       },
       "index": 0
     },
@@ -114,7 +144,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " They"
+        "thinking": " to say hello in"
       },
       "index": 0
     },
@@ -122,7 +152,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " didn"
+        "thinking": " one short sentence"
       },
       "index": 0
     },
@@ -130,7 +160,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": "'t specify"
+        "thinking": ". That"
       },
       "index": 0
     },
@@ -138,7 +168,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " a"
+        "thinking": "'s straightforward"
       },
       "index": 0
     },
@@ -146,39 +176,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " language or any"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " particular style"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": ", so I'll"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " keep it straightforward and"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " friendly. \n\nSince"
+        "thinking": "."
       },
       "index": 0
     },
@@ -194,7 +192,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": "'m MiMo,"
+        "thinking": " should"
       },
       "index": 0
     },
@@ -202,7 +200,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " I'll"
+        "thinking": " keep it friendly"
       },
       "index": 0
     },
@@ -210,7 +208,287 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " use"
+        "thinking": " and warm as"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " per my guidelines"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": ". \n\nI can"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " greet"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " them"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " directly"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " and add"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " a slight"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " personal"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " touch to"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " make it feel more"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " natural"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": ". Maybe"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " mention"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " my"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " name to"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " reinforce my identity."
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " \n\nThe response should"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " be concise"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " but"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " not"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " robotic"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": ". \"Hello there"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": "! Mi"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": "Mo here"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": ", nice"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " to meet you.\""
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " feels"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " right—it's short"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": ", friendly"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": ", and includes my"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " name. \n\n"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": "No need to over"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": "complicate it since"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " the request"
+      },
+      "index": 0
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": " is simple. Just"
       },
       "index": 0
     },
@@ -226,7 +504,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " warm and"
+        "thinking": " quick"
       },
       "index": 0
     },
@@ -234,7 +512,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": " convers"
+        "thinking": ", pleasant"
       },
       "index": 0
     },
@@ -242,55 +520,7 @@
       "type": "content_block_delta",
       "delta": {
         "type": "thinking_delta",
-        "thinking": "ational tone as"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " per my"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " guidelines. A cheerful"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " hello"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " with a mention"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " of being"
-      },
-      "index": 0
-    },
-    {
-      "type": "content_block_delta",
-      "delta": {
-        "type": "thinking_delta",
-        "thinking": " happy"
+        "thinking": " greeting."
       },
       "index": 0
     },
@@ -307,13 +537,65 @@
       "index": 0
     },
     {
+      "type": "content_block_start",
+      "index": 1,
+      "content_block": {
+        "type": "text",
+        "text": ""
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": "Hello"
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": " there! MiMo"
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": " here, nice to"
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": " meet you. "
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": "😊"
+      },
+      "index": 1
+    },
+    {
+      "type": "content_block_stop",
+      "index": 1
+    },
+    {
       "type": "message_delta",
       "delta": {
-        "stop_reason": "max_tokens"
+        "stop_reason": "end_turn"
       },
       "usage": {
         "input_tokens": 62,
-        "output_tokens": 64,
+        "output_tokens": 133,
         "cache_read_input_tokens": 192
       }
     },
@@ -321,5 +603,5 @@
       "type": "message_stop"
     }
   ],
-  "duration_ms": 1600
+  "duration_ms": 2353
 }

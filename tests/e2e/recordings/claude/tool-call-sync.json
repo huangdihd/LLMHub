@@ -6,7 +6,7 @@
     "kind": "sync",
     "model": "mimo-v2.5",
     "url_path": "/anthropic/v1/messages",
-    "recorded_at": "2026-07-09T02:49:00.437Z",
+    "recorded_at": "2026-07-09T08:38:15.668Z",
     "request_body": {
       "model": "mimo-v2.5",
       "max_tokens": 300,
@@ -39,7 +39,7 @@
   "status": 200,
   "content_type": "application/json",
   "body": {
-    "id": "14f44f2292ab409da5b9e88ced948c2c",
+    "id": "eda78459f38a4a85acb3dc45ca6f6347",
     "type": "message",
     "role": "assistant",
     "model": "mimo-v2.5",
@@ -47,12 +47,12 @@
     "content": [
       {
         "type": "thinking",
-        "thinking": "The user wants to know the current weather in Beijing and is asking me to use the tool. I have access to a `get_weather` tool that can retrieve the current weather for a city. I should use this tool to get the weather for Beijing. Let me call the tool with the city parameter set to \"Beijing\".",
+        "thinking": "I need to check the weather in Beijing using the get_weather tool.",
         "signature": ""
       },
       {
         "type": "tool_use",
-        "id": "call_54046cb419bd426599c9f718",
+        "id": "call_fc4ab0894c5d4af086dd0021",
         "name": "get_weather",
         "input": {
           "city": "Beijing"
@@ -61,9 +61,9 @@
     ],
     "usage": {
       "input_tokens": 311,
-      "output_tokens": 90,
+      "output_tokens": 38,
       "cache_read_input_tokens": 192
     }
   },
-  "duration_ms": 1577
+  "duration_ms": 1151
 }

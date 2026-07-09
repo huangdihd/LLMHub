@@ -6,7 +6,7 @@
     "kind": "sync",
     "model": "mimo-v2.5",
     "url_path": "/anthropic/v1/messages",
-    "recorded_at": "2026-07-09T02:49:05.523Z",
+    "recorded_at": "2026-07-09T08:38:21.787Z",
     "request_body": {
       "model": "mimo-v2.5",
       "max_tokens": 150,
@@ -62,7 +62,7 @@
   "status": 200,
   "content_type": "application/json",
   "body": {
-    "id": "e9001473003f47d0b6aedf9e30d8fe58",
+    "id": "7325ddd51e384200a3ac59ea8877153f",
     "type": "message",
     "role": "assistant",
     "model": "mimo-v2.5",
@@ -70,11 +70,11 @@
     "content": [
       {
         "type": "text",
-        "text": "Right now in Beijing, it's sunny with a temperature of 31°C. That"
+        "text": "The weather in Beijing right now is **sunny** with a temperature of **31°C**. \n\nIt's a beautiful day out there! If you're planning to go outside, don't forget your sunglasses and"
       },
       {
         "type": "thinking",
-        "thinking": "The weather function returned a JSON object with temp_c: 31 and condition: sunny. I should present this information in a natural, conversational way. Let me also consider if I should ask follow-up questions. The user asked for the weather right now, which I have. I could offer more information like humidity, wind, or forecast, but I don't have those tools. I could mention that I only have current conditions. Also, I should note that the tool didn't provide time or location details, but the user asked for Beijing. I'll just report what I have. Let me respond in a warm, conversational style.",
+        "thinking": "The user asked about the weather in Beijing and I used the get_weather tool. The tool returned: temp_c: 31, condition: sunny. I need to provide a natural response based on this data.\n\nI should answer in a warm, conversational style as per my instructions. I can mention the temperature and condition, and perhaps add a friendly remark. Since the user asked specifically for the tool, I should acknowledge that I used it.\n\nI'll respond in English since the user's query was in English.",
         "signature": ""
       }
     ],
@@ -84,5 +84,5 @@
       "cache_read_input_tokens": 448
     }
   },
-  "duration_ms": 2377
+  "duration_ms": 3349
 }

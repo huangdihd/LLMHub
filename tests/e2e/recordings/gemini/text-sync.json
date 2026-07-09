@@ -6,7 +6,7 @@
     "kind": "sync",
     "model": "gemini-2.5-flash-lite",
     "url_path": "/v1beta/models/gemini-2.5-flash-lite:generateContent",
-    "recorded_at": "2026-07-09T02:49:09.463Z",
+    "recorded_at": "2026-07-09T08:38:28.783Z",
     "request_body": {
       "contents": [
         {
@@ -57,7 +57,7 @@
       "serviceTier": "standard"
     },
     "modelVersion": "gemini-2.5-flash-lite",
-    "responseId": "JQxPaoaGDIqGqtsP-I6xwQs"
+    "responseId": "BF5Paq64A-Sj_uMP0-bzuQM"
   },
-  "duration_ms": 1554
+  "duration_ms": 5489
 }

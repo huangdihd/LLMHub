@@ -110,6 +110,9 @@
 <script setup lang="ts">
 import { marked } from 'marked'
 import { ref, computed, onMounted, nextTick } from 'vue'
+import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI } from '@google/genai'
 
 const isGeminiEndpoint = computed(() =>
   selectedEndpoint.value === 'gemini-generate' || selectedEndpoint.value === 'gemini-stream'
@@ -244,87 +247,57 @@ function scrollToBottom() {
   })
 }
 
-function getEndpointUrl(): string {
-  const ep = selectedEndpoint.value
-  if (ep === 'gemini-generate' || ep === 'gemini-stream') {
-    const model = encodeURIComponent(selectedModel.value)
-    const action = ep === 'gemini-generate' ? 'generateContent' : 'streamGenerateContent'
-    return `/api/gemini/v1/models/${model}/${action}`
+// ---- SDK clients ------------------------------------------------------------
+// The playground talks to the gateway through the official SDKs, so every
+// message doubles as an SDK-compatibility check of the gateway itself.
+// In session/impersonation modes the SDK auth header is suppressed so the
+// admin cookie (plus optional X-LLMHub-Key-ID) authenticates instead.
+
+function extraHeaders(): Record<string, string> {
+  const h: Record<string, string> = {}
+  if (selectedAuthId.value !== 'session' && selectedAuthId.value !== 'custom') {
+    h['X-LLMHub-Key-ID'] = selectedAuthId.value
   }
-  return ep
+  return h
 }
 
-function buildRequestBody(history: { role: string; content: string }[]) {
-  const ep = selectedEndpoint.value
+function makeOpenAIClient(): OpenAI {
+  const custom = selectedAuthId.value === 'custom'
+  return new OpenAI({
+    baseURL: `${location.origin}/api/openai`,
+    apiKey: custom ? apiKey.value : 'session',
+    dangerouslyAllowBrowser: true,
+    defaultHeaders: {
+      ...(custom ? {} : { Authorization: null }),
+      ...extraHeaders()
+    } as Record<string, string | null>
+  })
+}
 
-  if (ep === '/api/openai/completions') {
-    const prompt = history.map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`).join('\n') + '\nAssistant:'
-    return { model: selectedModel.value, prompt, stream: effectiveStream.value }
-  }
+function makeClaudeClient(): Anthropic {
+  const custom = selectedAuthId.value === 'custom'
+  return new Anthropic({
+    baseURL: `${location.origin}/api/claude`,
+    apiKey: custom ? apiKey.value : 'session',
+    dangerouslyAllowBrowser: true,
+    defaultHeaders: {
+      ...(custom ? {} : { 'x-api-key': null }),
+      ...extraHeaders()
+    } as Record<string, string | null>
+  })
+}
 
-  if (ep === '/api/claude/v1/complete') {
-    const prompt = history.map(m => `\n\n${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`).join('') + '\n\nAssistant:'
-    return { model: selectedModel.value, prompt, max_tokens_to_sample: 4096, stream: effectiveStream.value }
-  }
-
-  if (ep === '/api/openai/responses') {
-    return { model: selectedModel.value, input: history.map(m => ({ role: m.role, content: m.content })), stream: effectiveStream.value }
-  }
-
-  if (ep === '/api/claude/v1/messages') {
-    return { model: selectedModel.value, max_tokens: 4096, messages: history.map(m => ({ role: m.role, content: m.content })), stream: effectiveStream.value }
-  }
-
-  if (ep === 'gemini-generate' || ep === 'gemini-stream') {
-    return {
-      model: selectedModel.value,
-      contents: history.map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }]
-      })),
-      generationConfig: { maxOutputTokens: 4096 }
+function makeGeminiClient(): GoogleGenAI {
+  const custom = selectedAuthId.value === 'custom'
+  // An empty apiKey passes the SDK's browser check but never becomes a
+  // x-goog-api-key header, so the session cookie authenticates instead
+  return new GoogleGenAI({
+    apiKey: custom ? apiKey.value : '',
+    httpOptions: {
+      baseUrl: `${location.origin}/api/gemini`,
+      headers: extraHeaders()
     }
-  }
-
-  return { model: selectedModel.value, messages: history.map(m => ({ role: m.role, content: m.content })), stream: effectiveStream.value }
-}
-
-function parseStreamContent(chunk: any): { thinking?: string; content?: string } | null {
-  if (chunk.choices?.[0]?.delta?.content) return { content: chunk.choices[0].delta.content }
-  if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') return { content: chunk.delta.text }
-  if (chunk.candidates?.[0]?.content?.parts?.length) {
-    const part = chunk.candidates[0].content.parts[0]
-    if (part.thought && part.text) return { thinking: part.text }
-    if (part.text) return { content: part.text }
-  }
-  return null
-}
-
-function parseResponseContent(response: any): { thinking?: string; content: string } {
-  const ep = selectedEndpoint.value
-  if (ep === '/api/openai/completions' || ep === '/api/claude/v1/complete') {
-    return { content: response.choices?.[0]?.text || response.completion || '' }
-  }
-  if (ep === '/api/openai/responses') {
-    const output = response.output?.[0]
-    if (output?.content?.[0]?.text) return { content: output.content[0].text }
-    if (response.output_text) return { content: response.output_text }
-    return { content: '' }
-  }
-  if (ep === '/api/claude/v1/messages') {
-    return { content: response.content?.[0]?.text || '' }
-  }
-  if (ep === 'gemini-generate' || ep === 'gemini-stream') {
-    const parts = response.candidates?.[0]?.content?.parts || []
-    let thinking = ''
-    let content = ''
-    for (const part of parts) {
-      if (part.thought && part.text) thinking += part.text
-      else if (part.text) content += part.text
-    }
-    return { thinking: thinking || undefined, content }
-  }
-  return { content: response.choices?.[0]?.message?.content || '' }
+  })
 }
 
 async function sendMessage() {
@@ -336,102 +309,125 @@ async function sendMessage() {
   input.value = ''
   isLoading.value = true
 
-  const assistantIndex = messages.value.length
+  const idx = messages.value.length
   messages.value.push({ role: 'assistant', content: '', loading: true })
   scrollToBottom()
 
   const history = messages.value.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
-  const body = buildRequestBody(history)
+
+  const appendContent = (t?: string | null) => {
+    if (!t) return
+    messages.value[idx].content += t
+    scrollToBottom()
+  }
+  const appendThinking = (t?: string | null) => {
+    if (!t) return
+    messages.value[idx].thinking = (messages.value[idx].thinking || '') + t
+    scrollToBottom()
+  }
 
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+    const ep = selectedEndpoint.value
+    const model = selectedModel.value
 
-    if (selectedAuthId.value !== 'session' && selectedAuthId.value !== 'custom') {
-      headers['X-LLMHub-Key-ID'] = selectedAuthId.value
-    } else if (apiKey.value) {
-      headers['Authorization'] = `Bearer ${apiKey.value}`
-    }
-
-    const endpointUrl = getEndpointUrl()
-
-    if (effectiveStream.value) {
-      const response = await fetch(endpointUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body)
-      })
-
-      if (!response.ok) {
-        const errText = await response.text()
-        let errMsg = errText
-        try { errMsg = JSON.parse(errText)?.error?.message || errText } catch {}
-        throw new Error(errMsg)
+    if (ep === '/api/openai/chat/completions') {
+      const client = makeOpenAIClient()
+      if (effectiveStream.value) {
+        const stream = await client.chat.completions.create({ model, messages: history as any, stream: true })
+        for await (const chunk of stream) {
+          const delta: any = chunk.choices[0]?.delta
+          appendThinking(delta?.reasoning_content)
+          appendContent(delta?.content)
+        }
+      } else {
+        const r = await client.chat.completions.create({ model, messages: history as any })
+        const msg: any = r.choices[0]?.message
+        appendThinking(msg?.reasoning_content)
+        appendContent(msg?.content)
       }
-
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('No response body')
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim()
-            if (data === '[DONE]') continue
-            if (!data) continue
-
-            try {
-              const chunk = JSON.parse(data)
-              if (chunk.error) {
-                const errObj = chunk.error
-                const msg = errObj?.error?.message || errObj?.message || (typeof errObj === 'string' ? errObj : JSON.stringify(errObj))
-                messages.value[assistantIndex].content = `Error: ${msg}`
-                break
-              }
-              const parsed = parseStreamContent(chunk)
-              if (parsed) {
-                if (parsed.thinking) {
-                  messages.value[assistantIndex].thinking = (messages.value[assistantIndex].thinking || '') + parsed.thinking
-                }
-                if (parsed.content) {
-                  messages.value[assistantIndex].content += parsed.content
-                }
-                scrollToBottom()
-              }
-            } catch (e) {
-              // Skip invalid JSON
-            }
+    } else if (ep === '/api/openai/completions') {
+      const client = makeOpenAIClient()
+      const prompt = history.map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`).join('\n') + '\nAssistant:'
+      if (effectiveStream.value) {
+        const stream = await client.completions.create({ model, prompt, max_tokens: 4096, stream: true })
+        for await (const chunk of stream) {
+          appendContent(chunk.choices[0]?.text)
+        }
+      } else {
+        const r = await client.completions.create({ model, prompt, max_tokens: 4096 })
+        appendContent(r.choices[0]?.text)
+      }
+    } else if (ep === '/api/openai/responses') {
+      const client = makeOpenAIClient()
+      const inputItems = history.map(m => ({ role: m.role, content: m.content }))
+      if (effectiveStream.value) {
+        const stream = await client.responses.create({ model, input: inputItems as any, stream: true })
+        for await (const ev of stream) {
+          if (ev.type === 'response.output_text.delta') appendContent(ev.delta)
+          else if (ev.type === 'response.reasoning_summary_text.delta') appendThinking((ev as any).delta)
+        }
+      } else {
+        const r = await client.responses.create({ model, input: inputItems as any })
+        const reasoning: any = r.output.find((i: any) => i.type === 'reasoning')
+        appendThinking((reasoning?.summary || []).map((s: any) => s.text).join(''))
+        appendContent(r.output_text)
+      }
+    } else if (ep === '/api/claude/v1/messages') {
+      const client = makeClaudeClient()
+      if (effectiveStream.value) {
+        const stream = client.messages.stream({ model, max_tokens: 4096, messages: history as any })
+        for await (const ev of stream) {
+          if (ev.type === 'content_block_delta') {
+            const d: any = ev.delta
+            if (d.type === 'text_delta') appendContent(d.text)
+            else if (d.type === 'thinking_delta') appendThinking(d.thinking)
           }
         }
+      } else {
+        const r = await client.messages.create({ model, max_tokens: 4096, messages: history as any })
+        appendThinking(r.content.filter((b: any) => b.type === 'thinking').map((b: any) => b.thinking).join(''))
+        appendContent(r.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(''))
+      }
+    } else if (ep === '/api/claude/v1/complete') {
+      const client = makeClaudeClient()
+      const prompt = history.map(m => `\n\n${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`).join('') + '\n\nAssistant:'
+      if (effectiveStream.value) {
+        const stream = await client.completions.create({ model, prompt, max_tokens_to_sample: 4096, stream: true })
+        for await (const chunk of stream) {
+          appendContent(chunk.completion)
+        }
+      } else {
+        const r = await client.completions.create({ model, prompt, max_tokens_to_sample: 4096 })
+        appendContent(r.completion)
       }
     } else {
-      const response = await $fetch(endpointUrl, {
-        method: 'POST',
-        headers,
-        body
-      })
-
-      const parsed = parseResponseContent(response)
-      messages.value[assistantIndex].content = parsed.content
-      if (parsed.thinking) {
-        messages.value[assistantIndex].thinking = parsed.thinking
+      // gemini-generate / gemini-stream
+      const client = makeGeminiClient()
+      const contents = history.map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }))
+      const consumeParts = (parts: any[]) => {
+        for (const part of parts) {
+          if (part.thought && part.text) appendThinking(part.text)
+          else if (part.text) appendContent(part.text)
+        }
+      }
+      if (isGeminiStream.value) {
+        const stream = await client.models.generateContentStream({ model, contents, config: { maxOutputTokens: 4096 } })
+        for await (const chunk of stream) {
+          consumeParts(chunk.candidates?.[0]?.content?.parts || [])
+        }
+      } else {
+        const r = await client.models.generateContent({ model, contents, config: { maxOutputTokens: 4096 } })
+        consumeParts(r.candidates?.[0]?.content?.parts || [])
       }
     }
 
-    messages.value[assistantIndex].loading = false
+    messages.value[idx].loading = false
   } catch (error: any) {
-    messages.value[assistantIndex].content = `Error: ${error.message}`
-    messages.value[assistantIndex].loading = false
+    messages.value[idx].content = `Error: ${error.message}`
+    messages.value[idx].loading = false
   } finally {
     isLoading.value = false
   }

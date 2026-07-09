@@ -6,10 +6,10 @@
     "kind": "sync",
     "model": "mimo-v2.5",
     "url_path": "/anthropic/v1/messages",
-    "recorded_at": "2026-07-09T02:48:57.254Z",
+    "recorded_at": "2026-07-09T08:38:12.151Z",
     "request_body": {
       "model": "mimo-v2.5",
-      "max_tokens": 64,
+      "max_tokens": 200,
       "messages": [
         {
           "role": "user",
@@ -21,7 +21,7 @@
   "status": 200,
   "content_type": "application/json",
   "body": {
-    "id": "d85adad2a60c42f19b25977bbbe653f3",
+    "id": "43a5c1995b3c4d5b8274b2d7b026cf6e",
     "type": "message",
     "role": "assistant",
     "model": "mimo-v2.5",
@@ -29,19 +29,19 @@
     "content": [
       {
         "type": "text",
-        "text": "Hi there! It's great to see you today. 😊"
+        "text": "Hello! How can I assist you today?"
       },
       {
         "type": "thinking",
-        "thinking": "The user is asking me to say hello in one short sentence. I should respond in a friendly and brief manner as per my response style.",
+        "thinking": "The user asks for a greeting in one short sentence. The instruction specifies keeping responses concise and warm. \n\nA simple greeting like \"Hello! How can I assist you today?\" fits the request perfectly. It's short, friendly, and opens the conversation naturally.\n\nNo need to overthink this one—just deliver a clear and pleasant response.",
         "signature": ""
       }
     ],
     "usage": {
       "input_tokens": 62,
-      "output_tokens": 44,
+      "output_tokens": 80,
       "cache_read_input_tokens": 192
     }
   },
-  "duration_ms": 1491
+  "duration_ms": 2206
 }

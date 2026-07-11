@@ -14,7 +14,7 @@ export class ClaudeCompletionParser implements ProtocolParser {
       model: body.model,
       messages: [{ role: 'user', content: prompt }],
       config: {
-        maxTokens: body.max_tokens_to_sample || 4096,
+        maxTokens: body.max_tokens_to_sample ?? undefined,
         temperature: body.temperature,
         topP: body.top_p,
         stop: body.stop_sequences

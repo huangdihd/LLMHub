@@ -58,7 +58,7 @@ export type ToolChoice = 'auto' | 'none' | 'required' | { name: string }
 
 // ============ 生成配置 ============
 export interface GenerateConfig {
-  maxTokens: number
+  maxTokens?: number
   temperature?: number
   topP?: number
   stop?: string[]

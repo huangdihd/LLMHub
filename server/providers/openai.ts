@@ -124,16 +124,21 @@ export class OpenAIAdapter implements ProviderAdapter {
     const modelId = slashIndex !== undefined && slashIndex !== -1 ? request.model!.slice(slashIndex + 1) : request.model
 
     const thinkingBudget = request.config.thinkingConfig?.thinkingBudget || 0
-    const maxTokens = request.config.maxTokens + thinkingBudget
+    const maxTokens = request.config.maxTokens != null
+      ? request.config.maxTokens + thinkingBudget
+      : undefined
 
     const payload: any = {
       model: modelId || this.config.models[0]?.id,
       messages,
-      max_tokens: maxTokens,
       temperature: request.config.temperature,
       top_p: request.config.topP,
       stop: request.config.stop,
       stream: request.stream
+    }
+
+    if (maxTokens != null) {
+      payload.max_tokens = maxTokens
     }
 
     if (request.tools && request.tools.length > 0) {

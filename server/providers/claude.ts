@@ -79,7 +79,8 @@ export class ClaudeAdapter implements ProviderAdapter {
 
     return {
       model: modelId || this.config.models[0]?.id,
-      max_tokens: request.config.maxTokens,
+      // Anthropic 的 Messages API 要求必传 max_tokens,客户端未指定时兜底 4096
+      max_tokens: request.config.maxTokens ?? 4096,
       system: request.config.systemPrompt,
       messages,
       temperature: request.config.temperature,

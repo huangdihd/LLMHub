@@ -69,7 +69,7 @@ export class OpenAIResponsesParser implements ProtocolParser {
       model: body.model,
       messages: parsedMessages,
       config: {
-        maxTokens: body.max_output_tokens || 4096,
+        maxTokens: body.max_output_tokens ?? undefined,
         temperature: body.temperature,
         topP: body.top_p,
         stop: body.stop,

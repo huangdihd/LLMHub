@@ -97,7 +97,7 @@ export class GeminiAdapter implements ProviderAdapter {
     if (request.config.topP != null) {
       payload.generationConfig.topP = request.config.topP
     }
-    if (request.config.maxTokens > 0) {
+    if (request.config.maxTokens != null && request.config.maxTokens > 0) {
       payload.generationConfig.maxOutputTokens = request.config.maxTokens
     }
     if (request.config.stop?.length) {

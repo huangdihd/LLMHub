@@ -94,7 +94,7 @@ export class GeminiGenerateParser implements ProtocolParser {
       model: modelId,
       messages: parsedMessages,
       config: {
-        maxTokens: genConfig.maxOutputTokens || 4096,
+        maxTokens: genConfig.maxOutputTokens ?? undefined,
         temperature: genConfig.temperature,
         topP: genConfig.topP,
         stop: genConfig.stopSequences,

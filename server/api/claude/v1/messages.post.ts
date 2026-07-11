@@ -93,7 +93,7 @@ export default defineEventHandler(async (event) => {
         let streamDone = false
         let thinkingBuffer: string[] = []
         let thinkingFlushed = false
-        let pendingToolUseName: string | null = null
+        let currentToolIndex: number | undefined
 
         const flushThinkingBuffer = () => {
           if (thinkingBuffer.length === 0 || thinkingFlushed) return
@@ -147,57 +147,55 @@ export default defineEventHandler(async (event) => {
             const serializedChunk = serializer.serializeStreamChunk(unifiedChunk)
             serializedChunk.index = blockIndex
             writeSSE('content_block_delta', serializedChunk)
-                                        } else if (unifiedChunk.type === 'tool_call') {
+          } else if (unifiedChunk.type === 'tool_call') {
             flushThinkingBuffer()
 
             const toolCall = unifiedChunk.toolCall
-            if (toolCall?.name && !toolCall?.id) {
-              pendingToolUseName = toolCall.name
-              return
+            if (!toolCall) return
+
+            // Call boundary: prefer the upstream index when both sides carry
+            // one (providers that repeat id/name on every delta chunk would
+            // otherwise split one call into many); fall back to "id present".
+            // A name without id must still open a block immediately — some
+            // OpenAI-compatible providers never send ids, and buffering the
+            // chunk would drop its inputDelta with it.
+            let startsNewCall: boolean
+            if (!isWritingTool) {
+              startsNewCall = true
+            } else if (toolCall.index !== undefined && currentToolIndex !== undefined) {
+              startsNewCall = toolCall.index !== currentToolIndex
+            } else {
+              startsNewCall = !!toolCall.id
             }
 
-            const serializedChunk = serializer.serializeStreamChunk(unifiedChunk)
-
-            if (serializedChunk.type === 'content_block_start') {
+            if (startsNewCall) {
               if (blockStarted) {
                 writeSSE('content_block_stop', { type: "content_block_stop", index: blockIndex })
                 blockIndex++
               }
-              serializedChunk.index = blockIndex
-              writeSSE('content_block_start', serializedChunk)
+              writeSSE('content_block_start', {
+                type: "content_block_start",
+                index: blockIndex,
+                content_block: {
+                  type: "tool_use",
+                  id: toolCall.id || `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                  name: toolCall.name || ''
+                }
+              })
               blockStarted = true
               isWritingTool = true
-              pendingToolUseName = null
-
-              // Gemini may return full args in the same chunk; emit delta immediately
-              if (toolCall?.inputDelta) {
-                const deltaChunk = serializer.serializeStreamChunk({
-                  type: 'tool_call',
-                  toolCall: { inputDelta: toolCall.inputDelta }
-                })
-                deltaChunk.index = blockIndex
-                writeSSE('content_block_delta', deltaChunk)
-              }
-            } else {
-              // Handle pending tool_use (name arrived before id)
-              if (pendingToolUseName && !isWritingTool) {
-                if (blockStarted) {
-                  writeSSE('content_block_stop', { type: "content_block_stop", index: blockIndex })
-                  blockIndex++
-                }
-                writeSSE('content_block_start', {
-                  type: "content_block_start",
-                  index: blockIndex,
-                  content_block: { type: "tool_use", id: toolCall?.id || '', name: pendingToolUseName }
-                })
-                blockStarted = true
-                isWritingTool = true
-                pendingToolUseName = null
-              }
-              serializedChunk.index = blockIndex
-              writeSSE('content_block_delta', serializedChunk)
+              isWritingThinking = false
+              currentToolIndex = toolCall.index
             }
-                              } else if (unifiedChunk.type === 'done') {
+
+            if (toolCall.inputDelta) {
+              writeSSE('content_block_delta', {
+                type: "content_block_delta",
+                index: blockIndex,
+                delta: { type: 'input_json_delta', partial_json: toolCall.inputDelta }
+              })
+            }
+          } else if (unifiedChunk.type === 'done') {
             if (streamDone) {
               // Some providers split usage into a separate chunk — capture if available
               const u = (unifiedChunk as any).usage
@@ -249,7 +247,9 @@ export default defineEventHandler(async (event) => {
                         for (const unifiedChunk of unifiedChunks) {
               handleChunk(unifiedChunk)
             }
-          } catch(e) {}
+          } catch (e) {
+            console.error('[LLMHub] claude/messages: failed to process stream chunk, dropping it:', e)
+          }
         }
 
         const processRawChunk = (chunkStr: string) => {

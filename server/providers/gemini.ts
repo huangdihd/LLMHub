@@ -319,8 +319,9 @@ export class GeminiAdapter implements ProviderAdapter {
                 const trimmed = line.trim()
                 if (!trimmed) continue
 
-                if (trimmed.startsWith('data: ')) {
-                  const data = trimmed.slice(6).trim()
+                // SSE allows "data:" with no space after the colon
+                if (trimmed.startsWith('data:')) {
+                  const data = trimmed.slice(5).trim()
                   if (!data) continue
                   try {
                     const chunk = JSON.parse(data)
@@ -330,8 +331,8 @@ export class GeminiAdapter implements ProviderAdapter {
               }
             }
 
-            if (buffer.trim().startsWith('data: ')) {
-              const data = buffer.trim().slice(6).trim()
+            if (buffer.trim().startsWith('data:')) {
+              const data = buffer.trim().slice(5).trim()
               if (data) {
                 try {
                   const chunk = JSON.parse(data)

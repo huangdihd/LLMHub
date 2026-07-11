@@ -85,7 +85,9 @@ export default defineEventHandler(async (event) => {
                 writeEvents(serializer.serializeStreamChunk(unifiedChunk))
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error('[LLMHub] openai/responses: failed to process stream chunk, dropping it:', e)
+          }
         }
 
         while (true) {

@@ -105,7 +105,9 @@ export default defineEventHandler(async (event) => {
                 event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error('[LLMHub] openai/chat: failed to process stream chunk, dropping it:', e)
+          }
         }
 
         while (true) {

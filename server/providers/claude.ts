@@ -273,8 +273,9 @@ export class ClaudeAdapter implements ProviderAdapter {
               buffer = lines.pop() || ''
 
               for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6).trim()
+                // SSE allows "data:" with no space after the colon
+                if (line.startsWith('data:')) {
+                  const data = line.slice(5).trim()
                   if (!data) continue
                   try {
                     const chunk = JSON.parse(data)
@@ -284,8 +285,8 @@ export class ClaudeAdapter implements ProviderAdapter {
               }
             }
 
-            if (buffer.startsWith('data: ')) {
-              const data = buffer.slice(6).trim()
+            if (buffer.startsWith('data:')) {
+              const data = buffer.slice(5).trim()
               if (data) {
                 try {
                   const chunk = JSON.parse(data)

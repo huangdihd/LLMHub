@@ -169,8 +169,20 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     if (chunk.type === 'tool_call' && chunk.toolCall) {
       const tc = chunk.toolCall
       const events: ResponsesStreamEvent[] = []
-      // A chunk carrying an id starts a new call; delta-only chunks append to the current one
-      if (tc.id || this.currentItem?.type !== 'function_call') {
+      // A new call starts when the upstream index changes, or (without
+      // indices) when the chunk carries an id; delta-only chunks append to
+      // the current one. Comparing indices first keeps providers that repeat
+      // the id on every delta from splitting one call into many.
+      const cur = this.currentItem
+      let startsNew: boolean
+      if (cur?.type !== 'function_call') {
+        startsNew = true
+      } else if (tc.index !== undefined && cur.upstreamIndex !== undefined) {
+        startsNew = tc.index !== cur.upstreamIndex
+      } else {
+        startsNew = !!tc.id
+      }
+      if (startsNew) {
         events.push(...this.closeCurrentItem())
         this.outputIndex++
         this.currentItem = {
@@ -178,7 +190,8 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
           id: this.nextId('fc'),
           callId: tc.id || this.nextId('call'),
           toolName: tc.name || '',
-          args: ''
+          args: '',
+          upstreamIndex: tc.index
         }
         events.push(this.event('response.output_item.added', {
           output_index: this.outputIndex,

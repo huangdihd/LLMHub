@@ -314,9 +314,10 @@ export class OpenAIAdapter implements ProviderAdapter {
 
               for (const line of lines) {
                 const trimmed = line.trim()
-                if (!trimmed || !trimmed.startsWith('data: ')) continue
-                
-                const data = trimmed.slice(6).trim()
+                // SSE allows "data:" with no space after the colon
+                if (!trimmed || !trimmed.startsWith('data:')) continue
+
+                const data = trimmed.slice(5).trim()
                 if (data === '[DONE]') {
                   controller.enqueue(encoder.encode('data: [DONE]\n\n'))
                   streamEnded = true
@@ -329,9 +330,9 @@ export class OpenAIAdapter implements ProviderAdapter {
               }
             }
 
-            if (!streamEnded && buffer.trim().startsWith('data: ')) {
+            if (!streamEnded && buffer.trim().startsWith('data:')) {
               const trimmed = buffer.trim()
-              const data = trimmed.slice(6).trim()
+              const data = trimmed.slice(5).trim()
               if (data === '[DONE]') {
                 controller.enqueue(encoder.encode('data: [DONE]\n\n'))
               } else {
@@ -437,8 +438,47 @@ export class OpenAIAdapter implements ProviderAdapter {
     }
 
     if (choice.delta?.content != null && choice.delta.content !== '') {
-      const content = choice.delta.content
+      // Some OpenAI-compatible providers put content and tool_calls in the
+      // same delta — handle the content, then append the tool_call chunks
+      // instead of dropping them.
+      const contentResult = this.processContentDelta(choice.delta.content, state)
+      const toolCallChunks = this.mapToolCallDeltas(choice.delta.tool_calls)
+      if (toolCallChunks.length === 0) return contentResult
+      const contentChunks = Array.isArray(contentResult) ? contentResult : [contentResult]
+      return [...contentChunks, ...toolCallChunks]
+    }
 
+    if (choice.delta?.reasoning_content) {
+      return { type: 'thinking', delta: choice.delta.reasoning_content }
+    }
+
+    if (choice.delta?.reasoning) {
+      return { type: 'thinking', delta: choice.delta.reasoning }
+    }
+
+    const toolCallChunks = this.mapToolCallDeltas(choice.delta?.tool_calls)
+    if (toolCallChunks.length === 1) return toolCallChunks[0]
+    if (toolCallChunks.length > 1) return toolCallChunks
+
+    // Do not return 'done' just because usage is present; some providers send it in every chunk.
+    // We only return 'done' if finish_reason is set or when [DONE] is received.
+    return { type: 'content', delta: '' }
+  }
+
+  private mapToolCallDeltas(toolCalls: any[] | undefined): LLMStreamChunk[] {
+    if (!toolCalls?.length) return []
+    return toolCalls.map((tc: any) => ({
+      type: 'tool_call' as const,
+      toolCall: {
+        index: tc.index,
+        id: tc.id,
+        name: tc.function?.name,
+        inputDelta: tc.function?.arguments
+      }
+    }))
+  }
+
+  private processContentDelta(content: string, state: any): LLMStreamChunk | LLMStreamChunk[] {
       // DSML parser state machine
       if (!state.dsml_buffer) state.dsml_buffer = ''
       state.dsml_buffer += content
@@ -575,46 +615,6 @@ export class OpenAIAdapter implements ProviderAdapter {
       } else {
           return { type: 'content', delta: '' }
       }
-    }
-
-    if (choice.delta?.reasoning_content) {
-      return { type: 'thinking', delta: choice.delta.reasoning_content }
-    }
-
-    if (choice.delta?.reasoning) {
-      return { type: 'thinking', delta: choice.delta.reasoning }
-    }
-
-    if (choice.delta?.tool_calls) {
-      if (choice.delta.tool_calls.length > 1) {
-        return choice.delta.tool_calls.map((tc: any) => ({
-          type: 'tool_call',
-          toolCall: {
-            index: tc.index,
-            id: tc.id,
-            name: tc.function?.name,
-            inputDelta: tc.function?.arguments
-          }
-        }))
-      }
-
-      const tc = choice.delta.tool_calls[0]
-      if (tc) {
-        return {
-          type: 'tool_call',
-          toolCall: {
-            index: tc.index,
-            id: tc.id,
-            name: tc.function?.name,
-            inputDelta: tc.function?.arguments
-          }
-        }
-      }
-    }
-
-    // Do not return 'done' just because usage is present; some providers send it in every chunk.
-    // We only return 'done' if finish_reason is set or when [DONE] is received.
-    return { type: 'content', delta: '' }
   }
 
   async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {

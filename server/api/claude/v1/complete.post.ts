@@ -77,7 +77,9 @@ export default defineEventHandler(async (event) => {
               }
               // thinking / tool_call chunks have no representation in legacy completions
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error('[LLMHub] claude/complete: failed to process stream chunk, dropping it:', e)
+          }
         }
 
         while (true) {

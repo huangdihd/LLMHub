@@ -184,7 +184,9 @@ export default defineEventHandler(async (event) => {
               if (serialized) emit(serialized)
             }
           }
-        } catch {}
+        } catch (e) {
+          console.error('[LLMHub] gemini: failed to process stream chunk, dropping it:', e)
+        }
       }
 
       while (true) {

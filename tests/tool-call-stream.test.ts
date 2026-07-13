@@ -79,6 +79,27 @@ await test('parallel tool_calls in one delta all survive', () => {
   assert.deepEqual(r.map((c: any) => c.toolCall.name), ['f1', 'f2'])
 })
 
+console.log('logprobs — OpenAI adapter')
+
+await test('content delta carries upstream logprobs through', () => {
+  const adapter = new OpenAIAdapter(dummyConfig)
+  const lp = [{ token: 'hi', logprob: -0.4, bytes: [104, 105], top_logprobs: [] }]
+  const r: any = adapter.fromProviderStreamChunk({
+    choices: [{ delta: { content: 'hi' }, logprobs: { content: lp } }]
+  }, {})
+  const chunk = Array.isArray(r) ? r.find((c: any) => c.type === 'content') : r
+  assert.deepEqual(chunk.logprobs, lp)
+})
+
+await test('top_logprobs config becomes logprobs=true + top_logprobs on provider request', () => {
+  const adapter = new OpenAIAdapter(dummyConfig)
+  const payload = adapter.toProviderRequest({
+    model: 'm', messages: [{ role: 'user', content: 'hi' }], config: { topLogprobs: 3 }
+  })
+  assert.equal(payload.logprobs, true)
+  assert.equal(payload.top_logprobs, 3)
+})
+
 console.log('tool_call streaming — SSE parsing')
 
 await test('callStream accepts "data:" lines without a space', async () => {

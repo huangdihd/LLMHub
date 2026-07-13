@@ -90,7 +90,7 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
         id: this.nextId('msg'),
         status: 'completed',
         role: 'assistant',
-        content: [{ type: 'output_text', text, annotations: [] }]
+        content: [{ type: 'output_text', text, annotations: [], logprobs: response.logprobs || [] }]
       })
     }
 
@@ -144,12 +144,17 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     if (chunk.type === 'content') {
       const events = this.ensureItem('message')
       this.currentItem.text += chunk.delta || ''
+      const logprobs = chunk.logprobs || []
+      if (logprobs.length) {
+        if (!this.currentItem.logprobs) this.currentItem.logprobs = []
+        this.currentItem.logprobs.push(...logprobs)
+      }
       events.push(this.event('response.output_text.delta', {
         item_id: this.currentItem.id,
         output_index: this.outputIndex,
         content_index: 0,
         delta: chunk.delta || '',
-        logprobs: []
+        logprobs
       }))
       return events
     }
@@ -264,20 +269,20 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
         output_index: this.outputIndex,
         content_index: 0,
         text: item.text,
-        logprobs: []
+        logprobs: item.logprobs || []
       }))
       events.push(this.event('response.content_part.done', {
         item_id: item.id,
         output_index: this.outputIndex,
         content_index: 0,
-        part: { type: 'output_text', text: item.text, annotations: [] }
+        part: { type: 'output_text', text: item.text, annotations: [], logprobs: item.logprobs || [] }
       }))
       const full = {
         type: 'message',
         id: item.id,
         status: 'completed',
         role: 'assistant',
-        content: [{ type: 'output_text', text: item.text, annotations: [] }]
+        content: [{ type: 'output_text', text: item.text, annotations: [], logprobs: item.logprobs || [] }]
       }
       events.push(this.event('response.output_item.done', { output_index: this.outputIndex, item: full }))
       this.completedItems.push(full)

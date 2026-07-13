@@ -63,10 +63,25 @@ export interface GenerateConfig {
   topP?: number
   stop?: string[]
   systemPrompt?: string
+  /** 是否返回 token logprobs（OpenAI chat: logprobs=true） */
+  logprobs?: boolean
+  /** 每个 token 返回的候选数（OpenAI: top_logprobs，隐含 logprobs=true） */
+  topLogprobs?: number
   thinkingConfig?: {
     thinkingBudget?: number
     includeThoughts?: boolean
   }
+}
+
+/**
+ * 单个输出 token 的 logprob 信息，形状与 OpenAI 一致
+ * （chat completions 的 `logprobs.content[i]` / responses 的 output_text logprobs）。
+ */
+export interface TokenLogprob {
+  token: string
+  logprob: number
+  bytes?: number[] | null
+  top_logprobs?: Array<{ token: string; logprob: number; bytes?: number[] | null }>
 }
 
 // ============ 统一响应 ============
@@ -75,6 +90,8 @@ export interface LLMResponse {
   finishReason: 'stop' | 'length' | 'tool_calls' | 'error'
   toolCalls?: ToolCall[]
   usage: Usage
+  /** 输出文本各 token 的 logprobs（客户端请求 logprobs 时才有） */
+  logprobs?: TokenLogprob[]
 }
 
 export interface ToolCall {
@@ -120,6 +137,8 @@ export interface LLMStreamChunk {
   toolCall?: ToolCallDelta
   finishReason?: string
   usage?: Usage
+  /** 本帧 content 对应的 token logprobs（仅 type==='content' 时可能存在） */
+  logprobs?: TokenLogprob[]
 }
 
 export interface ToolCallDelta {

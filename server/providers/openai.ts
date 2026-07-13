@@ -141,6 +141,14 @@ export class OpenAIAdapter implements ProviderAdapter {
       payload.max_tokens = maxTokens
     }
 
+    // logprobs 透传：top_logprobs 隐含 logprobs=true（OpenAI chat 语义）
+    if (request.config.topLogprobs != null) {
+      payload.logprobs = true
+      payload.top_logprobs = request.config.topLogprobs
+    } else if (request.config.logprobs) {
+      payload.logprobs = true
+    }
+
     if (request.tools && request.tools.length > 0) {
       payload.tools = request.tools.map(t => ({
         type: 'function',
@@ -383,6 +391,7 @@ export class OpenAIAdapter implements ProviderAdapter {
       content: content.length > 0 ? content : (message.content || ''),
       finishReason: mapOpenAIFinishReason(choice.finish_reason),
       toolCalls,
+      logprobs: choice.logprobs?.content,
       usage: {
         promptTokens: response.usage?.prompt_tokens || 0,
         completionTokens: response.usage?.completion_tokens || 0
@@ -442,9 +451,21 @@ export class OpenAIAdapter implements ProviderAdapter {
       // same delta — handle the content, then append the tool_call chunks
       // instead of dropping them.
       const contentResult = this.processContentDelta(choice.delta.content, state)
-      const toolCallChunks = this.mapToolCallDeltas(choice.delta.tool_calls)
-      if (toolCallChunks.length === 0) return contentResult
       const contentChunks = Array.isArray(contentResult) ? contentResult : [contentResult]
+
+      // 把本帧的 token logprobs 挂到产出的 content chunk 上。DeepSeek 等按
+      // token 分帧,delta.content 与 logprobs.content 一一对应；DSML 缓冲仅在
+      // 出现工具调用标签时介入,普通文本近似 1:1,对纯透传足够。
+      const lp = choice.logprobs?.content
+      if (lp?.length) {
+        const target = contentChunks.find(c => c.type === 'content')
+        if (target) target.logprobs = lp
+      }
+
+      const toolCallChunks = this.mapToolCallDeltas(choice.delta.tool_calls)
+      if (toolCallChunks.length === 0) {
+        return contentChunks.length === 1 ? contentChunks[0] : contentChunks
+      }
       return [...contentChunks, ...toolCallChunks]
     }
 

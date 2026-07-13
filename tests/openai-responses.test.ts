@@ -110,7 +110,7 @@ test('text response produces a Responses API response object', () => {
   assert.match(out.id, /^resp_/)
   const msg = out.output.find((i: any) => i.type === 'message')
   assert.equal(msg.role, 'assistant')
-  assert.deepEqual(msg.content, [{ type: 'output_text', text: 'hello', annotations: [] }])
+  assert.deepEqual(msg.content, [{ type: 'output_text', text: 'hello', annotations: [], logprobs: [] }])
   assert.deepEqual(out.usage, {
     input_tokens: 10,
     input_tokens_details: { cached_tokens: 0 },
@@ -155,6 +155,34 @@ test('thinking content becomes a reasoning item', () => {
   assert.deepEqual(out.output[0].summary, [{ type: 'summary_text', text: 'hmm' }])
   assert.equal(out.output[0].type, 'reasoning')
   assert.equal(out.output[1].type, 'message')
+})
+
+test('logprobs on content chunks flow into deltas and accumulate on done', () => {
+  const s = new OpenAIResponsesSerializer()
+  const lp1 = [{ token: 'he', logprob: -0.1, bytes: [104, 101], top_logprobs: [] }]
+  const lp2 = [{ token: 'llo', logprob: -0.2, bytes: [108, 108, 111], top_logprobs: [] }]
+  const events: any[] = []
+  events.push(...s.serializeStreamChunk({ type: 'content', delta: 'he', logprobs: lp1 } as any))
+  events.push(...s.serializeStreamChunk({ type: 'content', delta: 'llo', logprobs: lp2 } as any))
+  events.push(...s.serializeStreamChunk({ type: 'done', usage: { promptTokens: 1, completionTokens: 2 } }))
+
+  const deltas = events.filter(e => e.event === 'response.output_text.delta')
+  assert.deepEqual(deltas[0].data.logprobs, lp1)
+  assert.deepEqual(deltas[1].data.logprobs, lp2)
+
+  const done = events.find(e => e.event === 'response.output_text.done')
+  assert.deepEqual(done.data.logprobs, [...lp1, ...lp2])
+
+  const completed = events[events.length - 1].data.response
+  assert.deepEqual(completed.output[0].content[0].logprobs, [...lp1, ...lp2])
+})
+
+test('request parser forwards top_logprobs into config', () => {
+  const req = new OpenAIResponsesParser().parseRequest({
+    model: 'm', input: 'hi', top_logprobs: 5
+  })
+  assert.equal(req.config.topLogprobs, 5)
+  assert.equal(req.config.logprobs, true)
 })
 
 console.log('openai-responses serializer (stream)')
@@ -205,7 +233,7 @@ test('full stream: text then tool call then done', () => {
   assert.equal(completed.status, 'completed')
   assert.equal(completed.output.length, 2)
   assert.equal(completed.output[0].type, 'message')
-  assert.deepEqual(completed.output[0].content, [{ type: 'output_text', text: 'hello', annotations: [] }])
+  assert.deepEqual(completed.output[0].content, [{ type: 'output_text', text: 'hello', annotations: [], logprobs: [] }])
   assert.equal(completed.output[1].type, 'function_call')
   assert.equal(completed.output[1].call_id, 'call_1')
   assert.equal(completed.output[1].arguments, '{"a":1}')

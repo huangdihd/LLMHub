@@ -73,7 +73,11 @@ export class OpenAIResponsesParser implements ProtocolParser {
         temperature: body.temperature,
         topP: body.top_p,
         stop: body.stop,
-        systemPrompt
+        systemPrompt,
+        // Responses API 用 top_logprobs 表达需求（并需在 include 里带
+        // "message.output_text.logprobs"，此处宽松处理：给了 top_logprobs 即视为需要）
+        topLogprobs: body.top_logprobs ?? undefined,
+        logprobs: body.top_logprobs != null || body.logprobs === true ? true : undefined
       },
       tools: body.tools?.filter((t: any) => t.type === 'function').map((t: any) => ({
         name: t.name,

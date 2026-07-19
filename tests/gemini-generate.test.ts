@@ -49,6 +49,44 @@ test('contents, systemInstruction and generationConfig are parsed', () => {
   assert.deepEqual(req.messages[1].content, [{ type: 'text', text: 'hello' }])
 })
 
+test('model history parts with thought:true parse as thinking blocks, not text', () => {
+  const req = new GeminiGenerateParser().parseRequest({
+    contents: [
+      { role: 'user', parts: [{ text: 'hi' }] },
+      {
+        role: 'model',
+        parts: [
+          { text: 'let me think...', thought: true },
+          { text: 'the answer is 42' }
+        ]
+      }
+    ]
+  }, 'p/m')
+  const blocks = req.messages[1].content as any[]
+  assert.deepEqual(blocks[0], { type: 'thinking', thinking: 'let me think...' })
+  assert.deepEqual(blocks[1], { type: 'text', text: 'the answer is 42' })
+})
+
+test('round-trip: parsed thought parts keep thought:true when sent back to gemini', () => {
+  const req = new GeminiGenerateParser().parseRequest({
+    contents: [
+      { role: 'user', parts: [{ text: 'hi' }] },
+      {
+        role: 'model',
+        parts: [
+          { text: 'let me think...', thought: true },
+          { text: 'the answer is 42' }
+        ]
+      }
+    ]
+  }, 'p/m')
+  const { payload } = new GeminiAdapter(dummyConfig).toProviderRequest(req)
+  assert.deepEqual(payload.contents[1].parts, [
+    { text: 'let me think...', thought: true },
+    { text: 'the answer is 42' }
+  ])
+})
+
 test('functionCall / functionResponse parts become tool meta', () => {
   const req = new GeminiGenerateParser().parseRequest({
     contents: [

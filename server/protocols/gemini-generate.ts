@@ -32,7 +32,11 @@ export class GeminiGenerateParser implements ProtocolParser {
 
       for (const part of parts) {
         if (part.text) {
-          contentBlocks.push({ type: 'text', text: part.text })
+          if (part.thought === true) {
+            contentBlocks.push({ type: 'thinking', thinking: part.text })
+          } else {
+            contentBlocks.push({ type: 'text', text: part.text })
+          }
         }
         if (part.inlineData) {
           contentBlocks.push({

@@ -49,15 +49,12 @@ export class ClaudeAdapter implements ProviderAdapter {
         }
       } else if (msg.role === 'tool') {
         if (msg.meta?.toolCallId && !contentBlocks.some(b => b.type === 'tool_result')) {
-          const textContent = contentBlocks
-            .filter(b => b.type === 'text')
-            .map(b => b.text)
-            .join('\n')
-
           contentBlocks = [{
             type: 'tool_result',
             tool_use_id: msg.meta.toolCallId,
-            content: textContent || (typeof msg.content === 'string' ? msg.content : '')
+            content: typeof msg.content === 'string'
+              ? msg.content
+              : contentBlocks.filter(b => b.type === 'text' || b.type === 'image')
           }]
         }
       }
@@ -122,7 +119,7 @@ export class ClaudeAdapter implements ProviderAdapter {
         return {
           type: 'tool_result',
           tool_use_id: block.toolResult.toolUseId,
-          content: block.toolResult.content,
+          content: this.convertContent(block.toolResult.content),
           is_error: block.toolResult.isError
         }
       }

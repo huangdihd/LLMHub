@@ -70,6 +70,22 @@ export class GeminiGenerateParser implements ProtocolParser {
             const output = resp.output || resp.error || JSON.stringify(resp)
             contentBlocks.push({ type: 'text', text: typeof output === 'string' ? output : JSON.stringify(output) })
           }
+          for (const resultPart of part.functionResponse.parts || []) {
+            if (resultPart.inlineData) {
+              contentBlocks.push({
+                type: 'image',
+                imageBase64: resultPart.inlineData.data,
+                imageMediaType: resultPart.inlineData.mimeType
+              })
+            }
+            if (resultPart.fileData) {
+              contentBlocks.push({
+                type: 'image',
+                imageUrl: resultPart.fileData.fileUri,
+                imageMediaType: resultPart.fileData.mimeType
+              })
+            }
+          }
         }
       }
 

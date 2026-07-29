@@ -119,12 +119,12 @@ test('tool_use blocks → meta.toolCalls; tool_result → meta.toolCallId', () =
   assert.equal(trBlock.toolResult.content, 'sunny')
 })
 
-test('structured tool_result content is stringified', () => {
+test('structured tool_result content is preserved', () => {
   const req = new ClaudeMessagesParser().parseRequest({
     messages: [{ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: [{ type: 'text', text: 'x' }] }] }]
   })
   const tr = (req.messages[0].content as any[])[0]
-  assert.equal(typeof tr.toolResult.content, 'string')
+  assert.deepEqual(tr.toolResult.content, [{ type: 'text', text: 'x' }])
 })
 
 test('image blocks: base64 source and url source', () => {

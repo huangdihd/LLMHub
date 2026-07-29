@@ -78,7 +78,7 @@ export class ClaudeMessagesParser implements ProtocolParser {
             type: 'tool_result' as const,
             toolResult: {
               toolUseId: part.tool_use_id,
-              content: typeof part.content === 'string' ? part.content : JSON.stringify(part.content),
+              content: this.parseContent(part.content),
               isError: part.is_error
             }
           }

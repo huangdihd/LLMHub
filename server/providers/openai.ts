@@ -20,26 +20,34 @@ export class OpenAIAdapter implements ProviderAdapter {
         if (Array.isArray(msg.content)) {
           const toolResults = msg.content.filter(b => b.type === 'tool_result')
           if (toolResults.length > 0) {
+            const trailingImages: any[] = []
             for (const tr of toolResults) {
+              const result = this.splitToolResultContent(tr.toolResult?.content)
               messages.push({
                 role: 'tool',
                 tool_call_id: tr.toolResult?.toolUseId || toolCallId,
-                content: tr.toolResult?.content || ''
+                content: result.text
               })
+              trailingImages.push(...result.images)
+            }
+            if (trailingImages.length > 0) {
+              messages.push({ role: 'user', content: this.convertContent(trailingImages) })
             }
             continue
           }
         }
-        // meta.toolCallId set but no tool_result blocks — send text content as tool response
+        // Chat Completions tool messages only carry text. Keep the required tool
+        // message first, then preserve image outputs in an adjacent user message.
         if (toolCallId) {
-          const textContent = typeof msg.content === 'string'
-            ? msg.content
-            : (Array.isArray(msg.content) ? msg.content.filter(b => b.type === 'text').map(b => b.text).join('') : '')
+          const result = this.splitToolResultContent(msg.content)
           messages.push({
             role: 'tool',
             tool_call_id: toolCallId,
-            content: textContent
+            content: result.text
           })
+          if (result.images.length > 0) {
+            messages.push({ role: 'user', content: this.convertContent(result.images) })
+          }
           continue
         }
         // No toolCallId at all — skip (invalid tool message)
@@ -49,21 +57,24 @@ export class OpenAIAdapter implements ProviderAdapter {
       if (Array.isArray(msg.content) && msg.content.some(b => b.type === 'tool_result')) {
         const toolResults = msg.content.filter(b => b.type === 'tool_result')
         const otherContent = msg.content.filter(b => b.type !== 'tool_result')
+        const resultImages: any[] = []
 
         // IMPORTANT: tool messages must follow assistant[tool_calls] immediately.
         // If a message has both results and text, output results FIRST.
         for (const tr of toolResults) {
+          const result = this.splitToolResultContent(tr.toolResult?.content)
           messages.push({
             role: 'tool',
             tool_call_id: tr.toolResult?.toolUseId,
-            content: tr.toolResult?.content || ''
+            content: result.text
           })
+          resultImages.push(...result.images)
         }
 
-        if (otherContent.length > 0) {
+        if (resultImages.length > 0 || otherContent.length > 0) {
           messages.push({
             role: msg.role,
-            content: this.convertContent(otherContent)
+            content: this.convertContent([...resultImages, ...otherContent])
           })
         }
       } else {
@@ -184,6 +195,19 @@ export class OpenAIAdapter implements ProviderAdapter {
       }
       return { type: 'text', text: '' }
     }).filter(Boolean)
+  }
+
+  private splitToolResultContent(content: any): { text: string; images: any[] } {
+    if (typeof content === 'string') return { text: content, images: [] }
+    if (!Array.isArray(content)) return { text: '', images: [] }
+
+    return {
+      text: content
+        .filter(block => block.type === 'text')
+        .map(block => block.text || '')
+        .join('\n'),
+      images: content.filter(block => block.type === 'image')
+    }
   }
 
   private convertToolChoice(toolChoice: any): any {

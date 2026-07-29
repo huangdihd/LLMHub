@@ -41,31 +41,31 @@ export class GeminiAdapter implements ProviderAdapter {
                 if (match) { toolName = match.name; break }
               }
             }
+            const result = this.convertToolResultContent(tr.toolResult!.content)
             parts.push({
               functionResponse: {
                 id: tr.toolResult!.toolUseId,
                 name: toolName,
-                response: { output: tr.toolResult!.content || '' }
+                response: { output: result.text },
+                ...(result.inlineParts.length > 0 ? { parts: result.inlineParts } : {})
               }
             })
+            parts.push(...result.externalParts)
           }
         }
       } else if (msg.role === 'tool' && msg.meta?.toolCallId) {
-        const textContent = typeof msg.content === 'string'
-          ? msg.content
-          : (msg.content as any[])
-              .filter((b: any) => b.type === 'text')
-              .map((b: any) => b.text)
-              .join('\n')
+        const result = this.convertToolResultContent(msg.content)
 
         parts.length = 0
         parts.push({
           functionResponse: {
             id: msg.meta.toolCallId,
             name: msg.meta.name || 'unknown',
-            response: { output: textContent }
+            response: { output: result.text },
+            ...(result.inlineParts.length > 0 ? { parts: result.inlineParts } : {})
           }
         })
+        parts.push(...result.externalParts)
       }
 
       if (parts.length > 0) {
@@ -177,19 +177,65 @@ export class GeminiAdapter implements ProviderAdapter {
           },
           thought_signature: 'skip_thought_signature_validator'
         })
-            } else if (block.type === 'tool_result' && (role === 'tool' || role === 'user')) {
+      } else if (block.type === 'tool_result' && (role === 'tool' || role === 'user')) {
+        const result = this.convertToolResultContent(block.toolResult.content)
         parts.push({
           functionResponse: {
             id: block.toolResult.toolUseId,
             name: block.toolResult.name || 'unknown',
-            response: { output: block.toolResult.content || '' }
+            response: { output: result.text },
+            ...(result.inlineParts.length > 0 ? { parts: result.inlineParts } : {})
           }
         })
+        parts.push(...result.externalParts)
       } else if (block.type === 'thinking') {
         parts.push({ text: block.thinking || '', thought: true })
       }
     }
     return parts
+  }
+
+  private convertToolResultContent(content: any): {
+    text: string
+    inlineParts: any[]
+    externalParts: any[]
+  } {
+    if (typeof content === 'string') {
+      return { text: content, inlineParts: [], externalParts: [] }
+    }
+    if (!Array.isArray(content)) {
+      return { text: '', inlineParts: [], externalParts: [] }
+    }
+
+    const inlineParts: any[] = []
+    const externalParts: any[] = []
+    for (const block of content) {
+      if (block.type !== 'image') continue
+      if (block.imageBase64) {
+        inlineParts.push({
+          inlineData: {
+            data: block.imageBase64,
+            mimeType: block.imageMediaType || 'image/jpeg'
+          }
+        })
+      } else if (block.imageUrl) {
+        externalParts.push({
+          fileData: {
+            fileUri: block.imageUrl,
+            mimeType: block.imageMediaType || 'image/jpeg'
+          }
+        })
+      }
+    }
+
+    return {
+      text: content
+        .filter(block => block.type === 'text')
+        .map(block => block.text || '')
+        .join('\n'),
+      inlineParts,
+      externalParts
+    }
   }
 
   async call(request: any): Promise<any> {

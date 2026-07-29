@@ -37,7 +37,7 @@ export interface ToolUse {
 
 export interface ToolResult {
   toolUseId: string
-  content: string
+  content: Content
   isError?: boolean
 }
 

@@ -41,7 +41,7 @@ export class OpenAIResponsesParser implements ProtocolParser {
         if (item.type === 'function_call_output') {
           parsedMessages.push({
             role: 'tool',
-            content: typeof item.output === 'string' ? item.output : this.flattenText(item.output),
+            content: this.parseContent(item.output),
             meta: { toolCallId: item.call_id, name: toolNameById[item.call_id] }
           })
           continue

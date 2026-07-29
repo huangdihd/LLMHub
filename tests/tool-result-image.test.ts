@@ -105,10 +105,115 @@ test('OpenAI Chat upstream receives the tool text before an adjacent image messa
   assert.deepEqual(payload.messages[2], {
     role: 'user',
     content: [
+      { type: 'text', text: 'Images returned by the preceding tool calls.' },
       { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
       { type: 'image_url', image_url: { url: 'https://example.com/screenshot.jpg' } }
     ]
   })
+})
+
+test('parallel Responses image results keep all tool messages contiguous', () => {
+  const request = new OpenAIResponsesParser().parseRequest({
+    input: [
+      { type: 'function_call', call_id: 'read_image:1', name: 'read_image', arguments: '{"path":"one.png"}' },
+      { type: 'function_call', call_id: 'read_image:2', name: 'read_image', arguments: '{"path":"two.png"}' },
+      {
+        type: 'function_call_output',
+        call_id: 'read_image:1',
+        output: [
+          { type: 'input_text', text: 'first image' },
+          { type: 'input_image', image_url: 'data:image/png;base64,AAAA' }
+        ]
+      },
+      {
+        type: 'function_call_output',
+        call_id: 'read_image:2',
+        output: [
+          { type: 'input_text', text: 'second image' },
+          { type: 'input_image', image_url: 'data:image/png;base64,BBBB' }
+        ]
+      }
+    ]
+  })
+  const payload = new OpenAIAdapter(dummyConfig).toProviderRequest(request)
+
+  assert.deepEqual(payload.messages.map((message: any) => message.role), [
+    'assistant',
+    'tool',
+    'tool',
+    'user'
+  ])
+  assert.deepEqual(payload.messages.slice(1, 3).map((message: any) => message.tool_call_id), [
+    'read_image:1',
+    'read_image:2'
+  ])
+  assert.deepEqual(payload.messages.slice(1, 3).map((message: any) => message.content), [
+    'first image',
+    'second image'
+  ])
+  assert.deepEqual(payload.messages[3].content, [
+    { type: 'text', text: 'Images returned by the preceding tool calls.' },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,BBBB' } }
+  ])
+})
+
+test('parallel text-only results remain consecutive without an extra user message', () => {
+  const request = new OpenAIResponsesParser().parseRequest({
+    input: [
+      { type: 'function_call', call_id: 'call_1', name: 'lookup', arguments: '{}' },
+      { type: 'function_call', call_id: 'call_2', name: 'lookup', arguments: '{}' },
+      { type: 'function_call_output', call_id: 'call_1', output: 'one' },
+      { type: 'function_call_output', call_id: 'call_2', output: 'two' }
+    ]
+  })
+  const payload = new OpenAIAdapter(dummyConfig).toProviderRequest(request)
+
+  assert.deepEqual(payload.messages.map((message: any) => message.role), ['assistant', 'tool', 'tool'])
+  assert.deepEqual(payload.messages.slice(1).map((message: any) => message.tool_call_id), ['call_1', 'call_2'])
+})
+
+test('mixed text and image results flush images after every tool message', () => {
+  const request = new OpenAIResponsesParser().parseRequest({
+    input: [
+      { type: 'function_call', call_id: 'call_1', name: 'lookup', arguments: '{}' },
+      { type: 'function_call', call_id: 'call_2', name: 'read_image', arguments: '{}' },
+      { type: 'function_call_output', call_id: 'call_1', output: 'plain text' },
+      {
+        type: 'function_call_output',
+        call_id: 'call_2',
+        output: [
+          { type: 'input_text', text: 'image result' },
+          { type: 'input_image', image_url: 'data:image/png;base64,AAAA' }
+        ]
+      }
+    ]
+  })
+  const payload = new OpenAIAdapter(dummyConfig).toProviderRequest(request)
+
+  assert.deepEqual(payload.messages.map((message: any) => message.role), ['assistant', 'tool', 'tool', 'user'])
+  assert.deepEqual(payload.messages.slice(1, 3).map((message: any) => message.tool_call_id), ['call_1', 'call_2'])
+})
+
+test('image-only result still emits a non-empty tool message', () => {
+  const request = new OpenAIResponsesParser().parseRequest({
+    input: [
+      { type: 'function_call', call_id: 'call_1', name: 'read_image', arguments: '{}' },
+      {
+        type: 'function_call_output',
+        call_id: 'call_1',
+        output: [{ type: 'input_image', image_url: 'data:image/png;base64,AAAA' }]
+      }
+    ]
+  })
+  const payload = new OpenAIAdapter(dummyConfig).toProviderRequest(request)
+
+  assert.deepEqual(payload.messages[1], {
+    role: 'tool',
+    tool_call_id: 'call_1',
+    content: 'Image returned by tool.'
+  })
+  assert.equal(payload.messages[2].role, 'user')
 })
 
 test('Claude upstream nests images inside tool_result content', () => {

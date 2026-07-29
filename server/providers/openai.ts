@@ -8,12 +8,35 @@ export class OpenAIAdapter implements ProviderAdapter {
 
   toProviderRequest(request: LLMRequest): any {
     const messages: any[] = []
+    const pendingToolImages: any[] = []
+
+    const flushToolImages = () => {
+      if (pendingToolImages.length === 0) return
+      messages.push({
+        role: 'user',
+        content: this.convertContent([
+          { type: 'text', text: 'Images returned by the preceding tool calls.' },
+          ...pendingToolImages
+        ])
+      })
+      pendingToolImages.length = 0
+    }
 
     if (request.config.systemPrompt) {
       messages.push({ role: 'system', content: request.config.systemPrompt })
     }
 
     for (const msg of request.messages) {
+      const hasToolResults = Array.isArray(msg.content)
+        && msg.content.some(block => block.type === 'tool_result')
+
+      // A single assistant turn may have several parallel tool calls. Keep every
+      // corresponding tool message contiguous; only flush collected images after
+      // the complete result batch.
+      if (msg.role !== 'tool' && !hasToolResults) {
+        flushToolImages()
+      }
+
       if (msg.role === 'tool') {
         // Tool messages: use meta.toolCallId (from opencode) or content tool_result blocks
         const toolCallId = msg.meta?.toolCallId
@@ -30,9 +53,7 @@ export class OpenAIAdapter implements ProviderAdapter {
               })
               trailingImages.push(...result.images)
             }
-            if (trailingImages.length > 0) {
-              messages.push({ role: 'user', content: this.convertContent(trailingImages) })
-            }
+            pendingToolImages.push(...trailingImages)
             continue
           }
         }
@@ -45,9 +66,7 @@ export class OpenAIAdapter implements ProviderAdapter {
             tool_call_id: toolCallId,
             content: result.text
           })
-          if (result.images.length > 0) {
-            messages.push({ role: 'user', content: this.convertContent(result.images) })
-          }
+          pendingToolImages.push(...result.images)
           continue
         }
         // No toolCallId at all — skip (invalid tool message)
@@ -71,10 +90,13 @@ export class OpenAIAdapter implements ProviderAdapter {
           resultImages.push(...result.images)
         }
 
-        if (resultImages.length > 0 || otherContent.length > 0) {
+        pendingToolImages.push(...resultImages)
+
+        if (otherContent.length > 0) {
+          flushToolImages()
           messages.push({
             role: msg.role,
-            content: this.convertContent([...resultImages, ...otherContent])
+            content: this.convertContent(otherContent)
           })
         }
       } else {
@@ -130,6 +152,8 @@ export class OpenAIAdapter implements ProviderAdapter {
         messages.push(message)
       }
     }
+
+    flushToolImages()
 
     const slashIndex = request.model?.indexOf('/')
     const modelId = slashIndex !== undefined && slashIndex !== -1 ? request.model!.slice(slashIndex + 1) : request.model
@@ -201,12 +225,15 @@ export class OpenAIAdapter implements ProviderAdapter {
     if (typeof content === 'string') return { text: content, images: [] }
     if (!Array.isArray(content)) return { text: '', images: [] }
 
+    const images = content.filter(block => block.type === 'image')
+    const text = content
+      .filter(block => block.type === 'text')
+      .map(block => block.text || '')
+      .join('\n')
+
     return {
-      text: content
-        .filter(block => block.type === 'text')
-        .map(block => block.text || '')
-        .join('\n'),
-      images: content.filter(block => block.type === 'image')
+      text: text || (images.length > 0 ? 'Image returned by tool.' : ''),
+      images
     }
   }
 

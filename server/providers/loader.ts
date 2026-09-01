@@ -1,7 +1,7 @@
 import type { ProviderConfig, ModelInfo } from '../core/types'
 import { getProviderStore } from '../stores/provider.store'
 import { fetchWithRetry } from '../utils/fetch'
-import { extractChatGptAccountId } from '../utils/codex-auth'
+import { CODEX_CLIENT_VERSION, extractChatGptAccountId } from '../utils/codex-auth'
 import { ensureCodexAccessToken } from '../services/codex-token-manager'
 
 const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
@@ -191,7 +191,9 @@ export class ProviderLoader {
     config = await ensureCodexAccessToken(config)
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${config.connection.api_key}`,
-      'x-codex-installation-id': config.connection.device_id || ''
+      'Accept': 'application/json',
+      'x-codex-installation-id': config.connection.device_id || '',
+      'originator': 'llmhub'
     }
     const accountId = config.connection.account_id
       || extractChatGptAccountId(config.connection.id_token)
@@ -200,7 +202,9 @@ export class ProviderLoader {
       headers['ChatGPT-Account-Id'] = accountId
     }
 
-    const response = await fetchWithRetry(`${config.connection.base_url.replace(/\/$/, '')}/models`, {
+    const modelsUrl = new URL(`${config.connection.base_url.replace(/\/$/, '')}/models`)
+    modelsUrl.searchParams.set('client_version', CODEX_CLIENT_VERSION)
+    const response = await fetchWithRetry(modelsUrl.toString(), {
       headers
     }, config.connection)
 

@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 
 export const CODEX_AUTH_BASE_URL = 'https://auth.openai.com'
 export const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
+export const CODEX_CLIENT_VERSION = '0.149.0'
 export const CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api/codex'
 
 export interface CodexOAuthTokens {

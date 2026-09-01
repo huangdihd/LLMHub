@@ -8,9 +8,11 @@ if (!buildDir) {
   process.exit(1)
 }
 const { CodexAdapter } = require(`${buildDir}/providers/codex.js`)
+const { ProviderLoader } = require(`${buildDir}/providers/loader.js`)
 const { ProviderStore } = require(`${buildDir}/stores/provider.store.js`)
 const {
   CODEX_CLIENT_ID,
+  CODEX_CLIENT_VERSION,
   exchangeCodexAuthorizationCode,
   extractChatGptAccountId,
   extractJwtExpiry,
@@ -111,6 +113,27 @@ await test('provider responses expose connection status but never OAuth credenti
   assert.equal('id_token' in sanitized.connection, false)
   assert.equal('device_id' in sanitized.connection, false)
   assert.equal('account_id' in sanitized.connection, false)
+})
+
+await test('model discovery sends the required Codex client version and catalog headers', async () => {
+  const originalFetch = globalThis.fetch
+  let captured: any
+  globalThis.fetch = (async (url: string, init: RequestInit) => {
+    captured = { url, headers: init.headers }
+    return Response.json({ models: [{ slug: 'gpt-5.6-sol', display_name: 'GPT-5.6-Sol' }] })
+  }) as any
+
+  try {
+    const models = await new ProviderLoader().fetchCodexModels(config)
+    assert.equal(captured.url, `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLIENT_VERSION}`)
+    assert.equal(captured.headers.Accept, 'application/json')
+    assert.equal(captured.headers.originator, 'llmhub')
+    assert.equal(captured.headers['x-codex-installation-id'], config.connection.device_id)
+    assert.equal(captured.headers['ChatGPT-Account-Id'], 'acct_from_jwt')
+    assert.equal(models[0].id, 'codex-sub/gpt-5.6-sol')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 })
 
 console.log('codex adapter')

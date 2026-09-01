@@ -46,7 +46,13 @@
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
-            <UButton color="gray" variant="soft" icon="i-heroicons-pencil-square" @click="editProvider(provider)">Edit</UButton>
+            <UButton
+              color="gray"
+              variant="soft"
+              class="dark:!bg-gray-800 dark:!text-gray-100 dark:hover:!bg-gray-700"
+              icon="i-heroicons-pencil-square"
+              @click="editProvider(provider)"
+            >Edit</UButton>
             <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="deleteProvider(provider.name)">Delete</UButton>
           </div>
         </div>

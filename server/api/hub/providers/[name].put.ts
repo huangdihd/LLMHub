@@ -20,8 +20,12 @@ export default defineEventHandler(async (event) => {
     }
 
     const nextProtocol = body.protocol ?? existing.protocol
+    const subscriptionProtocol = nextProtocol === 'codex-subscription' || nextProtocol === 'claude-subscription'
     if (nextProtocol === 'codex-subscription' && existing.protocol !== 'codex-subscription') {
       throw createError({ statusCode: 400, message: 'Use Connect ChatGPT to add a Codex Subscription provider' })
+    }
+    if (nextProtocol === 'claude-subscription' && existing.protocol !== 'claude-subscription') {
+      throw createError({ statusCode: 400, message: 'Use Connect Claude to add a Claude Subscription provider' })
     }
 
     // Validate base_url if it's being changed
@@ -36,10 +40,10 @@ export default defineEventHandler(async (event) => {
 
     // Build the connection patch from flat or nested body fields
     const connectionPatch: any = {}
-    if (body.base_url !== undefined && nextProtocol !== 'codex-subscription') connectionPatch.base_url = body.base_url
+    if (body.base_url !== undefined && !subscriptionProtocol) connectionPatch.base_url = body.base_url
     // Sanitized provider responses intentionally omit the current secret, so
     // an empty password field in the edit form means "keep the existing key".
-    if (body.api_key !== undefined && body.api_key !== '' && nextProtocol !== 'codex-subscription') connectionPatch.api_key = body.api_key
+    if (body.api_key !== undefined && body.api_key !== '' && !subscriptionProtocol) connectionPatch.api_key = body.api_key
     if (body.timeout !== undefined) connectionPatch.timeout = body.timeout
     if (body.enable_timeout !== undefined) connectionPatch.enable_timeout = body.enable_timeout
     if (body.max_retries !== undefined) connectionPatch.max_retries = body.max_retries
@@ -50,7 +54,7 @@ export default defineEventHandler(async (event) => {
     // Also merge any nested connection object
     if (body.connection && typeof body.connection === 'object') {
       const nested = { ...body.connection }
-      if (nextProtocol === 'codex-subscription') {
+      if (subscriptionProtocol) {
         delete nested.api_key
         delete nested.refresh_token
         delete nested.id_token

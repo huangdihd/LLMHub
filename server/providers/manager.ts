@@ -4,6 +4,7 @@ import { OpenAIAdapter } from './openai'
 import { ClaudeAdapter } from './claude'
 import { GeminiAdapter } from './gemini'
 import { CodexAdapter } from './codex'
+import { ClaudeSubscriptionAdapter } from './claude-subscription'
 import { OpenAIChatParser } from '../protocols/openai-chat'
 import { OpenAICompletionParser } from '../protocols/openai-completion'
 import { OpenAIResponsesParser } from '../protocols/openai-responses'
@@ -55,6 +56,8 @@ export class ProviderManager {
         this.adapters.set(config.name, new GeminiAdapter(config))
       } else if (config.protocol === 'codex-subscription') {
         this.adapters.set(config.name, new CodexAdapter(config))
+      } else if (config.protocol === 'claude-subscription') {
+        this.adapters.set(config.name, new ClaudeSubscriptionAdapter(config))
       }
     }
   }

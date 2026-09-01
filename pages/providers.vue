@@ -31,18 +31,18 @@
                 {{ provider.enabled ? 'Enabled' : 'Disabled' }}
               </UBadge>
               <UBadge
-                v-if="provider.protocol === 'codex-subscription'"
+                v-if="isSubscriptionProtocol(provider.protocol)"
                 :color="provider.connection.authenticated ? 'green' : 'red'"
                 variant="subtle"
                 size="sm"
               >
-                {{ provider.connection.authenticated ? 'ChatGPT connected' : 'Reconnect required' }}
+                {{ provider.connection.authenticated ? subscriptionConnectedLabel(provider.protocol) : 'Reconnect required' }}
               </UBadge>
             </div>
             <div class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
               <span>{{ protocolLabel(provider.protocol) }}</span>
               <span class="font-mono text-xs">{{ provider.name }}</span>
-              <span v-if="provider.protocol !== 'codex-subscription'" class="break-all">{{ provider.connection.base_url }}</span>
+              <span v-if="!isSubscriptionProtocol(provider.protocol)" class="break-all">{{ provider.connection.base_url }}</span>
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
@@ -173,6 +173,59 @@
             />
           </section>
 
+          <section v-else-if="form.protocol === 'claude-subscription'" class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="font-medium text-gray-900 dark:text-white">Claude Code subscription</h4>
+                  <UBadge
+                    v-if="editingProvider && !activeLogin"
+                    :color="editingProvider.connection.authenticated ? 'green' : 'red'"
+                    variant="subtle"
+                    size="sm"
+                  >
+                    {{ editingProvider.connection.authenticated ? 'Connected' : 'Not connected' }}
+                  </UBadge>
+                </div>
+                <p class="mt-1 text-sm leading-5 text-gray-500 dark:text-gray-400">
+                  Sign in on Anthropic, then paste the authorization code shown there.
+                </p>
+              </div>
+              <UButton
+                v-if="activeLogin?.status !== 'pending'"
+                type="button"
+                icon="i-heroicons-arrow-top-right-on-square"
+                :loading="startingLogin"
+                @click="startClaudeLogin"
+              >
+                {{ claudeConnectLabel }}
+              </UButton>
+            </div>
+
+            <div v-if="activeLogin?.status === 'pending'" class="mt-5 space-y-4 border-t border-gray-200 dark:border-gray-700 pt-5">
+              <UButton type="button" variant="soft" icon="i-heroicons-arrow-top-right-on-square" @click="openAuthorizationPage">Open Anthropic</UButton>
+              <UFormGroup label="Authorization code" help="Paste the code displayed after authorizing LLMHub.">
+                <div class="flex flex-col gap-2 sm:flex-row">
+                  <UInput v-model="authorizationCode" class="flex-1" placeholder="Paste authorization code" autocomplete="off" @keyup.enter="completeClaudeLogin" />
+                  <UButton type="button" :loading="completingLogin" :disabled="!authorizationCode.trim()" @click="completeClaudeLogin">Complete connection</UButton>
+                </div>
+              </UFormGroup>
+              <div class="flex items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
+                <span>Waiting for authorization code</span>
+                <span>Expires in {{ loginMinutesRemaining }} min</span>
+              </div>
+            </div>
+
+            <UAlert
+              v-else-if="activeLogin?.status === 'failed'"
+              class="mt-4"
+              color="red"
+              variant="subtle"
+              title="Could not connect Claude"
+              :description="activeLogin.error"
+            />
+          </section>
+
           <section v-else class="space-y-4">
             <UFormGroup label="Base URL" required :error="errors.base_url" help="The root URL for this provider's API.">
               <UInput v-model="form.base_url" :placeholder="protocolDefaults[form.protocol].baseUrl" />
@@ -236,7 +289,7 @@
             <div class="flex gap-2">
               <UButton color="gray" variant="ghost" :disabled="saving" @click="closeModal">Cancel</UButton>
               <UButton
-                v-if="protocolChosen && (form.protocol !== 'codex-subscription' || !!editingProvider)"
+                v-if="protocolChosen && (!isSubscriptionProtocol(form.protocol) || !!editingProvider)"
                 :loading="saving"
                 :disabled="activeLogin?.status === 'pending'"
                 @click="saveProvider"
@@ -252,12 +305,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
-type Protocol = 'openai' | 'claude' | 'gemini' | 'codex-subscription'
+type Protocol = 'openai' | 'claude' | 'gemini' | 'codex-subscription' | 'claude-subscription'
 type LoginState = {
   login_id: string
   status: 'pending' | 'completed' | 'failed' | 'cancelled'
-  verification_url: string
-  user_code: string
+  verification_url?: string
+  user_code?: string
+  authorization_url?: string
   expires_at: number
   error?: string
 }
@@ -267,10 +321,12 @@ const providers = ref<any[]>([])
 const loading = ref(true)
 const saving = ref(false)
 const startingLogin = ref(false)
+const completingLogin = ref(false)
 const isModalOpen = ref(false)
 const protocolChosen = ref(false)
 const editingProvider = ref<any>(null)
 const activeLogin = ref<LoginState | null>(null)
+const authorizationCode = ref('')
 const loginNow = ref(Date.now())
 const nameTouched = ref(false)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
@@ -278,6 +334,7 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null
 const protocolOptions: { value: Protocol; label: string; description: string; icon: string }[] = [
   { value: 'openai', label: 'OpenAI compatible', description: 'OpenAI, DeepSeek, OpenRouter, Ollama, and compatible APIs.', icon: 'i-heroicons-command-line' },
   { value: 'codex-subscription', label: 'ChatGPT subscription', description: 'Use Codex models included with a ChatGPT plan. Sign in with OpenAI.', icon: 'i-heroicons-user-circle' },
+  { value: 'claude-subscription', label: 'Claude Code subscription', description: 'Use Claude models included with a Claude plan. Sign in with Anthropic.', icon: 'i-heroicons-user-circle' },
   { value: 'claude', label: 'Anthropic Claude', description: 'Providers using the Anthropic Messages API.', icon: 'i-heroicons-chat-bubble-left-right' },
   { value: 'gemini', label: 'Google Gemini', description: 'Providers using the Gemini generateContent API.', icon: 'i-heroicons-sparkles' }
 ]
@@ -286,7 +343,8 @@ const protocolDefaults: Record<Protocol, { baseUrl: string; keyPlaceholder: stri
   openai: { baseUrl: 'https://api.openai.com/v1', keyPlaceholder: 'sk-…' },
   claude: { baseUrl: 'https://api.anthropic.com', keyPlaceholder: 'sk-ant-…' },
   gemini: { baseUrl: 'https://generativelanguage.googleapis.com', keyPlaceholder: 'Google API key' },
-  'codex-subscription': { baseUrl: '', keyPlaceholder: '' }
+  'codex-subscription': { baseUrl: '', keyPlaceholder: '' },
+  'claude-subscription': { baseUrl: '', keyPlaceholder: '' }
 }
 
 const form = reactive({
@@ -303,6 +361,11 @@ const codexConnectLabel = computed(() => {
   if (activeLogin.value?.status === 'failed') return 'Try again'
   if (editingProvider.value) return 'Reconnect'
   return 'Connect ChatGPT'
+})
+const claudeConnectLabel = computed(() => {
+  if (activeLogin.value?.status === 'failed') return 'Try again'
+  if (editingProvider.value) return 'Reconnect'
+  return 'Connect Claude'
 })
 const loginMinutesRemaining = computed(() => activeLogin.value
   ? Math.max(0, Math.ceil((activeLogin.value.expires_at - loginNow.value) / 60000))
@@ -338,9 +401,17 @@ function openAddModal() {
 function chooseProtocol(protocol: Protocol) {
   form.protocol = protocol
   const option = protocolOptions.find(item => item.value === protocol)!
-  form.display_name = protocol === 'codex-subscription' ? 'Codex Subscription' : option.label
+  if (protocol === 'codex-subscription') {
+    form.display_name = 'Codex Subscription'
+    form.name = 'codex'
+  } else if (protocol === 'claude-subscription') {
+    form.display_name = 'Claude Subscription'
+    form.name = 'claude-sub'
+  } else {
+    form.display_name = option.label
+    form.name = slugify(form.display_name)
+  }
   form.base_url = protocolDefaults[protocol].baseUrl
-  form.name = protocol === 'codex-subscription' ? 'codex' : slugify(form.display_name)
   nameTouched.value = false
   protocolChosen.value = true
 }
@@ -374,6 +445,7 @@ function editProvider(provider: any) {
 function resetForm() {
   stopPolling()
   activeLogin.value = null
+  authorizationCode.value = ''
   nameTouched.value = false
   clearErrors()
   Object.assign(form, {
@@ -412,6 +484,53 @@ async function startCodexLogin() {
     showError(error, 'Unable to start ChatGPT login')
   } finally {
     startingLogin.value = false
+  }
+}
+
+async function startClaudeLogin() {
+  if (!validateBasics()) return
+  startingLogin.value = true
+  try {
+    const models = form.use_custom_models ? form.custom_models.filter(model => model.id.trim()) : []
+    activeLogin.value = await $fetch<LoginState>('/api/hub/providers/claude-login/start' as any, {
+      method: 'POST',
+      body: {
+        name: form.name, display_name: form.display_name, enabled: form.enabled,
+        normalize_cch: form.normalize_cch, timeout: form.timeout,
+        enable_timeout: form.enable_timeout, max_retries: form.max_retries,
+        use_custom_models: form.use_custom_models, models,
+        reconnect: Boolean(editingProvider.value)
+      }
+    })
+    authorizationCode.value = ''
+    loginNow.value = Date.now()
+    openAuthorizationPage()
+  } catch (error: any) {
+    showError(error, 'Unable to start Claude login')
+  } finally {
+    startingLogin.value = false
+  }
+}
+
+async function completeClaudeLogin() {
+  if (!activeLogin.value || !authorizationCode.value.trim()) return
+  completingLogin.value = true
+  try {
+    const status = await $fetch<LoginState>(`/api/hub/providers/claude-login/${activeLogin.value.login_id}/complete` as any, {
+      method: 'POST',
+      body: { code: authorizationCode.value.trim() }
+    })
+    activeLogin.value = status
+    if (status.status === 'completed') {
+      toast.add({ title: 'Claude connected', description: `${form.display_name} is ready to use.`, color: 'green', icon: 'i-heroicons-check-circle' })
+      isModalOpen.value = false
+      await loadProviders()
+    }
+  } catch (error: any) {
+    if (error?.statusCode === 401) return navigateTo('/login')
+    showError(error, 'Unable to complete Claude login')
+  } finally {
+    completingLogin.value = false
   }
 }
 
@@ -454,20 +573,26 @@ async function cancelActiveLogin() {
   const login = activeLogin.value
   activeLogin.value = null
   if (!login) return
-  await $fetch(`/api/hub/providers/codex-login/${login.login_id}` as any, { method: 'DELETE' }).catch(() => {})
+  const loginType = form.protocol === 'claude-subscription' ? 'claude-login' : 'codex-login'
+  await $fetch(`/api/hub/providers/${loginType}/${login.login_id}` as any, { method: 'DELETE' }).catch(() => {})
 }
 
 function openVerificationPage() {
   if (activeLogin.value?.verification_url) window.open(activeLogin.value.verification_url, '_blank', 'noopener,noreferrer')
 }
 
+function openAuthorizationPage() {
+  if (activeLogin.value?.authorization_url) window.open(activeLogin.value.authorization_url, '_blank', 'noopener,noreferrer')
+}
+
 async function copyLoginCode() {
-  if (!activeLogin.value) return
+  if (!activeLogin.value?.user_code) return
   await navigator.clipboard.writeText(activeLogin.value.user_code)
   toast.add({ title: 'Code copied', color: 'green', timeout: 1500 })
 }
 
 async function saveProvider() {
+  if (isSubscriptionProtocol(form.protocol) && !editingProvider.value) return
   if (!validateForm()) return
   saving.value = true
   try {
@@ -480,7 +605,7 @@ async function saveProvider() {
       client_version: form.client_version,
       models, normalize_cch: form.normalize_cch
     }
-    if (form.protocol !== 'codex-subscription') {
+    if (!isSubscriptionProtocol(form.protocol)) {
       body.base_url = form.base_url
       body.api_key = form.api_key
     }
@@ -521,7 +646,7 @@ function validateBasics(): boolean {
 
 function validateForm(): boolean {
   const basicsValid = validateBasics()
-  if (form.protocol !== 'codex-subscription') {
+  if (!isSubscriptionProtocol(form.protocol)) {
     if (!form.base_url.trim()) errors.base_url = 'Enter the provider base URL'
     if (!editingProvider.value && !form.api_key.trim()) errors.api_key = 'Enter an API key'
   }
@@ -533,6 +658,14 @@ function clearErrors() {
   errors.display_name = ''
   errors.base_url = ''
   errors.api_key = ''
+}
+
+function isSubscriptionProtocol(protocol: Protocol): boolean {
+  return protocol === 'codex-subscription' || protocol === 'claude-subscription'
+}
+
+function subscriptionConnectedLabel(protocol: Protocol): string {
+  return protocol === 'codex-subscription' ? 'ChatGPT connected' : 'Claude connected'
 }
 
 function protocolLabel(protocol: Protocol): string {

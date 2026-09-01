@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Provider not found' })
     }
 
-    return { provider }
+    return { provider: store.sanitize(provider) }
   } catch (error: any) {
     if (error.statusCode) throw error
     throwFormattedError(error)

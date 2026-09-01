@@ -3,6 +3,8 @@ import { getProviderStore } from '../stores/provider.store'
 import { fetchWithRetry } from '../utils/fetch'
 import { CODEX_DEFAULT_CLIENT_VERSION, extractChatGptAccountId } from '../utils/codex-auth'
 import { ensureCodexAccessToken } from '../services/codex-token-manager'
+import { ensureClaudeAccessToken } from '../services/claude-token-manager'
+import { CLAUDE_CODE_BETA } from '../utils/claude-auth'
 
 const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
@@ -55,6 +57,8 @@ export class ProviderLoader {
         return await this.fetchGeminiModels(config)
       } else if (config.protocol === 'codex-subscription') {
         return await this.fetchCodexModels(config)
+      } else if (config.protocol === 'claude-subscription') {
+        return await this.fetchClaudeSubscriptionModels(config)
       }
     } catch (error) {
       console.error(`Failed to fetch models from ${providerName}:`, error)
@@ -144,6 +148,34 @@ export class ProviderLoader {
       display_name: m.display_name,
       capabilities: m.capabilities
     }))
+  }
+
+  private async fetchClaudeSubscriptionModels(config: ProviderConfig): Promise<ModelInfo[]> {
+    config = await ensureClaudeAccessToken(config)
+    const response = await fetchWithRetry(`${config.connection.base_url.replace(/\/$/, '')}/v1/models`, {
+      headers: {
+        'Authorization': `Bearer ${config.connection.api_key}`,
+        'Accept': 'application/json',
+        'anthropic-version': config.connection.version || '2023-06-01',
+        'anthropic-beta': CLAUDE_CODE_BETA,
+        'User-Agent': 'claude-cli/1.0.0',
+        'x-app': 'cli'
+      }
+    }, config.connection)
+
+    if (!response.ok) throw new Error(`Failed to fetch Claude subscription models: ${response.status}`)
+    const data = await response.json() as any
+    return (data.data || []).map((model: any) => {
+      const id = model.id
+      const configured = config.models.find(item => item.id === id)
+      return {
+        id: `${config.name}/${id}`,
+        provider: config.name,
+        name: id,
+        display_name: configured?.display_name || model.display_name || id,
+        capabilities: configured?.capabilities || { vision: true, tools: true, streaming: true }
+      }
+    }).filter((model: ModelInfo) => !!model.name)
   }
 
   private async fetchGeminiModels(config: ProviderConfig): Promise<ModelInfo[]> {

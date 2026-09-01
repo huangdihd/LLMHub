@@ -1,0 +1,11 @@
+[[checkers]]
+name = "TypeScript / Vue"
+kind = "command"
+command = "npx vue-tsc --noEmit"
+parser = "tsc"
+run_on = [
+    "*.ts",
+    "*.tsx",
+    "*.vue",
+]
+lint = false

@@ -16,6 +16,9 @@ export default defineEventHandler(async (event) => {
     if (body.protocol === 'codex-subscription') {
       throw createError({ statusCode: 400, message: 'Use Connect ChatGPT to add a Codex Subscription provider' })
     }
+    if (body.protocol === 'claude-subscription') {
+      throw createError({ statusCode: 400, message: 'Use Connect Claude to add a Claude Subscription provider' })
+    }
 
     if (body.base_url) {
       const ssrfConfig = await getAuthStore().getSSRFConfig()

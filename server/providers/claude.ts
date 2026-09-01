@@ -14,7 +14,19 @@ import { fetchWithRetry } from '../utils/fetch'
 export class ClaudeAdapter implements ProviderAdapter {
   name = 'claude'
 
-  constructor(private config: ProviderConfig) {}
+  constructor(protected config: ProviderConfig) {}
+
+  protected messagesUrl(): string {
+    return `${this.config.connection.base_url.replace(/\/$/, '')}/v1/messages`
+  }
+
+  protected async requestHeaders(): Promise<Record<string, string>> {
+    return {
+      'Content-Type': 'application/json',
+      'x-api-key': this.config.connection.api_key,
+      'anthropic-version': this.config.connection.version || '2023-06-01'
+    }
+  }
 
   toProviderRequest(request: LLMRequest): any {
     const messages: any[] = []
@@ -148,15 +160,9 @@ export class ClaudeAdapter implements ProviderAdapter {
   }
 
   async call(request: any): Promise<any> {
-    const headers: any = {
-      'Content-Type': 'application/json',
-      'x-api-key': this.config.connection.api_key,
-      'anthropic-version': this.config.connection.version || '2023-06-01'
-    }
-
-    const response = await fetchWithRetry(`${this.config.connection.base_url}/v1/messages`, {
+    const response = await fetchWithRetry(this.messagesUrl(), {
       method: 'POST',
-      headers,
+      headers: await this.requestHeaders(),
       body: JSON.stringify(request)
     }, this.config.connection)
 
@@ -180,6 +186,7 @@ export class ClaudeAdapter implements ProviderAdapter {
   }
 
   callStream(request: any): ReadableStream {
+    const adapter = this
     const config = this.config
     const encoder = new TextEncoder()
     const decoder = new TextDecoder()
@@ -207,15 +214,9 @@ export class ClaudeAdapter implements ProviderAdapter {
           }
 
           try {
-            const headers: any = {
-              'Content-Type': 'application/json',
-              'x-api-key': config.connection.api_key,
-              'anthropic-version': config.connection.version || '2023-06-01'
-            }
-
-            const response = await fetch(`${config.connection.base_url}/v1/messages`, {
+            const response = await fetch(adapter.messagesUrl(), {
               method: 'POST',
-              headers,
+              headers: await adapter.requestHeaders(),
               body: JSON.stringify(request),
               signal: abortController.signal
             })

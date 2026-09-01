@@ -107,7 +107,7 @@ export class ProviderStore {
   /** Strip credentials from provider API responses. */
   sanitize(config: ProviderConfig): Omit<ProviderConfig, 'connection'> & { connection: Omit<ProviderConfig['connection'], 'api_key' | 'refresh_token' | 'id_token' | 'device_id' | 'account_id'> & { authenticated: boolean } } {
     const { connection, ...rest } = config
-    const authenticated = config.protocol === 'codex-subscription'
+    const authenticated = config.protocol === 'codex-subscription' || config.protocol === 'claude-subscription'
       ? Boolean(connection.api_key && connection.refresh_token)
       : Boolean(connection.api_key)
     const {

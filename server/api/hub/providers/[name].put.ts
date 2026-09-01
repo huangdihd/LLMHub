@@ -14,6 +14,17 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, message: 'Provider name is required' })
     }
 
+    const existing = await store.get(name)
+    if (!existing) {
+      throw createError({ statusCode: 404, message: 'Provider not found' })
+    }
+
+    const nextProtocol = body.protocol ?? existing.protocol
+    const nextDeviceId = body.device_id ?? body.connection?.device_id ?? existing.connection.device_id
+    if (nextProtocol === 'codex-subscription' && !nextDeviceId?.trim()) {
+      throw createError({ statusCode: 400, message: 'Device ID is required for Codex Subscription providers' })
+    }
+
     // Validate base_url if it's being changed
     const newBaseUrl = body.base_url ?? body.connection?.base_url
     if (newBaseUrl) {
@@ -27,11 +38,15 @@ export default defineEventHandler(async (event) => {
     // Build the connection patch from flat or nested body fields
     const connectionPatch: any = {}
     if (body.base_url !== undefined) connectionPatch.base_url = body.base_url
-    if (body.api_key !== undefined) connectionPatch.api_key = body.api_key
+    // Sanitized provider responses intentionally omit the current secret, so
+    // an empty password field in the edit form means "keep the existing key".
+    if (body.api_key !== undefined && body.api_key !== '') connectionPatch.api_key = body.api_key
     if (body.timeout !== undefined) connectionPatch.timeout = body.timeout
     if (body.enable_timeout !== undefined) connectionPatch.enable_timeout = body.enable_timeout
     if (body.max_retries !== undefined) connectionPatch.max_retries = body.max_retries
     if (body.version !== undefined) connectionPatch.version = body.version
+    if (body.device_id !== undefined) connectionPatch.device_id = body.device_id?.trim()
+    if (body.account_id !== undefined) connectionPatch.account_id = body.account_id?.trim()
     // Also merge any nested connection object
     if (body.connection && typeof body.connection === 'object') {
       Object.assign(connectionPatch, body.connection)

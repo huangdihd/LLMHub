@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
                 doneSent = true
                 if (!u) trackUsage(event, 0, request.model)
                 writeEvents(serializer.serializeStreamChunk(unifiedChunk))
-              } else if ((unifiedChunk.type !== 'content' && unifiedChunk.type !== 'thinking') || unifiedChunk.delta) {
+              } else if ((unifiedChunk.type !== 'content' && unifiedChunk.type !== 'thinking') || unifiedChunk.delta || unifiedChunk.encryptedContent) {
                 writeEvents(serializer.serializeStreamChunk(unifiedChunk))
               }
             }

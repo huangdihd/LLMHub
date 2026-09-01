@@ -1,6 +1,7 @@
 import type { ProviderConfig, ModelInfo } from '../core/types'
 import { getProviderStore } from '../stores/provider.store'
 import { fetchWithRetry } from '../utils/fetch'
+import { extractChatGptAccountId } from '../utils/codex-auth'
 
 const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
@@ -51,6 +52,8 @@ export class ProviderLoader {
         return await this.fetchClaudeModels(config)
       } else if (config.protocol === 'gemini') {
         return await this.fetchGeminiModels(config)
+      } else if (config.protocol === 'codex-subscription') {
+        return await this.fetchCodexModels(config)
       }
     } catch (error) {
       console.error(`Failed to fetch models from ${providerName}:`, error)
@@ -181,6 +184,36 @@ export class ProviderLoader {
       display_name: m.display_name,
       capabilities: m.capabilities
     }))
+  }
+
+  private async fetchCodexModels(config: ProviderConfig): Promise<ModelInfo[]> {
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${config.connection.api_key}`,
+      'x-codex-installation-id': config.connection.device_id || ''
+    }
+    const accountId = config.connection.account_id || extractChatGptAccountId(config.connection.api_key)
+    if (accountId) {
+      headers['ChatGPT-Account-Id'] = accountId
+    }
+
+    const response = await fetchWithRetry(`${config.connection.base_url.replace(/\/$/, '')}/models`, {
+      headers
+    }, config.connection)
+
+    if (!response.ok) throw new Error(`Failed to fetch Codex models: ${response.status}`)
+    const data = await response.json() as any
+    const upstream = data.models || data.data || []
+    return upstream.map((model: any) => {
+      const id = model.slug || model.id || model.model
+      const configured = config.models.find(m => m.id === id)
+      return {
+        id: `${config.name}/${id}`,
+        provider: config.name,
+        name: id,
+        display_name: configured?.display_name || model.display_name || model.displayName || id,
+        capabilities: configured?.capabilities || { tools: true, streaming: true }
+      }
+    }).filter((model: ModelInfo) => !!model.name)
   }
 
   /** Fetch models from ALL providers in parallel, with 5-min cache. */

@@ -142,7 +142,9 @@ export class ProviderStore {
         timeout: connection?.timeout ?? 30000,
         enable_timeout: connection?.enable_timeout ?? true,
         max_retries: connection?.max_retries ?? 3,
-        ...(connection?.version ? { version: connection.version } : {})
+        ...(connection?.version ? { version: connection.version } : {}),
+        ...(connection?.device_id ? { device_id: connection.device_id } : {}),
+        ...(connection?.account_id ? { account_id: connection.account_id } : {})
       },
       models: models ?? [],
       ...(defaults ? { defaults } : {})

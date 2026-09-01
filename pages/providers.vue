@@ -34,7 +34,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4">
           <div>
             <span class="text-gray-500 dark:text-gray-400">Protocol:</span>
-            <span class="ml-2 font-medium text-gray-900 dark:text-white capitalize">{{ provider.protocol }}</span>
+            <span class="ml-2 font-medium text-gray-900 dark:text-white capitalize">{{ provider.protocol === 'codex-subscription' ? 'Codex Subscription' : provider.protocol }}</span>
           </div>
           <div>
             <span class="text-gray-500 dark:text-gray-400">Base URL:</span>
@@ -43,6 +43,10 @@
           <div class="sm:col-span-2">
             <span class="text-gray-500 dark:text-gray-400">API Key:</span>
             <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ provider.connection.api_key ? '••••••••••••••••' : 'Not set' }}</span>
+          </div>
+          <div v-if="provider.protocol === 'codex-subscription'" class="sm:col-span-2">
+            <span class="text-gray-500 dark:text-gray-400">Device ID:</span>
+            <span class="ml-2 font-mono text-xs text-gray-900 dark:text-white">{{ provider.connection.device_id }}</span>
           </div>
         </div>
       </UCard>
@@ -72,7 +76,7 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <UFormGroup label="Protocol">
-              <USelect v-model="form.protocol" :options="[{ label: 'OpenAI', value: 'openai' }, { label: 'Claude', value: 'claude' }, { label: 'Gemini', value: 'gemini' }]" />
+              <USelect v-model="form.protocol" :options="[{ label: 'OpenAI', value: 'openai' }, { label: 'Claude', value: 'claude' }, { label: 'Gemini', value: 'gemini' }, { label: 'Codex Subscription', value: 'codex-subscription' }]" />
             </UFormGroup>
             <UFormGroup label="Status">
               <div class="flex items-center h-[32px]">
@@ -97,12 +101,22 @@
           </div>
 
           <UFormGroup label="Base URL">
-            <UInput v-model="form.base_url" placeholder="https://api.openai.com/v1" />
+            <UInput v-model="form.base_url" :placeholder="form.protocol === 'codex-subscription' ? 'https://chatgpt.com/backend-api/codex' : 'https://api.openai.com/v1'" />
           </UFormGroup>
 
           <UFormGroup label="API Key">
-            <UInput v-model="form.api_key" type="password" placeholder="sk-..." />
+            <UInput v-model="form.api_key" type="password" :placeholder="form.protocol === 'codex-subscription' ? 'Codex OAuth access token' : 'sk-...'" />
           </UFormGroup>
+
+          <div v-if="form.protocol === 'codex-subscription'" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <UFormGroup label="Device ID" required>
+              <UInput v-model="form.device_id" placeholder="Persistent installation UUID" />
+              <template #hint>Sent as x-codex-installation-id in the header and client_metadata.</template>
+            </UFormGroup>
+            <UFormGroup label="ChatGPT Account ID (optional)">
+              <UInput v-model="form.account_id" placeholder="Auto-detected from JWT when possible" />
+            </UFormGroup>
+          </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <UFormGroup label="Timeout (ms)">
@@ -137,7 +151,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 
 const providers = ref<any[]>([])
 const loading = ref(true)
@@ -148,7 +162,7 @@ const editingProvider = ref<any>(null)
 const form = reactive({
   name: '',
   display_name: '',
-  protocol: 'openai' as 'openai' | 'claude' | 'gemini',
+  protocol: 'openai' as 'openai' | 'claude' | 'gemini' | 'codex-subscription',
   enabled: true,
   use_custom_models: false,
   custom_models: [] as { id: string; display_name: string }[],
@@ -158,11 +172,19 @@ const form = reactive({
   enable_timeout: true,
   max_retries: 3,
   version: '2023-06-01',
+  device_id: '',
+  account_id: '',
   normalize_cch: false
 })
 
 onMounted(async () => {
   await loadProviders()
+})
+
+watch(() => form.protocol, (protocol) => {
+  if (protocol === 'codex-subscription' && !form.base_url) {
+    form.base_url = 'https://chatgpt.com/backend-api/codex'
+  }
 })
 
 async function loadProviders() {
@@ -193,11 +215,13 @@ function editProvider(provider: any) {
   form.use_custom_models = provider.use_custom_models || false
   form.custom_models = (provider.models || []).map((m: any) => ({ id: m.id, display_name: m.display_name }))
   form.base_url = provider.connection.base_url
-  form.api_key = provider.connection.api_key
+  form.api_key = provider.connection.api_key || ''
   form.timeout = provider.connection.timeout || 30000
   form.enable_timeout = provider.connection.enable_timeout ?? true
   form.max_retries = provider.connection.max_retries || 3
   form.version = provider.connection.version || '2023-06-01'
+  form.device_id = provider.connection.device_id || ''
+  form.account_id = provider.connection.account_id || ''
   form.normalize_cch = provider.normalize_cch || false
   isModalOpen.value = true
 }
@@ -215,6 +239,8 @@ function resetForm() {
   form.enable_timeout = true
   form.max_retries = 3
   form.version = '2023-06-01'
+  form.device_id = ''
+  form.account_id = ''
   form.normalize_cch = false
 }
 
@@ -223,6 +249,10 @@ function closeModal() {
 }
 
 async function saveProvider() {
+  if (form.protocol === 'codex-subscription' && !form.device_id.trim()) {
+    alert('Device ID is required for Codex Subscription providers')
+    return
+  }
   saving.value = true
   try {
     const models = form.use_custom_models
@@ -241,6 +271,8 @@ async function saveProvider() {
       enable_timeout: form.enable_timeout,
       max_retries: form.max_retries,
       version: form.version,
+      device_id: form.device_id,
+      account_id: form.account_id,
       models,
       normalize_cch: form.normalize_cch
     }

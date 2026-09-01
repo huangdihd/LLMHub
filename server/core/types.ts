@@ -71,6 +71,9 @@ export interface GenerateConfig {
     thinkingBudget?: number
     includeThoughts?: boolean
   }
+  /** Responses/Codex reasoning controls. */
+  reasoningEffort?: string
+  reasoningSummary?: string
 }
 
 /**
@@ -139,6 +142,8 @@ export interface LLMStreamChunk {
   usage?: Usage
   /** 本帧 content 对应的 token logprobs（仅 type==='content' 时可能存在） */
   logprobs?: TokenLogprob[]
+  /** Opaque Responses reasoning state used to continue stateless Codex turns. */
+  encryptedContent?: string
 }
 
 export interface ToolCallDelta {
@@ -153,7 +158,7 @@ export interface ToolCallDelta {
 export interface ProviderConfig {
   name: string
   display_name: string
-  protocol: 'openai' | 'claude' | 'gemini'
+  protocol: 'openai' | 'claude' | 'gemini' | 'codex-subscription'
   enabled: boolean
   use_custom_models: boolean
   normalize_cch?: boolean
@@ -164,6 +169,10 @@ export interface ProviderConfig {
     enable_timeout?: boolean
     max_retries?: number
     version?: string
+    /** Persistent Codex installation identifier (shown as device_id in the UI). */
+    device_id?: string
+    /** ChatGPT account/workspace id. When omitted, CodexAdapter tries the access-token JWT. */
+    account_id?: string
   }
   models: ModelConfig[]
   defaults?: {

@@ -13,6 +13,10 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, message: 'Provider name is required' })
     }
 
+    if (body.protocol === 'codex-subscription' && !body.device_id?.trim()) {
+      throw createError({ statusCode: 400, message: 'Device ID is required for Codex Subscription providers' })
+    }
+
     if (body.base_url) {
       const ssrfConfig = await getAuthStore().getSSRFConfig()
       const result = validateBaseUrl(body.base_url, ssrfConfig)
@@ -33,8 +37,10 @@ export default defineEventHandler(async (event) => {
         timeout: body.timeout || 30000,
         enable_timeout: body.enable_timeout ?? true,
         max_retries: body.max_retries || 3,
-        version: body.version || ''
-        },
+        version: body.version || '',
+        device_id: body.device_id?.trim() || undefined,
+        account_id: body.account_id?.trim() || undefined
+      },
       models: body.models || [],
       defaults: body.defaults || { temperature: 0.7, max_tokens: 4096 },
       ...(body.normalize_cch !== undefined ? { normalize_cch: body.normalize_cch } : {})

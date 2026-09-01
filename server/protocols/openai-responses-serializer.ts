@@ -20,13 +20,19 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     return `${prefix}_${Date.now()}${(this.idCounter++).toString(36)}`
   }
 
-  private buildResponseObject(status: string, output: any[], usage: any, incompleteDetails: any = null): any {
+  private buildResponseObject(
+    status: string,
+    output: any[],
+    usage: any,
+    incompleteDetails: any = null,
+    error: any = null
+  ): any {
     return {
       id: this.responseId,
       object: 'response',
       created_at: this.createdAt,
       status,
-      error: null,
+      error,
       incomplete_details: incompleteDetails,
       instructions: null,
       max_output_tokens: null,
@@ -64,6 +70,7 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     const output: any[] = []
     let text = ''
     let thinking = ''
+    let encryptedThinking = ''
 
     if (typeof response.content === 'string') {
       text = response.content
@@ -71,14 +78,16 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
       for (const block of response.content) {
         if (block.type === 'text') text += block.text || ''
         else if (block.type === 'thinking') thinking += block.thinking || ''
+        else if (block.type === 'redacted_thinking') encryptedThinking = block.signature || ''
       }
     }
 
-    if (thinking) {
+    if (thinking || encryptedThinking) {
       output.push({
         type: 'reasoning',
         id: this.nextId('rs'),
-        summary: [{ type: 'summary_text', text: thinking }]
+        summary: thinking ? [{ type: 'summary_text', text: thinking }] : [],
+        ...(encryptedThinking ? { encrypted_content: encryptedThinking } : {})
       })
     }
 
@@ -108,11 +117,16 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     }
 
     const incomplete = response.finishReason === 'length'
+    const failed = response.finishReason === 'error'
+    let status = 'completed'
+    if (failed) status = 'failed'
+    else if (incomplete) status = 'incomplete'
     return this.buildResponseObject(
-      incomplete ? 'incomplete' : 'completed',
+      status,
       output,
       this.mapUsage(response.usage),
-      incomplete ? { reason: 'max_output_tokens' } : null
+      incomplete ? { reason: 'max_output_tokens' } : null,
+      failed ? { code: 'provider_error', message: 'Provider request failed' } : null
     )
   }
 
@@ -131,13 +145,24 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     if (chunk.type === 'done') {
       const events = this.closeCurrentItem()
       const incomplete = chunk.finishReason === 'length'
+      const failed = chunk.finishReason === 'error'
+      let status = 'completed'
+      let eventType = 'response.completed'
+      if (failed) {
+        status = 'failed'
+        eventType = 'response.failed'
+      } else if (incomplete) {
+        status = 'incomplete'
+        eventType = 'response.incomplete'
+      }
       const finalResponse = this.buildResponseObject(
-        incomplete ? 'incomplete' : 'completed',
+        status,
         this.completedItems,
         this.mapUsage(chunk.usage),
-        incomplete ? { reason: 'max_output_tokens' } : null
+        incomplete ? { reason: 'max_output_tokens' } : null,
+        failed ? { code: 'provider_error', message: 'Provider request failed' } : null
       )
-      events.push(this.event(incomplete ? 'response.incomplete' : 'response.completed', { response: finalResponse }))
+      events.push(this.event(eventType, { response: finalResponse }))
       return events
     }
 
@@ -162,12 +187,15 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     if (chunk.type === 'thinking') {
       const events = this.ensureItem('reasoning')
       this.currentItem.text += chunk.delta || ''
-      events.push(this.event('response.reasoning_summary_text.delta', {
-        item_id: this.currentItem.id,
-        output_index: this.outputIndex,
-        summary_index: 0,
-        delta: chunk.delta || ''
-      }))
+      if (chunk.encryptedContent) this.currentItem.encryptedContent = chunk.encryptedContent
+      if (chunk.delta) {
+        events.push(this.event('response.reasoning_summary_text.delta', {
+          item_id: this.currentItem.id,
+          output_index: this.outputIndex,
+          summary_index: 0,
+          delta: chunk.delta
+        }))
+      }
       return events
     }
 
@@ -318,7 +346,8 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
       const full = {
         type: 'reasoning',
         id: item.id,
-        summary: [{ type: 'summary_text', text: item.text }]
+        summary: item.text ? [{ type: 'summary_text', text: item.text }] : [],
+        ...(item.encryptedContent ? { encrypted_content: item.encryptedContent } : {})
       }
       events.push(this.event('response.output_item.done', { output_index: this.outputIndex, item: full }))
       this.completedItems.push(full)

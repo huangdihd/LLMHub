@@ -46,7 +46,18 @@ export class OpenAIResponsesParser implements ProtocolParser {
           })
           continue
         }
-        // Reasoning items from previous turns carry no replayable content for other providers
+        if (item.type === 'reasoning') {
+          const blocks: ContentBlock[] = []
+          const summary = Array.isArray(item.summary)
+            ? item.summary.map((part: any) => part.text || '').join('')
+            : ''
+          if (summary) blocks.push({ type: 'thinking', thinking: summary })
+          if (item.encrypted_content) {
+            blocks.push({ type: 'redacted_thinking', signature: item.encrypted_content })
+          }
+          if (blocks.length > 0) parsedMessages.push({ role: 'assistant', content: blocks })
+          continue
+        }
         if (item.type && item.type !== 'message') continue
 
         if (item.role === 'system' || item.role === 'developer') {
@@ -77,7 +88,9 @@ export class OpenAIResponsesParser implements ProtocolParser {
         // Responses API 用 top_logprobs 表达需求（并需在 include 里带
         // "message.output_text.logprobs"，此处宽松处理：给了 top_logprobs 即视为需要）
         topLogprobs: body.top_logprobs ?? undefined,
-        logprobs: body.top_logprobs != null || body.logprobs === true ? true : undefined
+        logprobs: body.top_logprobs != null || body.logprobs === true ? true : undefined,
+        reasoningEffort: body.reasoning?.effort,
+        reasoningSummary: body.reasoning?.summary
       },
       tools: body.tools?.filter((t: any) => t.type === 'function').map((t: any) => ({
         name: t.name,

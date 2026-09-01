@@ -4,7 +4,7 @@ import { getAuthStore } from '../stores/auth.store'
 import { resolveFallbackModel } from '../utils/fallback'
 
 export default defineEventHandler(async (event: H3Event) => {
-  if (!event.path.startsWith('/api/openai')) return
+  if (!event.path.startsWith('/api/openai') && !event.path.startsWith('/api/codex')) return
 
   const store = getAuthStore()
   const plainKey = extractApiKey(event)

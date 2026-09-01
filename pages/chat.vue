@@ -150,7 +150,6 @@ const endpoints = [
   { label: 'OpenAI Chat Completions', value: '/api/openai/chat/completions' },
   { label: 'OpenAI Completions', value: '/api/openai/completions' },
   { label: 'OpenAI Responses', value: '/api/openai/responses' },
-  { label: 'Codex Responses', value: '/api/codex/responses' },
   { label: 'Claude Messages', value: '/api/claude/v1/messages' },
   { label: 'Claude Completion', value: '/api/claude/v1/complete' },
   { label: 'Gemini generateContent', value: 'gemini-generate' },
@@ -282,19 +281,6 @@ function makeOpenAIClient(): OpenAI {
   })
 }
 
-function makeCodexClient(): OpenAI {
-  const custom = selectedAuthId.value === 'custom'
-  return new OpenAI({
-    baseURL: `${location.origin}/api/codex`,
-    apiKey: custom ? apiKey.value : 'session',
-    dangerouslyAllowBrowser: true,
-    defaultHeaders: {
-      ...(custom ? {} : { Authorization: null }),
-      ...extraHeaders()
-    } as Record<string, string | null>
-  })
-}
-
 function makeClaudeClient(): Anthropic {
   const custom = selectedAuthId.value === 'custom'
   return new Anthropic({
@@ -378,8 +364,8 @@ async function sendMessage() {
         const r = await client.completions.create({ model, prompt, max_tokens: 4096 })
         appendContent(r.choices[0]?.text)
       }
-    } else if (ep === '/api/openai/responses' || ep === '/api/codex/responses') {
-      const client = ep === '/api/codex/responses' ? makeCodexClient() : makeOpenAIClient()
+    } else if (ep === '/api/openai/responses') {
+      const client = makeOpenAIClient()
       const inputItems = history.map(m => ({ role: m.role, content: m.content }))
       if (effectiveStream.value) {
         const stream = await client.responses.create({ model, input: inputItems as any, stream: true })

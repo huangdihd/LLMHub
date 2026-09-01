@@ -1,10 +1,10 @@
 # LLMHub
 
-A unified LLM gateway that aggregates multiple LLM providers behind OpenAI, Codex Responses, Claude, and Gemini compatible API endpoints.
+A unified LLM gateway that aggregates multiple LLM providers behind OpenAI, Claude, and Gemini compatible API endpoints.
 
 ## Features
 
-- **Four Protocol Endpoints**: Exposes OpenAI-compatible (`/api/openai/*`), Codex Responses (`/api/codex/*`), Claude-compatible (`/api/claude/v1/*`), and Gemini-compatible (`/api/gemini/v1/*`) endpoints
+- **Three Protocol Endpoints**: Exposes OpenAI-compatible (`/api/openai/*`), Claude-compatible (`/api/claude/v1/*`), and Gemini-compatible (`/api/gemini/v1/*`) endpoints
 - **Cross-Protocol Routing**: Call any provider through any protocol (e.g., use Gemini protocol to call OpenAI models)
 - **Multi-Provider Aggregation**: Connect multiple LLM providers (OpenAI, Claude, Gemini, DeepSeek, etc.) through a single gateway
 - **API Key Management**: Create and manage API keys with per-key rate limiting and model access control
@@ -34,15 +34,14 @@ Navigate to **Providers** page to add your LLM providers:
 |-------|-------------|
 | Name | Unique identifier (e.g., `openai`, `deepseek`, `gemini`) |
 | Protocol | `openai`, `codex-subscription`, `claude`, or `gemini` |
-| Base URL | Provider API endpoint |
-| API Key | Your provider API key |
-| Device ID | Required for `codex-subscription`; a stable Codex installation identifier |
-| ChatGPT Account ID | Optional for `codex-subscription`; inferred from a JWT access token when possible |
+| Base URL | Provider API endpoint (API-key providers) |
+| API Key | Your provider API key (API-key providers) |
 
-For a direct ChatGPT subscription provider, use protocol `codex-subscription`, base URL
-`https://chatgpt.com/backend-api/codex`, your OAuth access token as the API key,
-and a persistent Device ID. Enabling a custom model list is recommended if the
-subscription model-list endpoint is unavailable.
+For a ChatGPT subscription provider, choose **ChatGPT subscription** and select
+**Connect ChatGPT**. LLMHub shows OpenAI's one-time device code, keeps OAuth
+credentials on the server, generates the installation ID, and refreshes tokens
+automatically. Codex Subscription is an upstream provider; clients call it through
+the normal OpenAI-compatible endpoints with a `provider/model` model ID.
 
 ### Creating API Keys
 
@@ -72,13 +71,6 @@ POST /api/claude/v1/complete
 GET  /api/claude/v1/models
 ```
 
-### Codex Responses Compatible
-
-```
-POST /api/codex/responses
-GET  /api/codex/models
-```
-
 ### Gemini Compatible
 
 ```
@@ -106,8 +98,8 @@ curl http://localhost:3000/api/claude/v1/messages \
   -H "Content-Type: application/json" \
   -d '{"model": "claude-3-sonnet-20240229", "max_tokens": 1024, "messages": [{"role": "user", "content": "Hello"}]}'
 
-# Codex Responses endpoint (the model remains provider/model)
-curl http://localhost:3000/api/codex/responses \
+# Codex Subscription provider through the OpenAI Responses endpoint
+curl http://localhost:3000/api/openai/responses \
   -H "Authorization: Bearer YOUR_LLMHUB_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"codex-sub/gpt-5.3-codex","input":"Hello","stream":false,"store":false}'
@@ -159,14 +151,11 @@ LLMHub/
 │   │   ├── auth/             #     Authentication
 │   │   ├── hub/              #     Dashboard APIs
 │   │   ├── openai/           #     OpenAI-compatible endpoints
-│   │   ├── codex/            #     Codex Responses-compatible endpoints
 │   │   ├── claude/v1/        #     Claude-compatible endpoints
 │   │   └── gemini/v1/        #     Gemini-compatible endpoints
 │   ├── protocols/            #   Request/response parsers & serializers
 │   │   ├── openai-chat.ts    #     OpenAI Chat parser
 │   │   ├── openai-chat-serializer.ts
-│   │   ├── codex-responses.ts#     Codex Responses parser
-│   │   ├── codex-responses-serializer.ts
 │   │   ├── claude-messages.ts#     Claude Messages parser
 │   │   ├── claude-messages-serializer.ts
 │   │   ├── gemini-generate.ts#     Gemini GenerateContent parser
@@ -182,7 +171,7 @@ LLMHub/
 │   │   ├── auth.store.ts     #     Keys, sessions, brute-force
 │   │   └── provider.store.ts #     Provider configs
 │   └── middleware/           #   Auth middleware
-│       ├── openai-auth.ts    #     Validate OpenAI and Codex API keys
+│       ├── openai-auth.ts    #     Validate OpenAI-compatible API keys
 │       ├── claude-auth.ts    #     Validate Claude API keys
 │       ├── gemini-auth.ts    #     Validate Gemini API keys
 │       └── hub-auth.ts       #     Validate admin session
@@ -237,7 +226,7 @@ interface LLMStreamChunk {
 
 ### Key Design Decisions
 
-1. **Four Protocol Gateway**: Single backend serves OpenAI, Codex Responses, Claude, and Gemini clients, allowing seamless migration between SDKs
+1. **Three Protocol Gateway**: Single backend serves OpenAI, Claude, and Gemini clients, allowing seamless migration between SDKs
 2. **Cross-Protocol Routing**: Any protocol endpoint can route to any provider (e.g., Gemini protocol → OpenAI provider)
 3. **Adapter Pattern**: Each provider has an adapter that converts unified requests to native format, making it easy to add new providers
 4. **File-Based Storage**: No database required; all data persisted to `.data/` directory using Nitro's FS driver

@@ -8,9 +8,16 @@ if (!buildDir) {
   process.exit(1)
 }
 const { CodexAdapter } = require(`${buildDir}/providers/codex.js`)
-const { extractChatGptAccountId } = require(`${buildDir}/utils/codex-auth.js`)
-const { CodexResponsesParser } = require(`${buildDir}/protocols/codex-responses.js`)
-const { CodexResponsesSerializer } = require(`${buildDir}/protocols/codex-responses-serializer.js`)
+const { ProviderStore } = require(`${buildDir}/stores/provider.store.js`)
+const {
+  CODEX_CLIENT_ID,
+  exchangeCodexAuthorizationCode,
+  extractChatGptAccountId,
+  extractJwtExpiry,
+  pollCodexDeviceCode,
+  refreshCodexTokens,
+  requestCodexDeviceCode
+} = require(`${buildDir}/utils/codex-auth.js`)
 
 let passed = 0
 function test(name: string, fn: () => void | Promise<void>) {
@@ -25,6 +32,7 @@ function test(name: string, fn: () => void | Promise<void>) {
 }
 
 const tokenPayload = Buffer.from(JSON.stringify({
+  exp: 1893456000,
   'https://api.openai.com/auth': { chatgpt_account_id: 'acct_from_jwt' }
 })).toString('base64url')
 const accessToken = `header.${tokenPayload}.signature`
@@ -42,69 +50,67 @@ const config = {
   models: [{ id: 'gpt-5.3-codex', display_name: 'GPT-5.3 Codex' }]
 }
 
-console.log('codex parser and serializer')
+console.log('codex device login')
 
-await test('Codex endpoint has a distinct parser and serializer name', () => {
-  const parser = new CodexResponsesParser()
-  assert.equal(parser.name, 'codex-responses')
-  assert.equal(parser.canHandle('/api/codex/responses', 'POST', {}), true)
-  assert.equal(parser.canHandle('/v1/responses', 'POST', {}), false)
-  assert.equal(new CodexResponsesSerializer().name, 'codex-responses')
+await test('device login starts with the fixed OpenAI client and returns the official verification URL', async () => {
+  let captured: any
+  const device = await requestCodexDeviceCode(async (url: string, init: RequestInit) => {
+    captured = { url, body: JSON.parse(String(init.body)) }
+    return Response.json({ device_auth_id: 'private-device-auth-id', user_code: 'ABCD-1234', interval: '5' })
+  })
+  assert.equal(captured.url, 'https://auth.openai.com/api/accounts/deviceauth/usercode')
+  assert.equal(captured.body.client_id, CODEX_CLIENT_ID)
+  assert.equal(device.user_code, 'ABCD-1234')
+  assert.equal(device.verification_url, 'https://auth.openai.com/codex/device')
+  assert.equal(device.interval, 5)
 })
 
-await test('reasoning controls and encrypted reasoning survive parsing', () => {
-  const request = new CodexResponsesParser().parseRequest({
-    model: 'codex-sub/gpt-5.3-codex',
-    reasoning: { effort: 'high', summary: 'auto' },
-    input: [{
-      type: 'reasoning',
-      encrypted_content: 'encrypted-state',
-      summary: [{ type: 'summary_text', text: 'thought summary' }]
-    }, { role: 'user', content: 'continue' }]
-  })
-  assert.equal(request.config.reasoningEffort, 'high')
-  assert.equal(request.config.reasoningSummary, 'auto')
-  assert.deepEqual(request.messages[0].content, [
-    { type: 'thinking', thinking: 'thought summary' },
-    { type: 'redacted_thinking', signature: 'encrypted-state' }
-  ])
+await test('device login treats 403 and 404 as pending', async () => {
+  const pending = await pollCodexDeviceCode('device', 'CODE', async () => new Response('', { status: 404 }))
+  assert.deepEqual(pending, { pending: true })
 })
 
-await test('encrypted reasoning survives non-stream and stream serialization', () => {
-  const sync = new CodexResponsesSerializer().serializeResponse({
-    content: [
-      { type: 'thinking', thinking: 'summary' },
-      { type: 'redacted_thinking', signature: 'encrypted-state' },
-      { type: 'text', text: 'answer' }
-    ],
-    finishReason: 'stop',
-    usage: { promptTokens: 1, completionTokens: 1 }
+await test('authorization code exchange uses the Codex device callback and returns all credentials', async () => {
+  let form = new URLSearchParams()
+  const tokens = await exchangeCodexAuthorizationCode('auth-code', 'verifier', async (url: string, init: RequestInit) => {
+    assert.equal(url, 'https://auth.openai.com/oauth/token')
+    form = new URLSearchParams(String(init.body))
+    return Response.json({ access_token: 'access', refresh_token: 'refresh', id_token: 'id' })
   })
-  assert.equal(sync.output[0].type, 'reasoning')
-  assert.equal(sync.output[0].encrypted_content, 'encrypted-state')
-
-  const stream = new CodexResponsesSerializer()
-  stream.serializeStreamChunk({ type: 'thinking', delta: 'summary' })
-  stream.serializeStreamChunk({ type: 'thinking', encryptedContent: 'encrypted-state' })
-  const terminal = stream.serializeStreamChunk({ type: 'done' })
-  const completed = terminal.find((event: any) => event.event === 'response.completed')
-  assert.equal(completed.data.response.output[0].encrypted_content, 'encrypted-state')
+  assert.equal(form.get('grant_type'), 'authorization_code')
+  assert.equal(form.get('client_id'), CODEX_CLIENT_ID)
+  assert.equal(form.get('redirect_uri'), 'https://auth.openai.com/deviceauth/callback')
+  assert.deepEqual(tokens, { access_token: 'access', refresh_token: 'refresh', id_token: 'id' })
 })
 
-await test('provider failures serialize as response.failed', () => {
-  const sync = new CodexResponsesSerializer().serializeResponse({
-    content: '',
-    finishReason: 'error',
-    usage: { promptTokens: 0, completionTokens: 0 }
+await test('token refresh uses JSON and accepts refresh-token rotation', async () => {
+  const refreshed = await refreshCodexTokens('old-refresh', async (_url: string, init: RequestInit) => {
+    assert.deepEqual(JSON.parse(String(init.body)), {
+      client_id: CODEX_CLIENT_ID,
+      grant_type: 'refresh_token',
+      refresh_token: 'old-refresh'
+    })
+    return Response.json({ access_token: 'new-access', refresh_token: 'new-refresh' })
   })
-  assert.equal(sync.status, 'failed')
-  assert.equal(sync.error.code, 'provider_error')
+  assert.deepEqual(refreshed, { access_token: 'new-access', refresh_token: 'new-refresh' })
+})
 
-  const events = new CodexResponsesSerializer().serializeStreamChunk({
-    type: 'done', finishReason: 'error'
+await test('provider responses expose connection status but never OAuth credentials', () => {
+  const sanitized = new ProviderStore().sanitize({
+    ...config,
+    connection: {
+      ...config.connection,
+      account_id: 'account-secret',
+      refresh_token: 'refresh-secret',
+      id_token: 'id-secret'
+    }
   })
-  assert.equal(events.at(-1).event, 'response.failed')
-  assert.equal(events.at(-1).data.response.status, 'failed')
+  assert.equal(sanitized.connection.authenticated, true)
+  assert.equal('api_key' in sanitized.connection, false)
+  assert.equal('refresh_token' in sanitized.connection, false)
+  assert.equal('id_token' in sanitized.connection, false)
+  assert.equal('device_id' in sanitized.connection, false)
+  assert.equal('account_id' in sanitized.connection, false)
 })
 
 console.log('codex adapter')
@@ -138,6 +144,7 @@ await test('provider request uses Responses shape and injects device_id into cli
 
 await test('account id is extracted from the Codex access-token JWT', () => {
   assert.equal(extractChatGptAccountId(accessToken), 'acct_from_jwt')
+  assert.equal(extractJwtExpiry(accessToken), 1893456000000)
   assert.equal(extractChatGptAccountId('opaque-token'), undefined)
 })
 

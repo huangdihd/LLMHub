@@ -10,14 +10,12 @@ import { OpenAIResponsesParser } from '../protocols/openai-responses'
 import { ClaudeMessagesParser } from '../protocols/claude-messages'
 import { ClaudeCompletionParser } from '../protocols/claude-completion'
 import { GeminiGenerateParser } from '../protocols/gemini-generate'
-import { CodexResponsesParser } from '../protocols/codex-responses'
 import { OpenAIChatSerializer } from '../protocols/openai-chat-serializer'
 import { OpenAIResponsesSerializer } from '../protocols/openai-responses-serializer'
 import { OpenAICompletionSerializer } from '../protocols/openai-completion-serializer'
 import { ClaudeMessagesSerializer } from '../protocols/claude-messages-serializer'
 import { ClaudeCompletionSerializer } from '../protocols/claude-completion-serializer'
 import { GeminiGenerateSerializer } from '../protocols/gemini-generate-serializer'
-import { CodexResponsesSerializer } from '../protocols/codex-responses-serializer'
 
 export class ProviderManager {
   private loader: ProviderLoader
@@ -32,7 +30,6 @@ export class ProviderManager {
       new OpenAIChatParser(),
       new OpenAICompletionParser(),
       new OpenAIResponsesParser(),
-      new CodexResponsesParser(),
       new ClaudeMessagesParser(),
       new ClaudeCompletionParser(),
       new GeminiGenerateParser()
@@ -40,7 +37,6 @@ export class ProviderManager {
 
     this.serializers.set('openai-chat', new OpenAIChatSerializer())
     this.serializers.set('openai-responses', new OpenAIResponsesSerializer())
-    this.serializers.set('codex-responses', new CodexResponsesSerializer())
     this.serializers.set('openai-completion', new OpenAICompletionSerializer())
     this.serializers.set('claude-messages', new ClaudeMessagesSerializer())
     this.serializers.set('claude-completion', new ClaudeCompletionSerializer())

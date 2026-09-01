@@ -2,6 +2,7 @@ import type { ProviderConfig, ModelInfo } from '../core/types'
 import { getProviderStore } from '../stores/provider.store'
 import { fetchWithRetry } from '../utils/fetch'
 import { extractChatGptAccountId } from '../utils/codex-auth'
+import { ensureCodexAccessToken } from '../services/codex-token-manager'
 
 const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
@@ -187,11 +188,14 @@ export class ProviderLoader {
   }
 
   private async fetchCodexModels(config: ProviderConfig): Promise<ModelInfo[]> {
+    config = await ensureCodexAccessToken(config)
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${config.connection.api_key}`,
       'x-codex-installation-id': config.connection.device_id || ''
     }
-    const accountId = config.connection.account_id || extractChatGptAccountId(config.connection.api_key)
+    const accountId = config.connection.account_id
+      || extractChatGptAccountId(config.connection.id_token)
+      || extractChatGptAccountId(config.connection.api_key)
     if (accountId) {
       headers['ChatGPT-Account-Id'] = accountId
     }

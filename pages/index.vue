@@ -155,27 +155,6 @@
           <template #header>
             <div class="flex items-center justify-between">
               <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                <UIcon name="i-heroicons-command-line" class="w-5 h-5 text-emerald-500" />
-                Codex Base URL
-              </h3>
-              <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-clipboard-document" @click="copyUrl(codexBaseUrl)" />
-            </div>
-          </template>
-          <div class="space-y-2">
-            <code class="block text-sm font-mono bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded select-all break-all">
-              {{ codexBaseUrl }}
-            </code>
-            <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <UBadge color="gray" variant="soft">/responses</UBadge>
-              <UBadge color="gray" variant="soft">/models</UBadge>
-            </div>
-          </div>
-        </UCard>
-
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
                 <UIcon name="i-heroicons-circle-stack" class="w-5 h-5 text-green-500" />
                 OpenAI Base URL
               </h3>
@@ -275,7 +254,6 @@ const modelsByProvider = ref<Record<string, number>>({})
 const openaiBaseUrl = ref('')
 const claudeBaseUrl = ref('')
 const geminiBaseUrl = ref('')
-const codexBaseUrl = ref('')
 const providerDisplayNames = ref<Record<string, string>>({})
 const apiKeys = ref<any[]>([])
 const refreshingKeys = ref(false)
@@ -335,7 +313,6 @@ onMounted(async () => {
   openaiBaseUrl.value = `${origin}/api/openai`
   claudeBaseUrl.value = `${origin}/api/claude`
   geminiBaseUrl.value = `${origin}/api/gemini`
-  codexBaseUrl.value = `${origin}/api/codex`
   try {
     const [providersData, statsData] = await Promise.all([
       $fetch('/api/hub/providers'),

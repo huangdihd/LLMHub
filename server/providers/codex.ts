@@ -13,6 +13,7 @@ import type {
 } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
 import { extractChatGptAccountId } from '../utils/codex-auth'
+import { ensureCodexAccessToken } from '../services/codex-token-manager'
 
 type CodexHeaders = Record<string, string>
 
@@ -139,9 +140,10 @@ export class CodexAdapter implements ProviderAdapter {
   }
 
   async call(request: any): Promise<any> {
+    const headers = await this.headers()
     const response = await fetchWithRetry(this.responsesUrl(), {
       method: 'POST',
-      headers: this.headers(),
+      headers,
       body: JSON.stringify({ ...request, stream: true, store: false })
     }, this.config.connection)
 
@@ -182,9 +184,9 @@ export class CodexAdapter implements ProviderAdapter {
   }
 
   callStream(request: any): ReadableStream {
+    const adapter = this
     const config = this.config
     const url = this.responsesUrl()
-    const headers = this.headers()
     const encoder = new TextEncoder()
     const decoder = new TextDecoder()
 
@@ -214,6 +216,7 @@ export class CodexAdapter implements ProviderAdapter {
           }
 
           try {
+            const headers = await adapter.headers()
             const response = await fetch(url, {
               method: 'POST',
               headers,
@@ -413,17 +416,19 @@ export class CodexAdapter implements ProviderAdapter {
     return `${this.config.connection.base_url.replace(/\/$/, '')}/responses`
   }
 
-  private headers(): CodexHeaders {
-    const deviceId = this.config.connection.device_id || ''
+  private async headers(): Promise<CodexHeaders> {
+    const active = await ensureCodexAccessToken(this.config)
+    const deviceId = active.connection.device_id || ''
     const headers: CodexHeaders = {
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
-      'Authorization': `Bearer ${this.config.connection.api_key}`,
+      'Authorization': `Bearer ${active.connection.api_key}`,
       'x-codex-installation-id': deviceId,
       'originator': 'llmhub'
     }
-    const accountId = this.config.connection.account_id
-      || extractChatGptAccountId(this.config.connection.api_key)
+    const accountId = active.connection.account_id
+      || extractChatGptAccountId(active.connection.id_token)
+      || extractChatGptAccountId(active.connection.api_key)
     if (accountId) headers['ChatGPT-Account-Id'] = accountId
     return headers
   }

@@ -104,11 +104,27 @@ export class ProviderStore {
     return true
   }
 
-  /** Strip sensitive fields (api_key) for public API responses. */
-  sanitize(config: ProviderConfig): Omit<ProviderConfig, 'connection'> & { connection: Omit<ProviderConfig['connection'], 'api_key'> } {
+  /** Strip credentials from provider API responses. */
+  sanitize(config: ProviderConfig): Omit<ProviderConfig, 'connection'> & { connection: Omit<ProviderConfig['connection'], 'api_key' | 'refresh_token' | 'id_token' | 'device_id' | 'account_id'> & { authenticated: boolean } } {
     const { connection, ...rest } = config
-    const { api_key, ...safeConnection } = connection
-    return { ...rest, connection: safeConnection }
+    const authenticated = config.protocol === 'codex-subscription'
+      ? Boolean(connection.api_key && connection.refresh_token)
+      : Boolean(connection.api_key)
+    const {
+      api_key: _apiKey,
+      refresh_token: _refreshToken,
+      id_token: _idToken,
+      device_id: _deviceId,
+      account_id: _accountId,
+      ...safeConnection
+    } = connection
+    return {
+      ...rest,
+      connection: {
+        ...safeConnection,
+        authenticated
+      }
+    }
   }
 
   /** Check whether a provider exists. */
@@ -144,7 +160,10 @@ export class ProviderStore {
         max_retries: connection?.max_retries ?? 3,
         ...(connection?.version ? { version: connection.version } : {}),
         ...(connection?.device_id ? { device_id: connection.device_id } : {}),
-        ...(connection?.account_id ? { account_id: connection.account_id } : {})
+        ...(connection?.account_id ? { account_id: connection.account_id } : {}),
+        ...(connection?.refresh_token ? { refresh_token: connection.refresh_token } : {}),
+        ...(connection?.id_token ? { id_token: connection.id_token } : {}),
+        ...(connection?.token_expires_at ? { token_expires_at: connection.token_expires_at } : {})
       },
       models: models ?? [],
       ...(defaults ? { defaults } : {})

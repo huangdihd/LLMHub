@@ -181,6 +181,10 @@ export interface ProviderConfig {
     token_expires_at?: number
     /** Codex client version sent when fetching the subscription model catalog. */
     client_version?: string
+    /** Non-secret subscription plan reported during OAuth (for example pro or max). */
+    subscription_type?: string
+    /** Non-secret upstream rate-limit tier reported during OAuth. */
+    rate_limit_tier?: string
   }
   models: ModelConfig[]
   defaults?: {

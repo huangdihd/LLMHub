@@ -26,6 +26,14 @@ export function extractChatGptAccountId(token?: string): string | undefined {
     || decoded?.account_id
 }
 
+/** Extract non-secret ChatGPT plan metadata when OpenAI includes it in a JWT. */
+export function extractChatGptPlanType(token?: string): string | undefined {
+  const decoded = decodeJwtPayload(token)
+  return decoded?.['https://api.openai.com/auth']?.chatgpt_plan_type
+    || decoded?.chatgpt_plan_type
+    || decoded?.plan_type
+}
+
 export function extractJwtExpiry(token?: string): number | undefined {
   const exp = decodeJwtPayload(token)?.exp
   return typeof exp === 'number' ? exp * 1000 : undefined

@@ -15,6 +15,7 @@ const {
   CODEX_DEFAULT_CLIENT_VERSION,
   exchangeCodexAuthorizationCode,
   extractChatGptAccountId,
+  extractChatGptPlanType,
   extractJwtExpiry,
   pollCodexDeviceCode,
   refreshCodexTokens,
@@ -35,7 +36,10 @@ function test(name: string, fn: () => void | Promise<void>) {
 
 const tokenPayload = Buffer.from(JSON.stringify({
   exp: 1893456000,
-  'https://api.openai.com/auth': { chatgpt_account_id: 'acct_from_jwt' }
+  'https://api.openai.com/auth': {
+    chatgpt_account_id: 'acct_from_jwt',
+    chatgpt_plan_type: 'plus'
+  }
 })).toString('base64url')
 const accessToken = `header.${tokenPayload}.signature`
 const config = {
@@ -169,6 +173,7 @@ await test('provider request uses Responses shape and injects device_id into cli
 
 await test('account id is extracted from the Codex access-token JWT', () => {
   assert.equal(extractChatGptAccountId(accessToken), 'acct_from_jwt')
+  assert.equal(extractChatGptPlanType(accessToken), 'plus')
   assert.equal(extractJwtExpiry(accessToken), 1893456000000)
   assert.equal(extractChatGptAccountId('opaque-token'), undefined)
 })

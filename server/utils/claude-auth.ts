@@ -13,6 +13,8 @@ export interface ClaudeOAuthTokens {
   access_token: string
   refresh_token: string
   expires_in: number
+  subscription_type?: string
+  rate_limit_tier?: string
 }
 
 export interface ClaudeAuthorization {
@@ -92,7 +94,8 @@ export async function refreshClaudeTokens(
   return {
     access_token: body.access_token,
     ...(body.refresh_token ? { refresh_token: body.refresh_token } : {}),
-    ...(Number(body.expires_in) > 0 ? { expires_in: Number(body.expires_in) } : {})
+    ...(Number(body.expires_in) > 0 ? { expires_in: Number(body.expires_in) } : {}),
+    ...extractTokenMetadata(body)
   }
 }
 
@@ -104,7 +107,17 @@ function validateTokens(body: any): ClaudeOAuthTokens {
   return {
     access_token: body.access_token,
     refresh_token: body.refresh_token,
-    expires_in: Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 3600
+    expires_in: Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 3600,
+    ...extractTokenMetadata(body)
+  }
+}
+
+function extractTokenMetadata(body: any): Pick<ClaudeOAuthTokens, 'subscription_type' | 'rate_limit_tier'> {
+  const subscriptionType = body?.subscription_type || body?.subscriptionType || body?.account?.subscription_type
+  const rateLimitTier = body?.rate_limit_tier || body?.rateLimitTier || body?.account?.rate_limit_tier
+  return {
+    ...(typeof subscriptionType === 'string' && subscriptionType ? { subscription_type: subscriptionType } : {}),
+    ...(typeof rateLimitTier === 'string' && rateLimitTier ? { rate_limit_tier: rateLimitTier } : {})
   }
 }
 

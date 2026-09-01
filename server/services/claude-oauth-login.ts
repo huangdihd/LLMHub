@@ -162,6 +162,8 @@ async function finishLogin(session: LoginSession, authorizationCode: string): Pr
       api_key: tokens.access_token,
       refresh_token: tokens.refresh_token,
       token_expires_at: Date.now() + tokens.expires_in * 1000,
+      ...(tokens.subscription_type ? { subscription_type: tokens.subscription_type } : {}),
+      ...(tokens.rate_limit_tier ? { rate_limit_tier: tokens.rate_limit_tier } : {}),
       base_url: existing?.connection.base_url || CLAUDE_API_BASE_URL,
       version: existing?.connection.version || '2023-06-01',
       timeout: session.draft.timeout,

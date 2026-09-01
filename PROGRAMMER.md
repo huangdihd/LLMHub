@@ -45,7 +45,7 @@ npx vue-tsc --noEmit # project type-check
 - Preserve streaming and non-streaming behavior across compatible ingress protocols. Tool calls, thinking blocks, finish reasons, and usage are normalized before serialization.
 - Stored provider names are immutable and become the prefix in public model IDs.
 - Provider model results are cached in memory for five minutes; configuration changes must invalidate `ProviderLoader`'s cache.
-- Subscription refresh tokens, access tokens, account identifiers, and installation/device identifiers are server-side secrets and must never be returned by hub APIs.
+- Subscription refresh tokens, access tokens, account identifiers, and installation/device identifiers are server-side secrets and must never be returned by hub APIs. Subscription plan/quota details are fetched server-side, normalized, and cached briefly; upstreams may omit plan metadata.
 - `tests/run-all.sh` explicitly lists provider and utility files that need precompilation; update it when tests import a new adapter using TypeScript syntax unsupported by Node type stripping.
 - E2E tests modify `.data/`, start local processes, and restore seeded state through their cleanup trap. They may rebuild `.output/`.
 - There is no configured standalone linter. Type checking is the available continuous diagnostic checker.

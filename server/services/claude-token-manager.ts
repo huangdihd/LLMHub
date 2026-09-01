@@ -38,7 +38,9 @@ async function refreshAndPersist(config: ProviderConfig): Promise<ProviderConfig
       ...config.connection,
       api_key: refreshed.access_token!,
       refresh_token: refreshed.refresh_token || config.connection.refresh_token,
-      token_expires_at: Date.now() + (refreshed.expires_in || 3600) * 1000
+      token_expires_at: Date.now() + (refreshed.expires_in || 3600) * 1000,
+      subscription_type: refreshed.subscription_type || config.connection.subscription_type,
+      rate_limit_tier: refreshed.rate_limit_tier || config.connection.rate_limit_tier
     }
   }
   const updated = await getProviderStore().update(config.name, patch)

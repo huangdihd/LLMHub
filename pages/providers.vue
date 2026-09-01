@@ -47,6 +47,15 @@
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
             <UButton
+              v-if="isSubscriptionProtocol(provider.protocol)"
+              color="gray"
+              variant="ghost"
+              :icon="usageState(provider.name).expanded ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+              :aria-expanded="usageState(provider.name).expanded"
+              :aria-controls="`subscription-usage-${provider.name}`"
+              @click="toggleUsageDetails(provider.name)"
+            >{{ usageState(provider.name).expanded ? 'Hide details' : 'Details' }}</UButton>
+            <UButton
               color="gray"
               variant="soft"
               class="dark:!bg-gray-800 dark:!text-gray-100 dark:hover:!bg-gray-700"
@@ -55,6 +64,74 @@
             >Edit</UButton>
             <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="deleteProvider(provider.name)">Delete</UButton>
           </div>
+        </div>
+
+        <div
+          v-if="isSubscriptionProtocol(provider.protocol) && usageState(provider.name).expanded"
+          :id="`subscription-usage-${provider.name}`"
+          class="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <UBadge
+              :color="usageState(provider.name).data?.plan ? 'primary' : 'gray'"
+              variant="subtle"
+              size="sm"
+            >
+              {{ usageState(provider.name).data?.plan ? titleCase(usageState(provider.name).data!.plan!) : 'Plan unavailable' }}
+            </UBadge>
+            <UButton
+              color="gray"
+              variant="ghost"
+              size="xs"
+              icon="i-heroicons-arrow-path"
+              :loading="usageState(provider.name).loading"
+              :disabled="usageState(provider.name).loading"
+              @click="fetchSubscriptionUsage(provider.name, true)"
+            >Refresh</UButton>
+          </div>
+
+          <div v-if="usageState(provider.name).loading && !usageState(provider.name).data" class="flex items-center gap-2 py-5 text-sm text-gray-500 dark:text-gray-400">
+            <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin" />
+            Loading quota details…
+          </div>
+          <p v-else-if="usageState(provider.name).error" class="py-4 text-sm text-red-600 dark:text-red-400" role="alert">
+            {{ usageState(provider.name).error }}
+          </p>
+          <template v-else-if="usageState(provider.name).data">
+            <div v-if="usageState(provider.name).data!.windows.length" class="mt-4 space-y-4">
+              <div v-for="window in usageState(provider.name).data!.windows" :key="window.id">
+                <div class="flex items-baseline justify-between gap-3 text-sm">
+                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ window.label }}</span>
+                  <span class="tabular-nums text-gray-500 dark:text-gray-400">{{ formatPercent(window.used_percent) }} used</span>
+                </div>
+                <div
+                  class="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
+                  role="progressbar"
+                  :aria-label="`${window.label}: ${formatPercent(window.used_percent)} used`"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  :aria-valuenow="clampPercent(window.used_percent)"
+                >
+                  <div class="h-full rounded-full bg-primary-500" :style="{ width: `${clampPercent(window.used_percent)}%` }" />
+                </div>
+                <div v-if="window.reset_at || window.detail" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                  <span v-if="window.reset_at">Resets {{ formatResetTime(window.reset_at) }}</span>
+                  <span v-if="window.detail">{{ window.detail }}</span>
+                </div>
+              </div>
+            </div>
+            <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">Quota details unavailable</p>
+
+            <div v-if="usageState(provider.name).data!.credits" class="mt-4 rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800/60">
+              <span class="font-medium text-gray-800 dark:text-gray-200">Credits:</span>
+              <span class="ml-1 text-gray-600 dark:text-gray-300">
+                {{ formatCredits(usageState(provider.name).data!.credits!) }}
+              </span>
+              <p v-if="usageState(provider.name).data!.credits!.detail" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ usageState(provider.name).data!.credits!.detail }}
+              </p>
+            </div>
+          </template>
         </div>
       </UCard>
     </div>
@@ -315,6 +392,32 @@ type LoginState = {
   expires_at: number
   error?: string
 }
+type SubscriptionUsageWindow = {
+  id: string
+  label: string
+  used_percent: number
+  reset_at?: string
+  detail?: string
+}
+type SubscriptionCredits = {
+  balance?: number | string
+  unlimited?: boolean
+  detail?: string
+}
+type SubscriptionUsage = {
+  provider: string
+  protocol: string
+  plan?: string
+  windows: SubscriptionUsageWindow[]
+  credits?: SubscriptionCredits
+  fetched_at: string
+}
+type SubscriptionUsageState = {
+  loading: boolean
+  error: string
+  data: SubscriptionUsage | null
+  expanded: boolean
+}
 
 const toast = useToast()
 const providers = ref<any[]>([])
@@ -328,8 +431,11 @@ const editingProvider = ref<any>(null)
 const activeLogin = ref<LoginState | null>(null)
 const authorizationCode = ref('')
 const loginNow = ref(Date.now())
+const usageNow = ref(Date.now())
+const subscriptionUsage = reactive<Record<string, SubscriptionUsageState>>({})
 const nameTouched = ref(false)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
+let usageClockTimer: ReturnType<typeof setInterval> | null = null
 
 const protocolOptions: { value: Protocol; label: string; description: string; icon: string }[] = [
   { value: 'openai', label: 'OpenAI compatible', description: 'OpenAI, DeepSeek, OpenRouter, Ollama, and compatible APIs.', icon: 'i-heroicons-command-line' },
@@ -375,8 +481,14 @@ watch(() => form.display_name, value => {
   if (!editingProvider.value && !nameTouched.value) form.name = slugify(value)
 })
 
-onMounted(loadProviders)
-onBeforeUnmount(stopPolling)
+onMounted(() => {
+  loadProviders()
+  usageClockTimer = setInterval(() => { usageNow.value = Date.now() }, 60000)
+})
+onBeforeUnmount(() => {
+  stopPolling()
+  if (usageClockTimer) clearInterval(usageClockTimer)
+})
 
 async function loadProviders() {
   loading.value = true
@@ -389,6 +501,95 @@ async function loadProviders() {
   } finally {
     loading.value = false
   }
+}
+
+function usageState(name: string): SubscriptionUsageState {
+  if (!subscriptionUsage[name]) {
+    subscriptionUsage[name] = { loading: false, error: '', data: null, expanded: false }
+  }
+  return subscriptionUsage[name]
+}
+
+async function toggleUsageDetails(name: string) {
+  const state = usageState(name)
+  state.expanded = !state.expanded
+  if (state.expanded && !state.data && !state.loading) await fetchSubscriptionUsage(name)
+}
+
+async function fetchSubscriptionUsage(name: string, refresh = false) {
+  const state = usageState(name)
+  state.loading = true
+  state.error = ''
+  try {
+    const suffix = refresh ? '?refresh=1' : ''
+    const data = await $fetch<SubscriptionUsage>(`/api/hub/providers/${encodeURIComponent(name)}/subscription-usage${suffix}`)
+    state.data = {
+      provider: data.provider,
+      protocol: data.protocol,
+      plan: data.plan,
+      windows: Array.isArray(data.windows) ? data.windows : [],
+      credits: data.credits,
+      fetched_at: data.fetched_at
+    }
+  } catch (error: any) {
+    state.error = error?.data?.message
+      || error?.statusMessage
+      || 'Unable to load quota details. Try refreshing.'
+  } finally {
+    state.loading = false
+  }
+}
+
+function titleCase(value: string): string {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, character => character.toUpperCase())
+}
+
+function clampPercent(value: number): number {
+  const percent = Number(value)
+  if (!Number.isFinite(percent)) return 0
+  return Math.min(100, Math.max(0, percent))
+}
+
+function formatPercent(value: number): string {
+  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(clampPercent(value))}%`
+}
+
+function formatResetTime(resetAt: string): string {
+  const timestamp = Date.parse(resetAt)
+  if (!Number.isFinite(timestamp)) return 'at an unknown time'
+
+  const absolute = new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(timestamp)
+  const seconds = (timestamp - usageNow.value) / 1000
+  let value: number
+  let unit: Intl.RelativeTimeFormatUnit
+  if (Math.abs(seconds) < 60) {
+    value = Math.round(seconds)
+    unit = 'second'
+  } else if (Math.abs(seconds) < 3600) {
+    value = Math.round(seconds / 60)
+    unit = 'minute'
+  } else if (Math.abs(seconds) < 86400) {
+    value = Math.round(seconds / 3600)
+    unit = 'hour'
+  } else {
+    value = Math.round(seconds / 86400)
+    unit = 'day'
+  }
+  const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(value, unit)
+  return `${absolute} (${relative})`
+}
+
+function formatCredits(credits: SubscriptionCredits): string {
+  if (credits.unlimited) return 'Unlimited'
+  if (credits.balance === undefined) return 'Balance unavailable'
+  return typeof credits.balance === 'number'
+    ? new Intl.NumberFormat().format(credits.balance)
+    : String(credits.balance)
 }
 
 function openAddModal() {
@@ -628,6 +829,7 @@ async function deleteProvider(name: string) {
   if (!confirm(`Delete provider “${name}”?`)) return
   try {
     await $fetch(`/api/hub/providers/${name}`, { method: 'DELETE' })
+    delete subscriptionUsage[name]
     toast.add({ title: 'Provider deleted', color: 'green' })
     await loadProviders()
   } catch (error: any) {

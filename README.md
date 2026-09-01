@@ -49,6 +49,13 @@ authorization code into LLMHub. Access and refresh tokens stay on the server and
 are refreshed automatically. This is an unofficial subscription integration;
 availability depends on Anthropic's account eligibility and service terms.
 
+Connected subscription providers have a **Details** panel that reads the
+providers' subscription-usage endpoints and displays available plan metadata,
+quota utilization, reset times, and Codex credit balance. Plan information is
+shown only when the upstream reports it; otherwise the dashboard explicitly
+marks it unavailable. Usage responses are cached for 60 seconds and can be
+manually refreshed.
+
 ### Creating API Keys
 
 Navigate to **API Keys** page to create keys for your applications:

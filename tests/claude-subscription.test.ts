@@ -82,7 +82,10 @@ await test('authorization exchange sends JSON PKCE fields', async () => {
   let captured: any
   const tokens = await exchangeClaudeAuthorizationCode('auth-code', 'verifier', 'state', async (url: string, init: RequestInit) => {
     captured = { url, body: JSON.parse(String(init.body)) }
-    return Response.json({ access_token: 'access', refresh_token: 'refresh', expires_in: 7200 })
+    return Response.json({
+      access_token: 'access', refresh_token: 'refresh', expires_in: 7200,
+      subscriptionType: 'max', rateLimitTier: 'default_claude_max_20x'
+    })
   })
   assert.equal(captured.url, CLAUDE_TOKEN_URL)
   assert.deepEqual(captured.body, {
@@ -93,7 +96,10 @@ await test('authorization exchange sends JSON PKCE fields', async () => {
     code_verifier: 'verifier',
     redirect_uri: CLAUDE_REDIRECT_URI
   })
-  assert.deepEqual(tokens, { access_token: 'access', refresh_token: 'refresh', expires_in: 7200 })
+  assert.deepEqual(tokens, {
+    access_token: 'access', refresh_token: 'refresh', expires_in: 7200,
+    subscription_type: 'max', rate_limit_tier: 'default_claude_max_20x'
+  })
 })
 
 await test('refresh supports refresh-token rotation', async () => {

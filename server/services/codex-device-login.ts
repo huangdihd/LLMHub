@@ -6,6 +6,7 @@ import { ProviderLoader } from '../providers/loader'
 import { getProviderStore } from '../stores/provider.store'
 import {
   CODEX_BACKEND_BASE_URL,
+  CODEX_DEFAULT_CLIENT_VERSION,
   exchangeCodexAuthorizationCode,
   extractChatGptAccountId,
   extractJwtExpiry,
@@ -32,6 +33,7 @@ interface ProviderDraft {
   use_custom_models: boolean
   models: ModelConfig[]
   reconnect: boolean
+  client_version: string
 }
 
 interface LoginSession {
@@ -168,6 +170,9 @@ async function completeLogin(session: LoginSession): Promise<void> {
       account_id: accountId,
       device_id: existing?.connection.device_id || randomUUID(),
       token_expires_at: extractJwtExpiry(tokens.access_token),
+      client_version: session.draft.client_version
+        || existing?.connection.client_version
+        || CODEX_DEFAULT_CLIENT_VERSION,
       base_url: existing?.connection.base_url || CODEX_BACKEND_BASE_URL,
       timeout: session.draft.timeout,
       enable_timeout: session.draft.enable_timeout,

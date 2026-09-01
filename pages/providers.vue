@@ -210,6 +210,10 @@
                 <UInput v-model="form.version" placeholder="2023-06-01" />
               </UFormGroup>
 
+              <UFormGroup v-if="form.protocol === 'codex-subscription'" label="Codex client version" help="Sent to OpenAI when fetching the subscription model catalog.">
+                <UInput v-model="form.client_version" placeholder="0.149.0" />
+              </UFormGroup>
+
               <UCheckbox v-model="form.use_custom_models" label="Use a custom model list instead of fetching models" />
               <div v-if="form.use_custom_models" class="space-y-2 rounded-md bg-gray-50 dark:bg-gray-800/50 p-3">
                 <div v-for="(model, index) in form.custom_models" :key="index" class="flex items-center gap-2">
@@ -289,7 +293,8 @@ const form = reactive({
   name: '', display_name: '', protocol: 'openai' as Protocol, enabled: true,
   use_custom_models: false, custom_models: [] as { id: string; display_name: string }[],
   base_url: '', api_key: '', timeout: 30000, enable_timeout: true,
-  max_retries: 3, version: '2023-06-01', normalize_cch: false
+  max_retries: 3, version: '2023-06-01', normalize_cch: false,
+  client_version: '0.149.0'
 })
 
 const errors = reactive({ name: '', display_name: '', base_url: '', api_key: '' })
@@ -361,6 +366,7 @@ function editProvider(provider: any) {
   form.enable_timeout = provider.connection.enable_timeout ?? true
   form.max_retries = provider.connection.max_retries ?? 3
   form.version = provider.connection.version || '2023-06-01'
+  form.client_version = provider.connection.client_version || '0.149.0'
   form.normalize_cch = provider.normalize_cch || false
   isModalOpen.value = true
 }
@@ -374,7 +380,7 @@ function resetForm() {
     name: '', display_name: '', protocol: 'openai', enabled: true,
     use_custom_models: false, custom_models: [], base_url: '', api_key: '',
     timeout: 30000, enable_timeout: true, max_retries: 3,
-    version: '2023-06-01', normalize_cch: false
+    version: '2023-06-01', normalize_cch: false, client_version: '0.149.0'
   })
 }
 
@@ -396,6 +402,7 @@ async function startCodexLogin() {
         normalize_cch: form.normalize_cch, timeout: form.timeout,
         enable_timeout: form.enable_timeout, max_retries: form.max_retries,
         use_custom_models: form.use_custom_models, models,
+        client_version: form.client_version,
         reconnect: Boolean(editingProvider.value)
       }
     })
@@ -470,6 +477,7 @@ async function saveProvider() {
       enabled: form.enabled, use_custom_models: form.use_custom_models,
       timeout: form.timeout, enable_timeout: form.enable_timeout,
       max_retries: form.max_retries, version: form.version,
+      client_version: form.client_version,
       models, normalize_cch: form.normalize_cch
     }
     if (form.protocol !== 'codex-subscription') {

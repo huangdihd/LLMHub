@@ -12,7 +12,7 @@ const { ProviderLoader } = require(`${buildDir}/providers/loader.js`)
 const { ProviderStore } = require(`${buildDir}/stores/provider.store.js`)
 const {
   CODEX_CLIENT_ID,
-  CODEX_CLIENT_VERSION,
+  CODEX_DEFAULT_CLIENT_VERSION,
   exchangeCodexAuthorizationCode,
   extractChatGptAccountId,
   extractJwtExpiry,
@@ -47,7 +47,8 @@ const config = {
     device_id: '11111111-2222-4333-8444-555555555555',
     timeout: 1000,
     enable_timeout: true,
-    max_retries: 0
+    max_retries: 0,
+    client_version: '0.150.0'
   },
   models: [{ id: 'gpt-5.3-codex', display_name: 'GPT-5.3 Codex' }]
 }
@@ -125,12 +126,13 @@ await test('model discovery sends the required Codex client version and catalog 
 
   try {
     const models = await new ProviderLoader().fetchCodexModels(config)
-    assert.equal(captured.url, `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLIENT_VERSION}`)
+    assert.equal(captured.url, 'https://chatgpt.com/backend-api/codex/models?client_version=0.150.0')
     assert.equal(captured.headers.Accept, 'application/json')
     assert.equal(captured.headers.originator, 'llmhub')
     assert.equal(captured.headers['x-codex-installation-id'], config.connection.device_id)
     assert.equal(captured.headers['ChatGPT-Account-Id'], 'acct_from_jwt')
     assert.equal(models[0].id, 'codex-sub/gpt-5.6-sol')
+    assert.equal(CODEX_DEFAULT_CLIENT_VERSION, '0.149.0')
   } finally {
     globalThis.fetch = originalFetch
   }

@@ -3,6 +3,7 @@ import {
   codexLoginActor,
   startCodexDeviceLogin
 } from '../../../../services/codex-device-login'
+import { CODEX_DEFAULT_CLIENT_VERSION } from '../../../../utils/codex-auth'
 
 export default defineEventHandler(async (event) => {
   if (!(await getAuthStore().isSetup())) {
@@ -25,6 +26,7 @@ export default defineEventHandler(async (event) => {
     max_retries: Number(body.max_retries) || 3,
     use_custom_models: body.use_custom_models === true,
     models: Array.isArray(body.models) ? body.models : [],
-    reconnect: body.reconnect === true
+    reconnect: body.reconnect === true,
+    client_version: String(body.client_version || CODEX_DEFAULT_CLIENT_VERSION).trim().slice(0, 64)
   })
 })

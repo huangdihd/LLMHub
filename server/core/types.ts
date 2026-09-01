@@ -179,6 +179,8 @@ export interface ProviderConfig {
     id_token?: string
     /** Access-token expiry as epoch milliseconds, when the token is a JWT. */
     token_expires_at?: number
+    /** Codex client version sent when fetching the subscription model catalog. */
+    client_version?: string
   }
   models: ModelConfig[]
   defaults?: {

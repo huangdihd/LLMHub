@@ -44,6 +44,9 @@ export default defineEventHandler(async (event) => {
     if (body.enable_timeout !== undefined) connectionPatch.enable_timeout = body.enable_timeout
     if (body.max_retries !== undefined) connectionPatch.max_retries = body.max_retries
     if (body.version !== undefined) connectionPatch.version = body.version
+    if (body.client_version !== undefined && nextProtocol === 'codex-subscription') {
+      connectionPatch.client_version = String(body.client_version).trim().slice(0, 64)
+    }
     // Also merge any nested connection object
     if (body.connection && typeof body.connection === 'object') {
       const nested = { ...body.connection }

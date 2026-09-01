@@ -1,7 +1,7 @@
 import type { ProviderConfig, ModelInfo } from '../core/types'
 import { getProviderStore } from '../stores/provider.store'
 import { fetchWithRetry } from '../utils/fetch'
-import { CODEX_CLIENT_VERSION, extractChatGptAccountId } from '../utils/codex-auth'
+import { CODEX_DEFAULT_CLIENT_VERSION, extractChatGptAccountId } from '../utils/codex-auth'
 import { ensureCodexAccessToken } from '../services/codex-token-manager'
 
 const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
@@ -203,7 +203,10 @@ export class ProviderLoader {
     }
 
     const modelsUrl = new URL(`${config.connection.base_url.replace(/\/$/, '')}/models`)
-    modelsUrl.searchParams.set('client_version', CODEX_CLIENT_VERSION)
+    modelsUrl.searchParams.set(
+      'client_version',
+      config.connection.client_version || CODEX_DEFAULT_CLIENT_VERSION
+    )
     const response = await fetchWithRetry(modelsUrl.toString(), {
       headers
     }, config.connection)

@@ -163,7 +163,8 @@ export class ProviderStore {
         ...(connection?.account_id ? { account_id: connection.account_id } : {}),
         ...(connection?.refresh_token ? { refresh_token: connection.refresh_token } : {}),
         ...(connection?.id_token ? { id_token: connection.id_token } : {}),
-        ...(connection?.token_expires_at ? { token_expires_at: connection.token_expires_at } : {})
+        ...(connection?.token_expires_at ? { token_expires_at: connection.token_expires_at } : {}),
+        ...(connection?.client_version ? { client_version: connection.client_version } : {})
       },
       models: models ?? [],
       ...(defaults ? { defaults } : {})

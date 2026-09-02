@@ -86,7 +86,7 @@ export class ClaudeAdapter implements ProviderAdapter {
     const slashIndex = request.model?.indexOf('/')
     const modelId = slashIndex !== undefined && slashIndex !== -1 ? request.model!.slice(slashIndex + 1) : request.model
 
-    return {
+    const payload: any = {
       model: modelId || this.config.models[0]?.id,
       // Anthropic 的 Messages API 要求必传 max_tokens,客户端未指定时兜底 4096
       max_tokens: request.config.maxTokens ?? 4096,
@@ -103,6 +103,16 @@ export class ClaudeAdapter implements ProviderAdapter {
       tool_choice: this.convertToolChoice(request.toolChoice),
       stream: request.stream
     }
+    const thinking = request.config.thinking
+    if (thinking?.enabled) {
+      if (thinking.mode === 'adaptive' || thinking.effort) {
+        payload.thinking = { type: 'adaptive' }
+        if (thinking.effort && thinking.effort !== 'none') payload.output_config = { effort: thinking.effort }
+      } else if (thinking.budgetTokens) {
+        payload.thinking = { type: 'enabled', budget_tokens: thinking.budgetTokens }
+      }
+    }
+    return payload
   }
 
   private convertContent(content: string | any[]): any {
@@ -138,13 +148,14 @@ export class ClaudeAdapter implements ProviderAdapter {
       if (block.type === 'thinking') {
         return {
           type: 'thinking',
-          thinking: block.thinking
+          thinking: block.thinking,
+          ...(block.signature ? { signature: block.signature } : {})
         }
       }
       if (block.type === 'redacted_thinking') {
         return {
           type: 'redacted_thinking',
-          signature: block.signature
+          data: block.data ?? block.signature
         }
       }
       return { type: 'text', text: '' }
@@ -314,9 +325,9 @@ export class ClaudeAdapter implements ProviderAdapter {
       if (block.type === 'text') {
         content.push({ type: 'text', text: block.text })
       } else if (block.type === 'thinking') {
-        content.push({ type: 'thinking', thinking: block.thinking })
+        content.push({ type: 'thinking', thinking: block.thinking, signature: block.signature, reasoningProvider: 'anthropic' })
       } else if (block.type === 'redacted_thinking') {
-        content.push({ type: 'redacted_thinking', signature: block.signature })
+        content.push({ type: 'redacted_thinking', data: block.data, reasoningProvider: 'anthropic' })
       } else if (block.type === 'tool_use') {
         toolCalls.push({
           id: block.id,
@@ -362,7 +373,7 @@ export class ClaudeAdapter implements ProviderAdapter {
         return { type: 'thinking', delta: chunk.delta.thinking }
       }
       if (chunk.delta?.type === 'signature_delta') {
-        return { type: 'content', delta: '' }
+        return { type: 'thinking', delta: '', signature: chunk.delta.signature }
       }
       if (chunk.delta?.type === 'input_json_delta') {
         return {
@@ -373,6 +384,9 @@ export class ClaudeAdapter implements ProviderAdapter {
     }
 
     if (chunk.type === 'content_block_start') {
+      if (chunk.content_block?.type === 'redacted_thinking') {
+        return { type: 'opaque_reasoning', opaqueData: chunk.content_block.data, reasoningProvider: 'anthropic' }
+      }
       if (chunk.content_block?.type === 'tool_use') {
         return {
           type: 'tool_call',

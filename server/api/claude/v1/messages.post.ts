@@ -1,5 +1,6 @@
 import { ProviderManager } from '../../../providers/manager'
 import { getProviderStore } from '../../../stores/provider.store'
+import { applyThinkingPolicy } from '../../../services/thinking-policy'
 
 const CCH_REGEX = /;\s*cch=\w+;/g
 
@@ -24,6 +25,7 @@ export default defineEventHandler(async (event) => {
   try {
     await incrementCalls()
     const resolved = manager.resolveAdapter(request.model || '', 'claude-messages', request.stream)
+    if (resolved) Object.assign(request, await applyThinkingPolicy(request, resolved.providerName))
     const adapter = resolved?.adapter
 
     if (!adapter) {
@@ -92,6 +94,7 @@ export default defineEventHandler(async (event) => {
         let isWritingThinking = false
         let streamDone = false
         let thinkingBuffer: string[] = []
+        let thinkingSignatures: string[] = []
         let thinkingFlushed = false
         let currentToolIndex: number | undefined
 
@@ -111,20 +114,27 @@ export default defineEventHandler(async (event) => {
             chunk.index = blockIndex
             writeSSE('content_block_delta', chunk)
           }
+          for (const signature of thinkingSignatures) {
+            const chunk = serializer!.serializeStreamChunk({ type: 'thinking', signature })
+            chunk.index = blockIndex
+            writeSSE('content_block_delta', chunk)
+          }
           writeSSE('content_block_stop', { type: "content_block_stop", index: blockIndex })
           blockIndex++
           blockStarted = false
           isWritingThinking = false
           thinkingFlushed = true
           thinkingBuffer = []
+          thinkingSignatures = []
         }
 
         const handleChunk = (unifiedChunk: any) => {
           if (!serializer) return
 
           if (unifiedChunk.type === 'thinking') {
-            if (!unifiedChunk.delta) return
-            thinkingBuffer.push(unifiedChunk.delta)
+            if (unifiedChunk.delta) thinkingBuffer.push(unifiedChunk.delta)
+            if (unifiedChunk.signature) thinkingSignatures.push(unifiedChunk.signature)
+            if (!unifiedChunk.delta && !unifiedChunk.signature) return
           } else if (unifiedChunk.type === 'content') {
             if (!unifiedChunk.delta) return
             flushThinkingBuffer()
@@ -147,6 +157,20 @@ export default defineEventHandler(async (event) => {
             const serializedChunk = serializer.serializeStreamChunk(unifiedChunk)
             serializedChunk.index = blockIndex
             writeSSE('content_block_delta', serializedChunk)
+          } else if (unifiedChunk.type === 'opaque_reasoning' && unifiedChunk.reasoningProvider === 'anthropic' && unifiedChunk.opaqueData) {
+            flushThinkingBuffer()
+            if (blockStarted) {
+              writeSSE('content_block_stop', { type: 'content_block_stop', index: blockIndex })
+              blockIndex++
+              blockStarted = false
+            }
+            writeSSE('content_block_start', {
+              type: 'content_block_start',
+              index: blockIndex,
+              content_block: { type: 'redacted_thinking', data: unifiedChunk.opaqueData }
+            })
+            writeSSE('content_block_stop', { type: 'content_block_stop', index: blockIndex })
+            blockIndex++
           } else if (unifiedChunk.type === 'tool_call') {
             flushThinkingBuffer()
 

@@ -1,4 +1,5 @@
 import { ProviderManager } from '../../providers/manager'
+import { applyThinkingPolicy } from '../../services/thinking-policy'
 import { OpenAIResponsesSerializer } from '../../protocols/openai-responses-serializer'
 import type { ResponsesStreamEvent } from '../../protocols/openai-responses-serializer'
 
@@ -17,6 +18,7 @@ export default defineEventHandler(async (event) => {
   try {
     incrementCalls().catch(() => {})
     const resolved = manager.resolveAdapter(request.model || '', 'openai-responses', request.stream)
+    if (resolved) Object.assign(request, await applyThinkingPolicy(request, resolved.providerName))
     const adapter = resolved?.adapter
 
     if (request.stream && adapter) {

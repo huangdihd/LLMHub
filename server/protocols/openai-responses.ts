@@ -53,7 +53,7 @@ export class OpenAIResponsesParser implements ProtocolParser {
             : ''
           if (summary) blocks.push({ type: 'thinking', thinking: summary })
           if (item.encrypted_content) {
-            blocks.push({ type: 'redacted_thinking', signature: item.encrypted_content })
+            blocks.push({ type: 'redacted_thinking', data: item.encrypted_content, reasoningProvider: 'openai' })
           }
           if (blocks.length > 0) parsedMessages.push({ role: 'assistant', content: blocks })
           continue
@@ -90,7 +90,13 @@ export class OpenAIResponsesParser implements ProtocolParser {
         topLogprobs: body.top_logprobs ?? undefined,
         logprobs: body.top_logprobs != null || body.logprobs === true ? true : undefined,
         reasoningEffort: body.reasoning?.effort,
-        reasoningSummary: body.reasoning?.summary
+        reasoningSummary: body.reasoning?.summary,
+        thinking: body.reasoning ? {
+          enabled: body.reasoning.effort !== 'none',
+          effort: body.reasoning.effort,
+          includeSummary: body.reasoning.summary !== 'none',
+          summary: body.reasoning.summary
+        } : undefined
       },
       tools: body.tools?.filter((t: any) => t.type === 'function').map((t: any) => ({
         name: t.name,

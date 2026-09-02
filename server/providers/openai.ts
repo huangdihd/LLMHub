@@ -158,7 +158,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     const slashIndex = request.model?.indexOf('/')
     const modelId = slashIndex !== undefined && slashIndex !== -1 ? request.model!.slice(slashIndex + 1) : request.model
 
-    const thinkingBudget = request.config.thinkingConfig?.thinkingBudget || 0
+    const thinkingBudget = request.config.thinking?.budgetTokens ?? request.config.thinkingConfig?.thinkingBudget ?? 0
     const maxTokens = request.config.maxTokens != null
       ? request.config.maxTokens + thinkingBudget
       : undefined
@@ -175,6 +175,8 @@ export class OpenAIAdapter implements ProviderAdapter {
     if (maxTokens != null) {
       payload.max_tokens = maxTokens
     }
+    const effort = request.config.thinking?.effort
+    if (effort && effort !== 'none') payload.reasoning_effort = effort
 
     // logprobs 透传：top_logprobs 隐含 logprobs=true（OpenAI chat 语义）
     if (request.config.topLogprobs != null) {

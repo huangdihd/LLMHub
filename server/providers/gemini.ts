@@ -104,14 +104,13 @@ export class GeminiAdapter implements ProviderAdapter {
       payload.generationConfig.stopSequences = request.config.stop
     }
 
-    if (request.config.thinkingConfig) {
+    const thinking = request.config.thinking
+    const thinkingBudget = thinking?.budgetTokens ?? request.config.thinkingConfig?.thinkingBudget
+    const includeThoughts = thinking?.includeSummary ?? request.config.thinkingConfig?.includeThoughts
+    if (thinkingBudget != null || includeThoughts != null) {
       payload.generationConfig.thinkingConfig = {}
-      if (request.config.thinkingConfig.thinkingBudget != null) {
-        payload.generationConfig.thinkingConfig.thinkingBudget = request.config.thinkingConfig.thinkingBudget
-      }
-      if (request.config.thinkingConfig.includeThoughts != null) {
-        payload.generationConfig.thinkingConfig.includeThoughts = request.config.thinkingConfig.includeThoughts
-      }
+      if (thinkingBudget != null) payload.generationConfig.thinkingConfig.thinkingBudget = thinkingBudget
+      if (includeThoughts != null) payload.generationConfig.thinkingConfig.includeThoughts = includeThoughts
     }
 
                 if (request.tools && request.tools.length > 0) {

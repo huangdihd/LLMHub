@@ -21,7 +21,12 @@ export interface ContentBlock {
   type: 'text' | 'image' | 'tool_use' | 'tool_result' | 'thinking' | 'redacted_thinking'
   text?: string
   thinking?: string
+  /** Anthropic signature for a visible thinking block. */
   signature?: string
+  /** Anthropic redacted-thinking payload or OpenAI/Codex encrypted reasoning state. */
+  data?: string
+  /** The upstream that produced opaque reasoning data. It prevents unsafe cross-provider reuse. */
+  reasoningProvider?: 'anthropic' | 'openai'
   imageUrl?: string
   imageBase64?: string
   imageMediaType?: string
@@ -57,6 +62,17 @@ export interface Tool {
 export type ToolChoice = 'auto' | 'none' | 'required' | { name: string }
 
 // ============ 生成配置 ============
+export type ThinkingEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+
+export interface ThinkingRequest {
+  enabled?: boolean
+  mode?: 'enabled' | 'adaptive'
+  effort?: ThinkingEffort
+  budgetTokens?: number
+  includeSummary?: boolean
+  summary?: 'auto' | 'concise' | 'detailed'
+}
+
 export interface GenerateConfig {
   maxTokens?: number
   temperature?: number
@@ -71,7 +87,9 @@ export interface GenerateConfig {
     thinkingBudget?: number
     includeThoughts?: boolean
   }
-  /** Responses/Codex reasoning controls. */
+  /** Normalized, protocol-independent thinking controls. */
+  thinking?: ThinkingRequest
+  /** Legacy fields retained while adapters migrate to `thinking`. */
   reasoningEffort?: string
   reasoningSummary?: string
 }
@@ -135,13 +153,18 @@ export interface EmbeddingResponse {
 
 // ============ 流式响应 ============
 export interface LLMStreamChunk {
-  type: 'content' | 'thinking' | 'tool_call' | 'done' | 'error'
+  type: 'content' | 'thinking' | 'opaque_reasoning' | 'tool_call' | 'done' | 'error'
   delta?: string
   toolCall?: ToolCallDelta
   finishReason?: string
   usage?: Usage
   /** 本帧 content 对应的 token logprobs（仅 type==='content' 时可能存在） */
   logprobs?: TokenLogprob[]
+  /** Anthropic signature delta attached to the active thinking block. */
+  signature?: string
+  /** Opaque Anthropic redacted-thinking data. */
+  opaqueData?: string
+  reasoningProvider?: 'anthropic' | 'openai'
   /** Opaque Responses reasoning state used to continue stateless Codex turns. */
   encryptedContent?: string
 }

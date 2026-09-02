@@ -119,7 +119,13 @@ export class GeminiGenerateParser implements ProtocolParser {
         topP: genConfig.topP,
         stop: genConfig.stopSequences,
         systemPrompt,
-        thinkingConfig
+        thinkingConfig,
+        thinking: Object.keys(thinkConfig).length > 0 ? {
+          enabled: thinkConfig.thinkingBudget !== 0,
+          budgetTokens: thinkConfig.thinkingBudget,
+          includeSummary: thinkConfig.includeThoughts,
+          effort: thinkConfig.thinkingBudget ? undefined : undefined
+        } : undefined
       },
       tools: this.extractTools(body.tools),
       stream: false

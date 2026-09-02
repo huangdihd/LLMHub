@@ -144,11 +144,11 @@ test('image blocks: base64 source and url source', () => {
 
 test('thinking and redacted_thinking blocks pass through', () => {
   const req = new ClaudeMessagesParser().parseRequest({
-    messages: [{ role: 'assistant', content: [{ type: 'thinking', thinking: 'mm' }, { type: 'redacted_thinking', signature: 'sig' }] }]
+    messages: [{ role: 'assistant', content: [{ type: 'thinking', thinking: 'mm', signature: 'signed' }, { type: 'redacted_thinking', data: 'opaque' }] }]
   })
   const blocks = req.messages[0].content as any[]
-  assert.deepEqual(blocks[0], { type: 'thinking', thinking: 'mm' })
-  assert.deepEqual(blocks[1], { type: 'redacted_thinking', signature: 'sig' })
+  assert.deepEqual(blocks[0], { type: 'thinking', thinking: 'mm', signature: 'signed', reasoningProvider: 'anthropic' })
+  assert.deepEqual(blocks[1], { type: 'redacted_thinking', data: 'opaque', reasoningProvider: 'anthropic' })
 })
 
 console.log('claude-messages serializer')

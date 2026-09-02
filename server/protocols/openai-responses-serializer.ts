@@ -78,7 +78,7 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
       for (const block of response.content) {
         if (block.type === 'text') text += block.text || ''
         else if (block.type === 'thinking') thinking += block.thinking || ''
-        else if (block.type === 'redacted_thinking') encryptedThinking = block.signature || ''
+        else if (block.type === 'redacted_thinking' && block.reasoningProvider === 'openai') encryptedThinking = block.data || ''
       }
     }
 

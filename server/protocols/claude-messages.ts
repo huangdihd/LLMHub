@@ -29,7 +29,14 @@ export class ClaudeMessagesParser implements ProtocolParser {
         temperature: body.temperature,
         topP: body.top_p,
         stop: body.stop_sequences,
-        systemPrompt
+        systemPrompt,
+        thinking: body.thinking ? {
+          enabled: body.thinking.type !== 'disabled',
+          mode: body.thinking.type === 'adaptive' ? 'adaptive' : 'enabled',
+          budgetTokens: body.thinking.budget_tokens,
+          effort: body.output_config?.effort,
+          includeSummary: true
+        } : (body.output_config?.effort ? { enabled: true, effort: body.output_config.effort, includeSummary: true } : undefined)
       },
       tools: body.tools?.map((t: any) => ({
         name: t.name,
@@ -86,13 +93,16 @@ export class ClaudeMessagesParser implements ProtocolParser {
         if (part.type === 'thinking') {
           return {
             type: 'thinking' as const,
-            thinking: part.thinking
+            thinking: part.thinking,
+            ...(part.signature ? { signature: part.signature } : {}),
+            ...(part.signature ? { reasoningProvider: 'anthropic' as const } : {})
           }
         }
         if (part.type === 'redacted_thinking') {
           return {
             type: 'redacted_thinking' as const,
-            signature: part.signature
+            data: part.data ?? part.signature,
+            reasoningProvider: 'anthropic' as const
           }
         }
         // Skip unknown block types silently

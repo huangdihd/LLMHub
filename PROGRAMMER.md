@@ -31,8 +31,8 @@ npx vue-tsc --noEmit # project type-check
 - `server/api/`: Nitro file-based routes. `hub/` serves dashboard management APIs; `openai/`, `claude/`, and `gemini/` are client-compatible ingress APIs.
 - `server/protocols/`: request parsers and response/stream serializers for each client protocol.
 - `server/providers/`: upstream adapters plus provider loading/routing. Adapters operate on unified types in `server/core/types.ts`.
-- `server/services/`: stateful authentication and token-management flows for subscription providers.
-- `server/stores/`: Nitro-storage-backed persistence. Keep credentials inside `ProviderConfig.connection` and sanitize them from management API responses.
+- `server/services/`: stateful authentication/token-management flows and shared request policy resolution, including configurable thinking policies.
+- `server/stores/`: Nitro-storage-backed persistence. Keep credentials inside `ProviderConfig.connection` and sanitize them from management API responses. Thinking policy settings are stored under `settings:thinking`.
 - `server/middleware/`: authentication for dashboard and compatible API endpoints.
 - `server/utils/`: shared request, error, authentication, embedding, and schema helpers.
 - `tests/`: native Node TypeScript protocol/adapter tests; `tests/e2e/` uses mock upstream recordings and official SDKs.

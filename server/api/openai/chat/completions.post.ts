@@ -1,4 +1,5 @@
 import { ProviderManager } from '../../../providers/manager'
+import { applyThinkingPolicy } from '../../../services/thinking-policy'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -15,6 +16,7 @@ export default defineEventHandler(async (event) => {
   try {
     incrementCalls().catch(() => {})
     const resolved = manager.resolveAdapter(request.model || '', 'openai-chat', request.stream)
+    if (resolved) Object.assign(request, await applyThinkingPolicy(request, resolved.providerName))
     const adapter = resolved?.adapter
 
     if (request.stream && adapter) {

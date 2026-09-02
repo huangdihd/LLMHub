@@ -10,7 +10,7 @@ A unified LLM gateway that aggregates multiple LLM providers behind OpenAI, Clau
 - **API Key Management**: Create and manage API keys with per-key rate limiting and model access control
 - **Brute-Force Protection**: Configurable login protection with IP-based lockout
 - **Usage Tracking**: Monitor API calls and token usage per key
-- **Web Dashboard**: Manage providers, models, API keys, and security settings
+- **Web Dashboard**: Manage providers, models, API keys, security settings, and configurable Thinking effort/budget mappings
 
 ## Quick Start
 
@@ -25,6 +25,10 @@ npm run dev
 Open http://localhost:3000 and set up your admin password.
 
 ## Configuration
+
+### Thinking Policy
+
+The **Thinking** dashboard page configures the global effort-to-token-budget mapping used when requests cross Claude, OpenAI/Codex, and Gemini protocols. Explicit client settings are respected by default. Claude signatures/redacted thinking and Codex encrypted reasoning remain opaque and are only replayed to compatible upstreams.
 
 ### Adding Providers
 

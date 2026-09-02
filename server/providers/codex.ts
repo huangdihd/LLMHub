@@ -40,7 +40,7 @@ export class CodexAdapter implements ProviderAdapter {
         .filter(block => block.type === 'thinking')
         .map(block => block.thinking || '')
         .join('')
-      const encryptedReasoning = blocks.find(block => block.type === 'redacted_thinking')?.signature
+      const encryptedReasoning = blocks.find(block => block.type === 'redacted_thinking' && block.reasoningProvider === 'openai')?.data
       if (encryptedReasoning) {
         input.push({
           type: 'reasoning',
@@ -116,10 +116,13 @@ export class CodexAdapter implements ProviderAdapter {
       }
     }
 
-    if (request.config.reasoningEffort || request.config.reasoningSummary) {
+    const thinking = request.config.thinking
+    const effort = thinking?.effort || request.config.reasoningEffort
+    const summary = thinking?.summary || request.config.reasoningSummary
+    if (effort || summary) {
       payload.reasoning = {
-        ...(request.config.reasoningEffort ? { effort: request.config.reasoningEffort } : {}),
-        summary: request.config.reasoningSummary || 'auto'
+        ...(effort && effort !== 'none' ? { effort } : {}),
+        summary: summary || (thinking?.includeSummary === false ? 'none' : 'auto')
       }
       payload.include = ['reasoning.encrypted_content']
     }

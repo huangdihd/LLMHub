@@ -1,4 +1,5 @@
 import { ProviderManager } from '../../../providers/manager'
+import { applyThinkingPolicy } from '../../../services/thinking-policy'
 
 export default defineEventHandler(async (event) => {
   const rawPath = event.context.params?._ || ''
@@ -101,6 +102,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!request.model) request.model = fullModel
+  request = await applyThinkingPolicy(request, request.model?.split('/')[0])
 
   if (action === 'generateContent') {
     try {

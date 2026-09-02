@@ -19,9 +19,9 @@ export class ClaudeMessagesSerializer implements ProtocolSerializer {
         if (block.type === 'text') {
           content.push({ type: 'text', text: block.text })
         } else if (block.type === 'thinking') {
-          content.push({ type: 'thinking', thinking: block.thinking })
+          content.push({ type: 'thinking', thinking: block.thinking, ...(block.signature ? { signature: block.signature } : {}) })
         } else if (block.type === 'redacted_thinking') {
-          content.push({ type: 'redacted_thinking', signature: block.signature })
+          content.push({ type: 'redacted_thinking', data: block.data ?? block.signature })
         }
       }
     }
@@ -80,10 +80,9 @@ export class ClaudeMessagesSerializer implements ProtocolSerializer {
       return {
         type: 'content_block_delta',
         index: 0,
-        delta: {
-          type: 'thinking_delta',
-          thinking: chunk.delta || ''
-        }
+        delta: chunk.signature
+          ? { type: 'signature_delta', signature: chunk.signature }
+          : { type: 'thinking_delta', thinking: chunk.delta || '' }
       }
     }
 

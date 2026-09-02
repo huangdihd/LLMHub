@@ -63,7 +63,8 @@ export class OpenAIChatParser implements ProtocolParser {
         temperature: body.temperature,
         topP: body.top_p,
         stop: body.stop,
-        systemPrompt
+        systemPrompt,
+        thinking: body.reasoning_effort ? { enabled: body.reasoning_effort !== 'none', effort: body.reasoning_effort, includeSummary: true } : undefined
       },
       tools: body.tools?.map((t: any) => ({
         name: t.function.name,

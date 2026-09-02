@@ -107,6 +107,7 @@ const navLinks = [
   { label: 'API Keys', to: '/api-keys' },
   { label: 'Providers', to: '/providers' },
   { label: 'Security', to: '/security' },
+  { label: 'Thinking', to: '/thinking' },
   { label: 'Chat', to: '/chat' },
 ]
 

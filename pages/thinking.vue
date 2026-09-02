@@ -10,9 +10,9 @@
       <UCard class="mb-6">
         <template #header><div class="flex items-center justify-between"><h3 class="text-lg font-medium">Global policy</h3><UToggle v-model="settings.enabled" /></div></template>
         <div class="grid gap-4 sm:grid-cols-2">
-          <UFormGroup label="Respect client request" help="Do not replace an effort or budget explicitly requested by the client."><UToggle v-model="settings.respectClient" /></UFormGroup>
+          <UFormGroup label="Respect client request" help="When on, requests without thinking parameters keep the upstream model default; explicit client values are never overridden."><UToggle v-model="settings.respectClient" /></UFormGroup>
           <UFormGroup label="Return reasoning summaries"><UToggle v-model="settings.includeSummary" /></UFormGroup>
-          <UFormGroup label="Default effort"><USelect v-model="settings.defaultEffort" :options="efforts" /></UFormGroup>
+          <UFormGroup label="Default effort" help="Only applied when Respect client request is disabled"><USelect v-model="settings.defaultEffort" :options="efforts" /></UFormGroup>
         </div>
       </UCard>
 

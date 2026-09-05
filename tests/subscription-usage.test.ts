@@ -9,6 +9,7 @@ if (!buildDir) {
 }
 
 const {
+  consumeCodexResetCredit,
   getSubscriptionUsage,
   normalizeClaudeUsage,
   normalizeCodexUsage
@@ -47,7 +48,19 @@ await test('Codex usage includes plan, quota windows, resets and credits', () =>
       has_credits: true,
       balance: '12.50',
       approx_local_messages: 25
-    }
+    },
+    rate_limit_reset_credits: { available_count: 1 }
+  }, undefined, {
+    available_count: 1,
+    credits: [{
+      id: 'reset-1',
+      reset_type: 'codex_rate_limits',
+      status: 'available',
+      granted_at: '2030-01-01T00:00:00Z',
+      expires_at: '2030-02-01T00:00:00Z',
+      title: 'Full reset',
+      description: 'Reset current usage limits.'
+    }]
   })
 
   assert.equal(usage.plan, 'plus')
@@ -61,6 +74,18 @@ await test('Codex usage includes plan, quota windows, resets and credits', () =>
     { id: 'secondary', label: '7-day', used: 41, reset: '2030-01-02T00:00:00.000Z' }
   ])
   assert.deepEqual(usage.credits, { balance: '12.50', detail: 'About 25 local messages' })
+  assert.deepEqual(usage.reset_credits, {
+    available_count: 1,
+    credits: [{
+      id: 'reset-1',
+      reset_type: 'codex_rate_limits',
+      status: 'available',
+      granted_at: '2030-01-01T00:00:00.000Z',
+      expires_at: '2030-02-01T00:00:00.000Z',
+      title: 'Full reset',
+      description: 'Reset current usage limits.'
+    }]
+  })
 })
 
 await test('Claude usage includes standard, scoped and extra-usage windows', () => {
@@ -109,6 +134,7 @@ await test('Codex usage request uses wham endpoint and account header', async ()
     models: []
   }
   const usage = await getSubscriptionUsage(config, true, async (url: string, init: RequestInit) => {
+    if (url.endsWith('/rate-limit-reset-credits')) return new Response(null, { status: 404 })
     captured = { url, headers: init.headers as Record<string, string> }
     return Response.json({ plan_type: 'pro', rate_limit: {} })
   })
@@ -116,6 +142,62 @@ await test('Codex usage request uses wham endpoint and account header', async ()
   assert.equal(captured.headers.Authorization, 'Bearer access')
   assert.equal(captured.headers['ChatGPT-Account-Id'], 'acct_1')
   assert.equal(usage.plan, 'pro')
+})
+
+await test('Codex usage request fetches banked reset details when resets are available', async () => {
+  const urls: string[] = []
+  const config = {
+    name: 'codex-reset-details-request',
+    protocol: 'codex-subscription',
+    connection: {
+      base_url: 'https://chatgpt.com/backend-api/codex',
+      api_key: 'access',
+      refresh_token: 'refresh',
+      account_id: 'acct_1',
+      token_expires_at: Date.now() + 3600000
+    },
+    models: []
+  }
+  const usage = await getSubscriptionUsage(config, true, async (url: string) => {
+    urls.push(url)
+    if (url.endsWith('/rate-limit-reset-credits')) {
+      return Response.json({
+        available_count: 1,
+        credits: [{ id: 'reset-1', reset_type: 'codex_rate_limits', status: 'available' }]
+      })
+    }
+    return Response.json({ rate_limit: {}, rate_limit_reset_credits: { available_count: 1 } })
+  })
+  assert.deepEqual(urls, [
+    'https://chatgpt.com/backend-api/wham/usage',
+    'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits'
+  ])
+  assert.equal(usage.reset_credits?.credits?.[0].id, 'reset-1')
+})
+
+await test('Codex reset request consumes the selected banked reset', async () => {
+  let captured: any
+  const config = {
+    name: 'codex-reset-consume-request',
+    protocol: 'codex-subscription',
+    connection: {
+      base_url: 'https://chatgpt.com/backend-api/codex',
+      api_key: 'access',
+      refresh_token: 'refresh',
+      account_id: 'acct_1',
+      token_expires_at: Date.now() + 3600000
+    },
+    models: []
+  }
+  const result = await consumeCodexResetCredit(config, 'reset-1', 'request-1', async (url: string, init: RequestInit) => {
+    captured = { url, method: init.method, headers: init.headers, body: JSON.parse(String(init.body)) }
+    return Response.json({ code: 'reset', windows_reset: 2 })
+  })
+  assert.equal(captured.url, 'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume')
+  assert.equal(captured.method, 'POST')
+  assert.equal(captured.headers['ChatGPT-Account-Id'], 'acct_1')
+  assert.deepEqual(captured.body, { redeem_request_id: 'request-1', credit_id: 'reset-1' })
+  assert.deepEqual(result, { code: 'reset', windows_reset: 2 })
 })
 
 await test('Claude usage request uses official OAuth endpoint and persisted plan metadata', async () => {

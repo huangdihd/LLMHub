@@ -131,6 +131,55 @@
                 {{ usageState(provider.name).data!.credits!.detail }}
               </p>
             </div>
+
+            <div
+              v-if="provider.protocol === 'codex-subscription' && usageState(provider.name).data!.reset_credits"
+              class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Banked resets</p>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ usageState(provider.name).data!.reset_credits!.available_count }} available
+                  </p>
+                </div>
+              </div>
+
+              <div v-if="usageState(provider.name).data!.reset_credits!.credits?.length" class="mt-3 space-y-2">
+                <div
+                  v-for="credit in usageState(provider.name).data!.reset_credits!.credits"
+                  :key="credit.id"
+                  class="flex flex-col gap-2 rounded-md bg-gray-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between dark:bg-gray-800/60"
+                >
+                  <div class="min-w-0">
+                    <p class="text-sm text-gray-800 dark:text-gray-200">{{ credit.title || 'Usage limit reset' }}</p>
+                    <p v-if="credit.description" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ credit.description }}</p>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ credit.expires_at ? `Expires ${formatResetTime(credit.expires_at)}` : 'Does not expire' }}
+                    </p>
+                  </div>
+                  <UButton
+                    color="primary"
+                    variant="soft"
+                    size="xs"
+                    class="self-start sm:self-auto"
+                    :loading="usageState(provider.name).resettingCreditId === credit.id"
+                    :disabled="Boolean(usageState(provider.name).resettingCreditId)"
+                    @click="useSubscriptionReset(provider.name, credit)"
+                  >Use reset</UButton>
+                </div>
+              </div>
+              <UButton
+                v-else-if="usageState(provider.name).data!.reset_credits!.available_count > 0"
+                class="mt-3"
+                color="primary"
+                variant="soft"
+                size="xs"
+                :loading="usageState(provider.name).resettingCreditId === '__next__'"
+                :disabled="Boolean(usageState(provider.name).resettingCreditId)"
+                @click="useSubscriptionReset(provider.name)"
+              >Use reset</UButton>
+            </div>
           </template>
         </div>
       </UCard>
@@ -404,16 +453,30 @@ type SubscriptionCredits = {
   unlimited?: boolean
   detail?: string
 }
+type SubscriptionResetCredit = {
+  id: string
+  reset_type: string
+  status: string
+  granted_at?: string
+  expires_at?: string
+  title?: string
+  description?: string
+}
 type SubscriptionUsage = {
   provider: string
   protocol: string
   plan?: string
   windows: SubscriptionUsageWindow[]
   credits?: SubscriptionCredits
+  reset_credits?: {
+    available_count: number
+    credits?: SubscriptionResetCredit[]
+  }
   fetched_at: string
 }
 type SubscriptionUsageState = {
   loading: boolean
+  resettingCreditId: string
   error: string
   data: SubscriptionUsage | null
   expanded: boolean
@@ -505,7 +568,7 @@ async function loadProviders() {
 
 function usageState(name: string): SubscriptionUsageState {
   if (!subscriptionUsage[name]) {
-    subscriptionUsage[name] = { loading: false, error: '', data: null, expanded: false }
+    subscriptionUsage[name] = { loading: false, resettingCreditId: '', error: '', data: null, expanded: false }
   }
   return subscriptionUsage[name]
 }
@@ -529,6 +592,7 @@ async function fetchSubscriptionUsage(name: string, refresh = false) {
       plan: data.plan,
       windows: Array.isArray(data.windows) ? data.windows : [],
       credits: data.credits,
+      reset_credits: data.reset_credits,
       fetched_at: data.fetched_at
     }
   } catch (error: any) {
@@ -537,6 +601,38 @@ async function fetchSubscriptionUsage(name: string, refresh = false) {
       || 'Unable to load quota details. Try refreshing.'
   } finally {
     state.loading = false
+  }
+}
+
+async function useSubscriptionReset(name: string, credit?: SubscriptionResetCredit) {
+  const title = credit?.title || 'usage limit reset'
+  if (!confirm(`Use this ${title}? This will reset your eligible weekly and 5-hour usage limits.`)) return
+
+  const state = usageState(name)
+  const pendingId = credit?.id || '__next__'
+  state.resettingCreditId = pendingId
+  try {
+    const result = await $fetch<{ code: string; windows_reset: number }>(
+      `/api/hub/providers/${encodeURIComponent(name)}/subscription-reset`,
+      { method: 'POST', body: credit ? { credit_id: credit.id } : {} }
+    )
+    const messages: Record<string, string> = {
+      reset: `Reset applied to ${result.windows_reset || 'eligible'} usage limit window${result.windows_reset === 1 ? '' : 's'}.`,
+      nothing_to_reset: 'No current usage limit window is eligible for a reset.',
+      no_credit: 'That usage limit reset is no longer available.',
+      already_redeemed: 'This reset was already used.'
+    }
+    toast.add({
+      title: result.code === 'reset' ? 'Usage limits reset' : 'Reset not applied',
+      description: messages[result.code] || `OpenAI returned: ${result.code}`,
+      color: result.code === 'reset' ? 'green' : 'orange',
+      icon: result.code === 'reset' ? 'i-heroicons-check-circle' : 'i-heroicons-information-circle'
+    })
+    await fetchSubscriptionUsage(name, true)
+  } catch (error: any) {
+    showError(error, 'Unable to use usage limit reset')
+  } finally {
+    state.resettingCreditId = ''
   }
 }
 

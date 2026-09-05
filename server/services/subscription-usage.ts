@@ -5,7 +5,10 @@ import { extractChatGptAccountId, extractChatGptPlanType } from '../utils/codex-
 import { CLAUDE_CODE_BETA } from '../utils/claude-auth'
 
 const CACHE_TTL_MS = 60 * 1000
-const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
+const CODEX_API_BASE_URL = 'https://chatgpt.com/backend-api/wham'
+const CODEX_USAGE_URL = `${CODEX_API_BASE_URL}/usage`
+const CODEX_RESET_CREDITS_URL = `${CODEX_API_BASE_URL}/rate-limit-reset-credits`
+const CODEX_CONSUME_RESET_URL = `${CODEX_RESET_CREDITS_URL}/consume`
 
 export interface SubscriptionUsageWindow {
   id: string
@@ -13,6 +16,16 @@ export interface SubscriptionUsageWindow {
   used_percent: number
   reset_at?: string
   detail?: string
+}
+
+export interface SubscriptionResetCredit {
+  id: string
+  reset_type: string
+  status: string
+  granted_at?: string
+  expires_at?: string
+  title?: string
+  description?: string
 }
 
 export interface SubscriptionUsage {
@@ -24,6 +37,10 @@ export interface SubscriptionUsage {
     balance?: number | string
     unlimited?: boolean
     detail?: string
+  }
+  reset_credits?: {
+    available_count: number
+    credits?: SubscriptionResetCredit[]
   }
   fetched_at: string
 }
@@ -49,7 +66,49 @@ export async function getSubscriptionUsage(
   return value
 }
 
-export function normalizeCodexUsage(provider: string, data: any, configuredPlan?: string): SubscriptionUsage {
+export async function consumeCodexResetCredit(
+  config: ProviderConfig,
+  creditId?: string,
+  idempotencyKey = crypto.randomUUID(),
+  fetcher: typeof fetch = fetch
+): Promise<{ code: string; windows_reset: number }> {
+  if (config.protocol !== 'codex-subscription') {
+    throw usageError('Usage limit resets are only available for Codex subscription providers', 400)
+  }
+
+  const active = await ensureCodexAccessToken(config)
+  const accountId = active.connection.account_id
+    || extractChatGptAccountId(active.connection.id_token)
+    || extractChatGptAccountId(active.connection.api_key)
+  if (!accountId) throw usageError('Codex account ID is unavailable; reconnect this provider', 401)
+
+  const response = await fetcher(CODEX_CONSUME_RESET_URL, {
+    method: 'POST',
+    headers: {
+      ...codexHeaders(active.connection.api_key, accountId),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      redeem_request_id: idempotencyKey,
+      ...(creditId ? { credit_id: creditId } : {})
+    })
+  })
+  if (!response.ok) throw await responseError(response, 'Unable to use Codex usage limit reset')
+
+  const data = await response.json()
+  cache.delete(config.name)
+  return {
+    code: String(data?.code || 'unknown'),
+    windows_reset: Math.max(0, Number(data?.windows_reset) || 0)
+  }
+}
+
+export function normalizeCodexUsage(
+  provider: string,
+  data: any,
+  configuredPlan?: string,
+  resetCreditDetails?: any
+): SubscriptionUsage {
   const windows: SubscriptionUsageWindow[] = []
   addCodexWindows(windows, data?.rate_limit ?? data?.rate_limits, '')
   addCodexWindows(windows, data?.code_review_rate_limit, 'Code review ')
@@ -59,6 +118,14 @@ export function normalizeCodexUsage(provider: string, data: any, configuredPlan?
   const hasBalance = balance !== undefined && balance !== null && balance !== ''
   const creditDetails = credits?.approx_local_messages
     ? `About ${credits.approx_local_messages} local messages`
+    : undefined
+  const resetCreditSummary = data?.rate_limit_reset_credits
+  const availableResetCount = Number(resetCreditDetails?.available_count ?? resetCreditSummary?.available_count)
+  const resetCredits = Array.isArray(resetCreditDetails?.credits)
+    ? resetCreditDetails.credits
+      .filter((credit: any) => String(credit?.status || '').toLowerCase() === 'available')
+      .map(normalizeResetCredit)
+      .filter((credit: SubscriptionResetCredit | undefined): credit is SubscriptionResetCredit => Boolean(credit))
     : undefined
 
   return {
@@ -71,6 +138,12 @@ export function normalizeCodexUsage(provider: string, data: any, configuredPlan?
         ...(hasBalance ? { balance } : {}),
         ...(credits?.unlimited ? { unlimited: true } : {}),
         ...(creditDetails ? { detail: creditDetails } : {})
+      }
+    } : {}),
+    ...(Number.isFinite(availableResetCount) ? {
+      reset_credits: {
+        available_count: Math.max(0, Math.trunc(availableResetCount)),
+        ...(resetCredits ? { credits: resetCredits } : {})
       }
     } : {}),
     fetched_at: new Date().toISOString()
@@ -143,20 +216,22 @@ async function fetchCodexUsage(config: ProviderConfig, fetcher: typeof fetch): P
     || extractChatGptAccountId(active.connection.api_key)
   if (!accountId) throw usageError('Codex account ID is unavailable; reconnect this provider', 401)
 
-  const response = await fetcher(CODEX_USAGE_URL, {
-    headers: {
-      'Authorization': `Bearer ${active.connection.api_key}`,
-      'ChatGPT-Account-Id': accountId,
-      'Accept': 'application/json',
-      'Origin': 'https://chatgpt.com',
-      'Referer': 'https://chatgpt.com/',
-      'User-Agent': 'Mozilla/5.0'
-    }
-  })
+  const headers = codexHeaders(active.connection.api_key, accountId)
+  const response = await fetcher(CODEX_USAGE_URL, { headers })
   if (!response.ok) throw await responseError(response, 'Unable to fetch Codex subscription usage')
+
+  const data = await response.json()
+  let resetCreditDetails: any
+  try {
+    const resetResponse = await fetcher(CODEX_RESET_CREDITS_URL, { headers })
+    if (resetResponse.ok) resetCreditDetails = await resetResponse.json()
+  } catch {
+    // Detailed reset rows are optional; retain any count from the usage response.
+  }
+
   const plan = extractChatGptPlanType(active.connection.id_token)
     || extractChatGptPlanType(active.connection.api_key)
-  return normalizeCodexUsage(config.name, await response.json(), plan)
+  return normalizeCodexUsage(config.name, data, plan, resetCreditDetails)
 }
 
 async function fetchClaudeUsage(config: ProviderConfig, fetcher: typeof fetch): Promise<SubscriptionUsage> {
@@ -173,6 +248,33 @@ async function fetchClaudeUsage(config: ProviderConfig, fetcher: typeof fetch): 
   const plan = active.connection.subscription_type
     || planFromRateLimitTier(active.connection.rate_limit_tier)
   return normalizeClaudeUsage(config.name, await response.json(), plan)
+}
+
+function codexHeaders(accessToken: string, accountId: string): Record<string, string> {
+  return {
+    'Authorization': `Bearer ${accessToken}`,
+    'ChatGPT-Account-Id': accountId,
+    'Accept': 'application/json',
+    'Origin': 'https://chatgpt.com',
+    'Referer': 'https://chatgpt.com/',
+    'User-Agent': 'Mozilla/5.0'
+  }
+}
+
+function normalizeResetCredit(value: any): SubscriptionResetCredit | undefined {
+  const id = typeof value?.id === 'string' ? value.id.trim() : ''
+  if (!id) return undefined
+  const grantedAt = optionalReset(value.granted_at).reset_at
+  const expiresAt = optionalReset(value.expires_at).reset_at
+  return {
+    id,
+    reset_type: String(value.reset_type || 'codex_rate_limits'),
+    status: String(value.status || 'available'),
+    ...(grantedAt ? { granted_at: grantedAt } : {}),
+    ...(expiresAt ? { expires_at: expiresAt } : {}),
+    ...(typeof value.title === 'string' && value.title.trim() ? { title: value.title.trim() } : {}),
+    ...(typeof value.description === 'string' && value.description.trim() ? { description: value.description.trim() } : {})
+  }
 }
 
 function addCodexWindows(windows: SubscriptionUsageWindow[], rateLimit: any, prefix: string): void {

@@ -14,6 +14,7 @@ import type {
 import { fetchWithRetry } from '../utils/fetch'
 import { extractChatGptAccountId } from '../utils/codex-auth'
 import { ensureCodexAccessToken } from '../services/codex-token-manager'
+import { consumeCodexResetCredit } from '../services/subscription-usage'
 
 type CodexHeaders = Record<string, string>
 
@@ -25,6 +26,7 @@ type CodexHeaders = Record<string, string>
  */
 export class CodexAdapter implements ProviderAdapter {
   name = 'codex-subscription'
+  private resetInFlight?: Promise<boolean>
 
   constructor(private config: ProviderConfig) {}
 
@@ -143,13 +145,20 @@ export class CodexAdapter implements ProviderAdapter {
   }
 
   async call(request: any): Promise<any> {
-    const headers = await this.headers()
-    const response = await fetchWithRetry(this.responsesUrl(), {
+    const requestBody = JSON.stringify({ ...request, stream: true, store: false })
+    let response = await fetchWithRetry(this.responsesUrl(), {
       method: 'POST',
-      headers,
-      body: JSON.stringify({ ...request, stream: true, store: false })
+      headers: await this.headers(),
+      body: requestBody
     }, this.config.connection)
 
+    if (response.status === 429 && await this.tryAutomaticReset()) {
+      response = await fetchWithRetry(this.responsesUrl(), {
+        method: 'POST',
+        headers: await this.headers(),
+        body: requestBody
+      }, this.config.connection)
+    }
     if (!response.ok) throw await this.providerError(response)
 
     const contentType = response.headers.get('content-type') || ''
@@ -219,13 +228,17 @@ export class CodexAdapter implements ProviderAdapter {
           }
 
           try {
-            const headers = await adapter.headers()
-            const response = await fetch(url, {
+            const requestBody = JSON.stringify({ ...request, stream: true, store: false })
+            const sendRequest = async () => fetch(url, {
               method: 'POST',
-              headers,
-              body: JSON.stringify({ ...request, stream: true, store: false }),
+              headers: await adapter.headers(),
+              body: requestBody,
               signal: abortController.signal
             })
+            let response = await sendRequest()
+            if (response.status === 429 && await adapter.tryAutomaticReset()) {
+              response = await sendRequest()
+            }
             if (timeoutId) clearTimeout(timeoutId)
             if (!response.ok) {
               const text = await response.text().catch(() => '')
@@ -434,6 +447,25 @@ export class CodexAdapter implements ProviderAdapter {
       || extractChatGptAccountId(active.connection.api_key)
     if (accountId) headers['ChatGPT-Account-Id'] = accountId
     return headers
+  }
+
+  private tryAutomaticReset(): Promise<boolean> {
+    if (this.config.connection.auto_reset_on_quota_exhausted !== true) {
+      return Promise.resolve(false)
+    }
+    if (this.resetInFlight) return this.resetInFlight
+
+    const attempt = consumeCodexResetCredit(this.config)
+      .then(result => result.code === 'reset')
+      .catch((error: any) => {
+        console.warn(`Unable to automatically use a Codex reset for ${this.config.name}:`, error?.message || error)
+        return false
+      })
+    this.resetInFlight = attempt
+    attempt.finally(() => {
+      if (this.resetInFlight === attempt) this.resetInFlight = undefined
+    })
+    return attempt
   }
 
   private async providerError(response: Response): Promise<any> {

@@ -51,6 +51,9 @@ export default defineEventHandler(async (event) => {
     if (body.client_version !== undefined && nextProtocol === 'codex-subscription') {
       connectionPatch.client_version = String(body.client_version).trim().slice(0, 64)
     }
+    if (body.auto_reset_on_quota_exhausted !== undefined && nextProtocol === 'codex-subscription') {
+      connectionPatch.auto_reset_on_quota_exhausted = body.auto_reset_on_quota_exhausted === true
+    }
     // Also merge any nested connection object
     if (body.connection && typeof body.connection === 'object') {
       const nested = { ...body.connection }

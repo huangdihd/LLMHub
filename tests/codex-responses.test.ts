@@ -220,6 +220,81 @@ await test('sync call sends Codex auth headers and collects terminal SSE respons
   }
 })
 
+await test('quota rejection automatically consumes one banked reset and retries a sync request once', async () => {
+  const originalFetch = globalThis.fetch
+  const urls: string[] = []
+  let responseAttempts = 0
+  globalThis.fetch = (async (url: string, init: RequestInit) => {
+    urls.push(url)
+    if (url.endsWith('/rate-limit-reset-credits/consume')) {
+      const body = JSON.parse(String(init.body))
+      assert.equal(typeof body.redeem_request_id, 'string')
+      assert.equal('credit_id' in body, false)
+      return Response.json({ code: 'reset', windows_reset: 2 })
+    }
+    responseAttempts++
+    if (responseAttempts === 1) return Response.json({ error: { code: 'rate_limit_exceeded' } }, { status: 429 })
+    const completed = {
+      type: 'response.completed',
+      response: { id: 'resp_after_reset', status: 'completed', output: [], usage: {} }
+    }
+    return new Response(`data: ${JSON.stringify(completed)}\n\n`, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' }
+    })
+  }) as any
+
+  try {
+    const adapter = new CodexAdapter({
+      ...config,
+      connection: { ...config.connection, auto_reset_on_quota_exhausted: true }
+    })
+    const response = await adapter.call({ model: 'gpt-5.3-codex', input: [] })
+    assert.equal(response.id, 'resp_after_reset')
+    assert.equal(responseAttempts, 2)
+    assert.equal(urls.filter(url => url.endsWith('/rate-limit-reset-credits/consume')).length, 1)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('quota rejection automatically consumes one banked reset and retries a stream request once', async () => {
+  const originalFetch = globalThis.fetch
+  let responseAttempts = 0
+  let consumeAttempts = 0
+  globalThis.fetch = (async (url: string) => {
+    if (url.endsWith('/rate-limit-reset-credits/consume')) {
+      consumeAttempts++
+      return Response.json({ code: 'reset', windows_reset: 1 })
+    }
+    responseAttempts++
+    if (responseAttempts === 1) return new Response('quota exhausted', { status: 429 })
+    return new Response('data: {"type":"response.completed","response":{"status":"completed"}}\n\n', {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' }
+    })
+  }) as any
+
+  try {
+    const adapter = new CodexAdapter({
+      ...config,
+      connection: { ...config.connection, auto_reset_on_quota_exhausted: true }
+    })
+    const reader = adapter.callStream({ model: 'gpt-5.3-codex', input: [] }).getReader()
+    let output = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      output += new TextDecoder().decode(value)
+    }
+    assert.match(output, /response\.completed/)
+    assert.equal(responseAttempts, 2)
+    assert.equal(consumeAttempts, 1)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 await test('stream events normalize text, reasoning, tool calls and usage', () => {
   const adapter = new CodexAdapter(config)
   const state = {}

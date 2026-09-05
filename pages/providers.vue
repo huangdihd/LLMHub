@@ -90,6 +90,19 @@
             >Refresh</UButton>
           </div>
 
+          <div v-if="provider.protocol === 'codex-subscription'" class="mt-4 flex items-center justify-between gap-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-800/50">
+            <div>
+              <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Automatically use a banked reset</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">When Codex rejects a request because its quota is exhausted, use one reset and retry that request once.</p>
+            </div>
+            <UToggle
+              :model-value="provider.connection.auto_reset_on_quota_exhausted === true"
+              :disabled="autoResetSaving[provider.name]"
+              :aria-label="`Automatically use a banked reset for ${provider.display_name}`"
+              @update:model-value="setAutoReset(provider, $event)"
+            />
+          </div>
+
           <div v-if="usageState(provider.name).loading && !usageState(provider.name).data" class="flex items-center gap-2 py-5 text-sm text-gray-500 dark:text-gray-400">
             <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin" />
             Loading quota details…
@@ -496,6 +509,7 @@ const authorizationCode = ref('')
 const loginNow = ref(Date.now())
 const usageNow = ref(Date.now())
 const subscriptionUsage = reactive<Record<string, SubscriptionUsageState>>({})
+const autoResetSaving = reactive<Record<string, boolean>>({})
 const nameTouched = ref(false)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let usageClockTimer: ReturnType<typeof setInterval> | null = null
@@ -571,6 +585,28 @@ function usageState(name: string): SubscriptionUsageState {
     subscriptionUsage[name] = { loading: false, resettingCreditId: '', error: '', data: null, expanded: false }
   }
   return subscriptionUsage[name]
+}
+
+async function setAutoReset(provider: any, enabled: boolean) {
+  if (autoResetSaving[provider.name]) return
+  autoResetSaving[provider.name] = true
+  try {
+    await $fetch(`/api/hub/providers/${encodeURIComponent(provider.name)}`, {
+      method: 'PUT',
+      body: { auto_reset_on_quota_exhausted: enabled }
+    })
+    provider.connection.auto_reset_on_quota_exhausted = enabled
+    toast.add({
+      title: enabled ? 'Automatic reset enabled' : 'Automatic reset disabled',
+      color: enabled ? 'green' : 'gray',
+      icon: enabled ? 'i-heroicons-check-circle' : 'i-heroicons-information-circle'
+    })
+  } catch (error: any) {
+    if (error?.statusCode === 401) return navigateTo('/login')
+    showError(error, 'Unable to update automatic reset')
+  } finally {
+    autoResetSaving[provider.name] = false
+  }
 }
 
 async function toggleUsageDetails(name: string) {

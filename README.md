@@ -58,7 +58,9 @@ providers' subscription-usage endpoints and displays available plan metadata,
 quota utilization, reset times, and Codex credit balance. Plan information is
 shown only when the upstream reports it; otherwise the dashboard explicitly
 marks it unavailable. Usage responses are cached for 60 seconds and can be
-manually refreshed.
+manually refreshed. Codex subscription cards also provide an opt-in automatic
+reset switch (disabled by default): after a quota-exhaustion response, LLMHub
+uses one available Banked Reset and retries that request once.
 
 ### Creating API Keys
 

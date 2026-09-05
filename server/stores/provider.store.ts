@@ -165,6 +165,9 @@ export class ProviderStore {
         ...(connection?.id_token ? { id_token: connection.id_token } : {}),
         ...(connection?.token_expires_at ? { token_expires_at: connection.token_expires_at } : {}),
         ...(connection?.client_version ? { client_version: connection.client_version } : {}),
+        ...(connection?.auto_reset_on_quota_exhausted !== undefined
+          ? { auto_reset_on_quota_exhausted: connection.auto_reset_on_quota_exhausted }
+          : {}),
         ...(connection?.subscription_type ? { subscription_type: connection.subscription_type } : {}),
         ...(connection?.rate_limit_tier ? { rate_limit_tier: connection.rate_limit_tier } : {})
       },

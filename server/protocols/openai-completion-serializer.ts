@@ -36,7 +36,10 @@ export class OpenAICompletionSerializer implements ProtocolSerializer {
       usage: {
         prompt_tokens: response.usage.promptTokens,
         completion_tokens: response.usage.completionTokens,
-        total_tokens: response.usage.promptTokens + response.usage.completionTokens
+        total_tokens: response.usage.promptTokens + response.usage.completionTokens,
+        ...(response.usage.cachedTokens != null
+          ? { prompt_tokens_details: { cached_tokens: response.usage.cachedTokens } }
+          : {})
       }
     }
   }
@@ -63,7 +66,10 @@ export class OpenAICompletionSerializer implements ProtocolSerializer {
         result.usage = {
           prompt_tokens: chunk.usage.promptTokens,
           completion_tokens: chunk.usage.completionTokens,
-          total_tokens: chunk.usage.promptTokens + chunk.usage.completionTokens
+          total_tokens: chunk.usage.promptTokens + chunk.usage.completionTokens,
+          ...(chunk.usage.cachedTokens != null
+            ? { prompt_tokens_details: { cached_tokens: chunk.usage.cachedTokens } }
+            : {})
         }
       }
       return result

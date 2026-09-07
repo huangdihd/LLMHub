@@ -61,7 +61,10 @@ export class GeminiGenerateSerializer implements ProtocolSerializer {
       usageMetadata: {
         promptTokenCount: response.usage.promptTokens,
         candidatesTokenCount: response.usage.completionTokens,
-        totalTokenCount: response.usage.promptTokens + response.usage.completionTokens
+        totalTokenCount: response.usage.promptTokens + response.usage.completionTokens,
+        ...(response.usage.cachedTokens != null
+          ? { cachedContentTokenCount: response.usage.cachedTokens }
+          : {})
       },
       modelVersion: 'llmhub'
     }
@@ -93,7 +96,10 @@ export class GeminiGenerateSerializer implements ProtocolSerializer {
         usageMetadata: chunk.usage ? {
           promptTokenCount: chunk.usage.promptTokens,
           candidatesTokenCount: chunk.usage.completionTokens,
-          totalTokenCount: chunk.usage.promptTokens + chunk.usage.completionTokens
+          totalTokenCount: chunk.usage.promptTokens + chunk.usage.completionTokens,
+          ...(chunk.usage.cachedTokens != null
+            ? { cachedContentTokenCount: chunk.usage.cachedTokens }
+            : {})
         } : undefined
       }
     }

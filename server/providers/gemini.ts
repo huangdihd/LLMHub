@@ -441,7 +441,10 @@ export class GeminiAdapter implements ProviderAdapter {
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       usage: {
         promptTokens: response.usageMetadata?.promptTokenCount || 0,
-        completionTokens: response.usageMetadata?.candidatesTokenCount || 0
+        completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
+        ...(response.usageMetadata?.cachedContentTokenCount != null
+          ? { cachedTokens: response.usageMetadata.cachedContentTokenCount }
+          : {})
       }
     }
   }
@@ -454,7 +457,10 @@ export class GeminiAdapter implements ProviderAdapter {
           type: 'done',
           usage: {
             promptTokens: chunk.usageMetadata.promptTokenCount || 0,
-            completionTokens: chunk.usageMetadata.candidatesTokenCount || 0
+            completionTokens: chunk.usageMetadata.candidatesTokenCount || 0,
+            ...(chunk.usageMetadata.cachedContentTokenCount != null
+              ? { cachedTokens: chunk.usageMetadata.cachedContentTokenCount }
+              : {})
           }
         }
       }
@@ -495,7 +501,10 @@ export class GeminiAdapter implements ProviderAdapter {
         finishReason: hasToolCall ? 'tool_calls' : this.mapFinishReason(candidate.finishReason),
         usage: chunk.usageMetadata ? {
           promptTokens: chunk.usageMetadata.promptTokenCount || 0,
-          completionTokens: chunk.usageMetadata.candidatesTokenCount || 0
+          completionTokens: chunk.usageMetadata.candidatesTokenCount || 0,
+          ...(chunk.usageMetadata.cachedContentTokenCount != null
+            ? { cachedTokens: chunk.usageMetadata.cachedContentTokenCount }
+            : {})
         } : undefined
       })
     }

@@ -447,7 +447,10 @@ export class OpenAIAdapter implements ProviderAdapter {
       logprobs: choice.logprobs?.content,
       usage: {
         promptTokens: response.usage?.prompt_tokens || 0,
-        completionTokens: response.usage?.completion_tokens || 0
+        completionTokens: response.usage?.completion_tokens || 0,
+        ...(response.usage?.prompt_tokens_details?.cached_tokens != null
+          ? { cachedTokens: response.usage.prompt_tokens_details.cached_tokens }
+          : {})
       }
     }
   }
@@ -456,7 +459,10 @@ export class OpenAIAdapter implements ProviderAdapter {
     const choice = chunk.choices?.[0]
     const usage = chunk.usage ? {
       promptTokens: chunk.usage.prompt_tokens || 0,
-      completionTokens: chunk.usage.completion_tokens || 0
+      completionTokens: chunk.usage.completion_tokens || 0,
+      ...(chunk.usage.prompt_tokens_details?.cached_tokens != null
+        ? { cachedTokens: chunk.usage.prompt_tokens_details.cached_tokens }
+        : {})
     } : undefined
 
     if (!choice) {

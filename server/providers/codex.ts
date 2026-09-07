@@ -508,10 +508,12 @@ function safeJsonParse(value: string): object {
   try { return JSON.parse(value) } catch { return {} }
 }
 
-function mapUsage(usage: any): { promptTokens: number; completionTokens: number } {
+function mapUsage(usage: any): { promptTokens: number; completionTokens: number; cachedTokens?: number } {
+  const cachedTokens = usage?.input_tokens_details?.cached_tokens
   return {
     promptTokens: usage?.input_tokens || 0,
-    completionTokens: usage?.output_tokens || 0
+    completionTokens: usage?.output_tokens || 0,
+    ...(cachedTokens != null ? { cachedTokens } : {})
   }
 }
 

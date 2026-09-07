@@ -123,8 +123,13 @@ export interface ToolCall {
 }
 
 export interface Usage {
+  /** Total input tokens, including cache reads and cache creation. */
   promptTokens: number
   completionTokens: number
+  /** Input tokens read from a provider-side prompt/context cache. */
+  cachedTokens?: number
+  /** Input tokens used to create a provider-side cache entry. */
+  cacheCreationTokens?: number
 }
 
 // ============ 统一嵌入请求 ============

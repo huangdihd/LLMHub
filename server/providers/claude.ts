@@ -341,27 +341,25 @@ export class ClaudeAdapter implements ProviderAdapter {
       content,
       finishReason: mapClaudeStopReason(response.stop_reason),
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      usage: {
-        promptTokens: response.usage?.input_tokens || 0,
-        completionTokens: response.usage?.output_tokens || 0
-      }
+      usage: mapClaudeUsage(response.usage)
     } as LLMResponse
   }
 
   fromProviderStreamChunk(chunk: any, state: any = {}): LLMStreamChunk {
-    // message_start carries input_tokens — stash for later
+    // message_start carries input/cache usage — stash it for the final chunk
     if (chunk.type === 'message_start') {
-      if (chunk.message?.usage?.input_tokens) {
-        state._inputTokens = chunk.message.usage.input_tokens
+      if (chunk.message?.usage) {
+        state._usage = mapClaudeUsage(chunk.message.usage)
       }
       return { type: 'content', delta: '' }
     }
 
     if (chunk.type === 'message_stop') {
-      const usage = state._inputTokens
-        ? { promptTokens: state._inputTokens, completionTokens: 0 }
+      const usage = state._usage
+        ? { ...state._usage, completionTokens: state._outputTokens || state._usage.completionTokens }
         : undefined
-      delete state._inputTokens
+      delete state._usage
+      delete state._outputTokens
       return { type: 'done', usage }
     }
 
@@ -404,16 +402,30 @@ export class ClaudeAdapter implements ProviderAdapter {
       if (chunk.usage?.output_tokens) {
         state._outputTokens = (state._outputTokens || 0) + chunk.usage.output_tokens
       }
+      if (chunk.usage && (
+        chunk.usage.input_tokens != null
+        || chunk.usage.cache_read_input_tokens != null
+        || chunk.usage.cache_creation_input_tokens != null
+      )) {
+        const deltaUsage = mapClaudeUsage(chunk.usage)
+        state._usage = {
+          ...(state._usage || { promptTokens: 0, completionTokens: 0 }),
+          ...deltaUsage,
+          completionTokens: state._usage?.completionTokens || 0
+        }
+      }
 
       if (chunk.delta?.stop_reason) {
-        const promptTokens = state._inputTokens || 0
-        const completionTokens = state._outputTokens || chunk.usage?.output_tokens || 0
-        delete state._inputTokens
+        const usage = {
+          ...(state._usage || { promptTokens: 0, completionTokens: 0 }),
+          completionTokens: state._outputTokens || chunk.usage?.output_tokens || 0
+        }
+        delete state._usage
         delete state._outputTokens
         return {
           type: 'done',
           finishReason: mapClaudeStopReason(chunk.delta.stop_reason),
-          usage: { promptTokens, completionTokens }
+          usage
         }
       }
       // message_delta without stop_reason: still collect output_tokens
@@ -447,6 +459,18 @@ export class ClaudeAdapter implements ProviderAdapter {
       display_name: m.display_name,
       capabilities: m.capabilities
     }))
+  }
+}
+
+function mapClaudeUsage(usage: any) {
+  const inputTokens = usage?.input_tokens || 0
+  const cachedTokens = usage?.cache_read_input_tokens
+  const cacheCreationTokens = usage?.cache_creation_input_tokens
+  return {
+    promptTokens: inputTokens + (cachedTokens || 0) + (cacheCreationTokens || 0),
+    completionTokens: usage?.output_tokens || 0,
+    ...(cachedTokens != null ? { cachedTokens } : {}),
+    ...(cacheCreationTokens != null ? { cacheCreationTokens } : {})
   }
 }
 

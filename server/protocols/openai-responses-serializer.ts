@@ -59,7 +59,7 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     const completionTokens = usage?.completionTokens || 0
     return {
       input_tokens: promptTokens,
-      input_tokens_details: { cached_tokens: 0 },
+      input_tokens_details: { cached_tokens: usage?.cachedTokens || 0 },
       output_tokens: completionTokens,
       output_tokens_details: { reasoning_tokens: 0 },
       total_tokens: promptTokens + completionTokens

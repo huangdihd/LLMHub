@@ -6,6 +6,17 @@ function mapClaudeStopReason(reason: string | undefined): string {
   return 'end_turn'
 }
 
+function mapClaudeUsage(usage: LLMResponse['usage']): any {
+  const cachedTokens = usage.cachedTokens || 0
+  const cacheCreationTokens = usage.cacheCreationTokens || 0
+  return {
+    input_tokens: Math.max(0, usage.promptTokens - cachedTokens - cacheCreationTokens),
+    output_tokens: usage.completionTokens,
+    ...(usage.cachedTokens != null ? { cache_read_input_tokens: usage.cachedTokens } : {}),
+    ...(usage.cacheCreationTokens != null ? { cache_creation_input_tokens: usage.cacheCreationTokens } : {})
+  }
+}
+
 export class ClaudeMessagesSerializer implements ProtocolSerializer {
   name = 'claude-messages'
 
@@ -45,10 +56,7 @@ export class ClaudeMessagesSerializer implements ProtocolSerializer {
       model: 'llmhub',
       stop_reason: mapClaudeStopReason(response.finishReason),
       stop_sequence: null,
-      usage: {
-        input_tokens: response.usage.promptTokens,
-        output_tokens: response.usage.completionTokens
-      }
+      usage: mapClaudeUsage(response.usage)
     }
   }
 
@@ -59,9 +67,9 @@ export class ClaudeMessagesSerializer implements ProtocolSerializer {
         delta: {
           stop_reason: mapClaudeStopReason(chunk.finishReason)
         },
-        usage: {
-          output_tokens: chunk.usage?.completionTokens || 0
-        }
+        usage: chunk.usage
+          ? mapClaudeUsage(chunk.usage)
+          : { output_tokens: 0 }
       }
     }
 

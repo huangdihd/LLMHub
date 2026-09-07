@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">LLMHub logo</title>
+  <desc id="desc">A connected hub formed by three nodes</desc>
+  <defs>
+    <linearGradient id="background" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="20" y1="18" x2="45" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DBEAFE"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#background)"/>
+  <path d="M22 22L32 32M42 22L32 32M32 32V45" stroke="url(#mark)" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="22" cy="22" r="6" fill="#FFFFFF"/>
+  <circle cx="42" cy="22" r="6" fill="#FFFFFF"/>
+  <circle cx="32" cy="45" r="6" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="5" fill="#BFDBFE" stroke="#FFFFFF" stroke-width="3"/>
+</svg>

@@ -7,11 +7,20 @@ import { ensureClaudeAccessToken } from '../services/claude-token-manager'
 import { CLAUDE_CODE_BETA } from '../utils/claude-auth'
 
 const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const MODEL_DISCOVERY_TIMEOUT = 10_000
+const MODEL_DISCOVERY_MAX_RETRIES = 1
+const MODEL_DISCOVERY_FETCH_OPTIONS = {
+  timeout: MODEL_DISCOVERY_TIMEOUT,
+  enable_timeout: true,
+  maxRetries: MODEL_DISCOVERY_MAX_RETRIES
+} as const
 
 export class ProviderLoader {
   private providers: Map<string, ProviderConfig> = new Map()
   /** In-memory model cache shared across all ProviderLoader instances */
   private static modelCache: { timestamp: number; models: ModelInfo[] } | null = null
+  private static modelRefreshPromise: Promise<ModelInfo[]> | null = null
+  private static cacheGeneration = 0
 
   async loadAll(): Promise<void> {
     const store = getProviderStore()
@@ -38,17 +47,18 @@ export class ProviderLoader {
       throw new Error(`Provider not found: ${providerName}`)
     }
 
-    try {
-      if (config.use_custom_models) {
-        return config.models.map(m => ({
-          id: `${providerName}/${m.id}`,
-          provider: providerName,
-          name: m.id,
-          display_name: m.display_name,
-          capabilities: m.capabilities
-        }))
-      }
+    if (config.use_custom_models) {
+      return config.models.map(m => ({
+        id: `${providerName}/${m.id}`,
+        provider: providerName,
+        name: m.id,
+        display_name: m.display_name,
+        capabilities: m.capabilities
+      }))
+    }
 
+    const startedAt = Date.now()
+    try {
       if (config.protocol === 'openai') {
         return await this.fetchOpenAIModels(config)
       } else if (config.protocol === 'claude') {
@@ -62,6 +72,8 @@ export class ProviderLoader {
       }
     } catch (error) {
       console.error(`Failed to fetch models from ${providerName}:`, error)
+    } finally {
+      console.info(`[LLMHub] Model discovery for "${providerName}" completed in ${Date.now() - startedAt}ms`)
     }
 
     return config.models.map(m => ({
@@ -75,6 +87,7 @@ export class ProviderLoader {
 
   private async fetchOpenAIModels(config: ProviderConfig): Promise<ModelInfo[]> {
     const response = await fetchWithRetry(`${config.connection.base_url}/models`, {
+      ...MODEL_DISCOVERY_FETCH_OPTIONS,
       headers: {
         'Authorization': `Bearer ${config.connection.api_key}`
       }
@@ -117,6 +130,7 @@ export class ProviderLoader {
       }
 
       const response = await fetchWithRetry(`${config.connection.base_url}/v1/models`, {
+        ...MODEL_DISCOVERY_FETCH_OPTIONS,
         headers
       }, config.connection)
 
@@ -153,6 +167,7 @@ export class ProviderLoader {
   private async fetchClaudeSubscriptionModels(config: ProviderConfig): Promise<ModelInfo[]> {
     config = await ensureClaudeAccessToken(config)
     const response = await fetchWithRetry(`${config.connection.base_url.replace(/\/$/, '')}/v1/models`, {
+      ...MODEL_DISCOVERY_FETCH_OPTIONS,
       headers: {
         'Authorization': `Bearer ${config.connection.api_key}`,
         'Accept': 'application/json',
@@ -181,6 +196,7 @@ export class ProviderLoader {
   private async fetchGeminiModels(config: ProviderConfig): Promise<ModelInfo[]> {
     try {
       const response = await fetchWithRetry(`${config.connection.base_url}/v1beta/models`, {
+        ...MODEL_DISCOVERY_FETCH_OPTIONS,
         headers: {
           'x-goog-api-key': config.connection.api_key
         }
@@ -240,6 +256,7 @@ export class ProviderLoader {
       config.connection.client_version || CODEX_DEFAULT_CLIENT_VERSION
     )
     const response = await fetchWithRetry(modelsUrl.toString(), {
+      ...MODEL_DISCOVERY_FETCH_OPTIONS,
       headers
     }, config.connection)
 
@@ -259,31 +276,58 @@ export class ProviderLoader {
     }).filter((model: ModelInfo) => !!model.name)
   }
 
-  /** Fetch models from ALL providers in parallel, with 5-min cache. */
+  /** Fetch models from all providers, returning stale cache while it refreshes. */
   async fetchAllModels(): Promise<ModelInfo[]> {
-    // Static cache shared across short-lived instances
-    if (ProviderLoader.modelCache && Date.now() - ProviderLoader.modelCache.timestamp < MODEL_CACHE_TTL) {
-      return ProviderLoader.modelCache.models
+    const cache = ProviderLoader.modelCache
+    if (cache && Date.now() - cache.timestamp < MODEL_CACHE_TTL) {
+      return cache.models
     }
 
+    if (cache) {
+      void this.refreshModelCache().catch(error => {
+        console.error('[LLMHub] Failed to refresh model cache:', error)
+      })
+      return cache.models
+    }
+
+    return this.refreshModelCache()
+  }
+
+  private refreshModelCache(): Promise<ModelInfo[]> {
+    if (ProviderLoader.modelRefreshPromise) {
+      return ProviderLoader.modelRefreshPromise
+    }
+
+    const generation = ProviderLoader.cacheGeneration
     const providerNames = Array.from(this.providers.keys())
-    const results = await Promise.all(
+    const refreshPromise: Promise<ModelInfo[]> = Promise.all(
       providerNames.map(name =>
-        this.fetchModels(name).catch(err => {
-          console.error(`Failed to fetch models from ${name}:`, err)
+        this.fetchModels(name).catch(error => {
+          console.error(`Failed to fetch models from ${name}:`, error)
           return [] as ModelInfo[]
         })
       )
-    )
+    ).then(results => {
+      const models = results.flat()
+      if (generation === ProviderLoader.cacheGeneration) {
+        ProviderLoader.modelCache = { timestamp: Date.now(), models }
+      }
+      return models
+    }).finally(() => {
+      if (ProviderLoader.modelRefreshPromise === refreshPromise) {
+        ProviderLoader.modelRefreshPromise = null
+      }
+    })
 
-    const allModels = results.flat()
-    ProviderLoader.modelCache = { timestamp: Date.now(), models: allModels }
-    return allModels
+    ProviderLoader.modelRefreshPromise = refreshPromise
+    return refreshPromise
   }
 
   /** Invalidate the model cache (called after provider config changes). */
   static invalidateCache(): void {
     ProviderLoader.modelCache = null
+    ProviderLoader.modelRefreshPromise = null
+    ProviderLoader.cacheGeneration++
   }
 
   parseModelId(modelId: string): { provider: string; model: string } {

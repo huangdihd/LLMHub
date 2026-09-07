@@ -7,6 +7,17 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/ui'
   ],
+  app: {
+    head: {
+      title: 'LLMHub',
+      meta: [
+        { name: 'description', content: 'A unified gateway for multiple LLM providers' }
+      ],
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }
+      ]
+    }
+  },
   nitro: {
     storage: {
       data: {

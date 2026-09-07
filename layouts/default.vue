@@ -4,10 +4,10 @@
       <UContainer>
         <div class="flex justify-between h-16">
           <div class="flex items-center">
-            <h1 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <UIcon name="i-heroicons-cube-transparent" class="w-6 h-6" />
-              LLMHub
-            </h1>
+            <NuxtLink to="/" class="flex items-center gap-2" aria-label="LLMHub home">
+              <img src="/logo.svg" alt="" class="w-8 h-8" />
+              <span class="text-xl font-bold text-gray-900 dark:text-white">LLMHub</span>
+            </NuxtLink>
           </div>
           <!-- Desktop nav -->
           <div class="hidden md:flex items-center space-x-2">

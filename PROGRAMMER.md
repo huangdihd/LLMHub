@@ -44,7 +44,7 @@ npx vue-tsc --noEmit # project type-check
 - A new upstream protocol normally requires a provider adapter, registration in `ProviderManager`, model loading in `ProviderLoader`, persisted and sanitized config support, dashboard support, and tests.
 - Preserve streaming and non-streaming behavior across compatible ingress protocols. Tool calls, thinking blocks, finish reasons, and usage are normalized before serialization.
 - Stored provider names are immutable and become the prefix in public model IDs.
-- Provider model results are cached in memory for five minutes; configuration changes must invalidate `ProviderLoader`'s cache.
+- Provider model results are cached in memory for five minutes. Expired entries are returned stale while one background refresh runs; configuration changes invalidate the cache so the next request waits for fresh data. Upstream model discovery uses a fixed 10-second timeout with one retry.
 - Subscription refresh tokens, access tokens, account identifiers, and installation/device identifiers are server-side secrets and must never be returned by hub APIs. Subscription plan/quota details are fetched server-side, normalized, and cached briefly; upstreams may omit plan metadata.
 - `tests/run-all.sh` explicitly lists provider and utility files that need precompilation; update it when tests import a new adapter using TypeScript syntax unsupported by Node type stripping.
 - E2E tests modify `.data/`, start local processes, and restore seeded state through their cleanup trap. They may rebuild `.output/`.

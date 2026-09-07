@@ -124,7 +124,7 @@ await test('model discovery sends the required Codex client version and catalog 
   const originalFetch = globalThis.fetch
   let captured: any
   globalThis.fetch = (async (url: string, init: RequestInit) => {
-    captured = { url, headers: init.headers }
+    captured = { url, ...init }
     return Response.json({ models: [{ slug: 'gpt-5.6-sol', display_name: 'GPT-5.6-Sol' }] })
   }) as any
 
@@ -135,6 +135,9 @@ await test('model discovery sends the required Codex client version and catalog 
     assert.equal(captured.headers.originator, 'llmhub')
     assert.equal(captured.headers['x-codex-installation-id'], config.connection.device_id)
     assert.equal(captured.headers['ChatGPT-Account-Id'], 'acct_from_jwt')
+    assert.equal(captured.timeout, 10_000)
+    assert.equal(captured.enable_timeout, true)
+    assert.equal(captured.maxRetries, 1)
     assert.equal(models[0].id, 'codex-sub/gpt-5.6-sol')
     assert.equal(CODEX_DEFAULT_CLIENT_VERSION, '0.149.0')
   } finally {

@@ -57,6 +57,37 @@ test('function_call items merge into one assistant message with parsed arguments
   assert.equal(tool.meta.name, 'get_weather')
 })
 
+test('reasoning and following function calls stay in one assistant turn', () => {
+  const req = new OpenAIResponsesParser().parseRequest({
+    input: [
+      { role: 'user', content: 'inspect this project' },
+      { type: 'reasoning', summary: [{ type: 'summary_text', text: 'I should inspect files.' }] },
+      { type: 'function_call', call_id: 'call_1', name: 'read_file', arguments: '{"path":"README.md"}' },
+      { type: 'function_call_output', call_id: 'call_1', output: 'contents' }
+    ]
+  })
+
+  assert.equal(req.messages.length, 3)
+  const assistant = req.messages[1]
+  assert.deepEqual(assistant.content, [{ type: 'thinking', thinking: 'I should inspect files.' }])
+  assert.deepEqual(assistant.meta.toolCalls, [{ id: 'call_1', name: 'read_file', input: { path: 'README.md' } }])
+})
+
+test('reasoning and following assistant message stay in one assistant turn', () => {
+  const req = new OpenAIResponsesParser().parseRequest({
+    input: [
+      { type: 'reasoning', summary: [{ type: 'summary_text', text: 'Done thinking.' }] },
+      { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Final answer' }] }
+    ]
+  })
+
+  assert.equal(req.messages.length, 1)
+  assert.deepEqual(req.messages[0].content, [
+    { type: 'thinking', thinking: 'Done thinking.' },
+    { type: 'text', text: 'Final answer' }
+  ])
+})
+
 test('input_image with string image_url (Responses format)', () => {
   const req = new OpenAIResponsesParser().parseRequest({
     input: [{

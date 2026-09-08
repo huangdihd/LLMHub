@@ -15,6 +15,11 @@ export class OpenAIResponsesParser implements ProtocolParser {
     // call_id → tool name, so tool results keep their name (Gemini needs it)
     const toolNameById: Record<string, string> = {}
 
+    const isReasoningOnlyAssistant = (message: any) => message?.role === 'assistant'
+      && Array.isArray(message.content)
+      && message.content.length > 0
+      && message.content.every((block: ContentBlock) => block.type === 'thinking' || block.type === 'redacted_thinking')
+
     const appendToolCall = (item: any) => {
       const call = {
         id: item.call_id || item.id,
@@ -23,7 +28,9 @@ export class OpenAIResponsesParser implements ProtocolParser {
       }
       if (call.id && call.name) toolNameById[call.id] = call.name
       const last = parsedMessages[parsedMessages.length - 1]
-      if (last && last.role === 'assistant' && last.meta?.toolCalls) {
+      if (last?.role === 'assistant' && (last.meta?.toolCalls || isReasoningOnlyAssistant(last))) {
+        last.meta ||= {}
+        last.meta.toolCalls ||= []
         last.meta.toolCalls.push(call)
       } else {
         parsedMessages.push({ role: 'assistant', content: '', meta: { toolCalls: [call] } })
@@ -55,7 +62,11 @@ export class OpenAIResponsesParser implements ProtocolParser {
           if (item.encrypted_content) {
             blocks.push({ type: 'redacted_thinking', data: item.encrypted_content, reasoningProvider: 'openai' })
           }
-          if (blocks.length > 0) parsedMessages.push({ role: 'assistant', content: blocks })
+          if (blocks.length > 0) {
+            const last = parsedMessages[parsedMessages.length - 1]
+            if (isReasoningOnlyAssistant(last)) last.content.push(...blocks)
+            else parsedMessages.push({ role: 'assistant', content: blocks })
+          }
           continue
         }
         if (item.type && item.type !== 'message') continue
@@ -64,10 +75,21 @@ export class OpenAIResponsesParser implements ProtocolParser {
           const text = typeof item.content === 'string' ? item.content : this.flattenText(item.content)
           systemPrompt = systemPrompt ? `${systemPrompt}\n${text}` : text
         } else {
-          parsedMessages.push({
-            role: item.role === 'assistant' ? 'assistant' : 'user',
-            content: this.parseContent(item.content)
-          })
+          const role = item.role === 'assistant' ? 'assistant' : 'user'
+          const content = this.parseContent(item.content)
+          const last = parsedMessages[parsedMessages.length - 1]
+
+          // A Responses reasoning item and the following assistant output belong
+          // to the same turn. Keep them together when bridging to Chat Completions.
+          if (role === 'assistant' && isReasoningOnlyAssistant(last)) {
+            if (typeof content === 'string') {
+              if (content) last.content.push({ type: 'text', text: content })
+            } else {
+              last.content.push(...content)
+            }
+          } else {
+            parsedMessages.push({ role, content })
+          }
         }
       }
     }

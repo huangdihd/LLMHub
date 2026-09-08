@@ -79,6 +79,24 @@ await test('parallel tool_calls in one delta all survive', () => {
   assert.deepEqual(r.map((c: any) => c.toolCall.name), ['f1', 'f2'])
 })
 
+await test('provider request drops reasoning-only assistant history', () => {
+  const adapter = new OpenAIAdapter(dummyConfig)
+  const payload = adapter.toProviderRequest({
+    model: 'm',
+    messages: [
+      { role: 'user', content: 'hello' },
+      { role: 'assistant', content: [{ type: 'thinking', thinking: 'internal reasoning' }] },
+      { role: 'user', content: 'continue' }
+    ],
+    config: {}
+  })
+
+  assert.deepEqual(payload.messages, [
+    { role: 'user', content: 'hello' },
+    { role: 'user', content: 'continue' }
+  ])
+})
+
 console.log('logprobs — OpenAI adapter')
 
 await test('content delta carries upstream logprobs through', () => {

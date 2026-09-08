@@ -149,6 +149,15 @@ export class OpenAIAdapter implements ProviderAdapter {
           if (!message.content) message.content = null
         }
 
+        // reasoning_content alone is not a valid historical assistant message
+        // for strict OpenAI-compatible APIs such as DeepSeek. It carries no
+        // usable turn when there is neither visible content nor a tool call.
+        let hasContent = message.content != null
+        if (typeof message.content === 'string' || Array.isArray(message.content)) {
+          hasContent = message.content.length > 0
+        }
+        if (message.role === 'assistant' && !hasContent && !message.tool_calls) continue
+
         messages.push(message)
       }
     }

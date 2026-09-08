@@ -32,7 +32,7 @@ npx vue-tsc --noEmit # project type-check
 - `server/protocols/`: request parsers and response/stream serializers for each client protocol.
 - `server/providers/`: upstream adapters plus provider loading/routing. Adapters operate on unified types in `server/core/types.ts`.
 - `server/services/`: stateful authentication/token-management flows and shared request policy resolution, including configurable thinking policies.
-- `server/stores/`: Nitro-storage-backed persistence. Keep credentials inside `ProviderConfig.connection` and sanitize them from management API responses. Thinking policy settings are stored under `settings:thinking`.
+- `server/stores/`: Nitro-storage-backed persistence. Keep credentials inside `ProviderConfig.connection` and sanitize them from management API responses. Thinking policy settings are stored under `settings:thinking`; per-model input/output/cached token billing ratios are stored under `settings:model-token-ratios`.
 - `server/middleware/`: authentication for dashboard and compatible API endpoints.
 - `server/utils/`: shared request, error, authentication, embedding, and schema helpers.
 - `tests/`: native Node TypeScript protocol/adapter tests; `tests/e2e/` uses mock upstream recordings and official SDKs.

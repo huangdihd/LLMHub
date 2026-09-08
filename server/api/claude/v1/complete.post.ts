@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
             for (const unifiedChunk of unifiedChunks) {
               if (unifiedChunk.type === 'done') {
                 const u = unifiedChunk.usage
-                if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
+                if (u) trackUsage(event, u, request.model)
                 if (doneSent) continue
                 doneSent = true
                 writeCompletion(serializer!.serializeStreamChunk(unifiedChunk))
@@ -117,7 +117,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const u = response.usage
-    trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0), request.model)
+    trackUsage(event, u || 0, request.model)
     return serializer.serializeResponse(response)
   } catch (error: any) {
     throwFormattedError(error)

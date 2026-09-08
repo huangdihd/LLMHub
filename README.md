@@ -62,6 +62,10 @@ manually refreshed. Codex subscription cards also provide an opt-in automatic
 reset switch (disabled by default): after a quota-exhaustion response, LLMHub
 uses one available Banked Reset and retries that request once.
 
+### Model Token Billing Ratios
+
+The **Models** page can set independent input, output, and cached-token billing percentages for each model. These percentages affect API-key monthly quota usage and usage statistics; they do not alter token counts returned to API clients. Cached tokens are removed from the ordinary input count before the cached percentage is applied. All percentages default to 100% and may be set from 0% to 10000%.
+
 ### Creating API Keys
 
 Navigate to **API Keys** page to create keys for your applications:

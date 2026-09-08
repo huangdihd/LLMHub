@@ -111,7 +111,7 @@ export default defineEventHandler(async (event) => {
       const serializer = manager.getSerializer('gemini-generate')
       if (!serializer) throwFormattedError(manager.buildGatewayError('Serializer not found', 500))
       const u = response.usage
-      trackUsage(event, (u?.promptTokens || 0) + (u?.completionTokens || 0), request.model)
+      trackUsage(event, u || 0, request.model)
       return serializer.serializeResponse(response)
     } catch (e: any) {
       throwFormattedError(e)
@@ -176,9 +176,9 @@ export default defineEventHandler(async (event) => {
           const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
           for (const uc of unifiedChunks) {
             if (uc.type === 'done') {
-              if (doneSent) { const u = (uc as any).usage; if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model); return }
+              if (doneSent) { const u = (uc as any).usage; if (u) trackUsage(event, u, request.model); return }
               doneSent = true
-              const u = (uc as any).usage; if (u) trackUsage(event, (u.promptTokens || 0) + (u.completionTokens || 0), request.model)
+              const u = (uc as any).usage; if (u) trackUsage(event, u, request.model)
               emit(serializer!.serializeStreamChunk(uc))
             } else {
               // Serializer buffers partial tool-call args and returns null for them

@@ -20,12 +20,17 @@ export default defineEventHandler(async (event) => {
     }
 
     const nextProtocol = body.protocol ?? existing.protocol
-    const subscriptionProtocol = nextProtocol === 'codex-subscription' || nextProtocol === 'claude-subscription'
+    const subscriptionProtocol = nextProtocol === 'codex-subscription'
+      || nextProtocol === 'claude-subscription'
+      || nextProtocol === 'antigravity-subscription'
     if (nextProtocol === 'codex-subscription' && existing.protocol !== 'codex-subscription') {
       throw createError({ statusCode: 400, message: 'Use Connect ChatGPT to add a Codex Subscription provider' })
     }
     if (nextProtocol === 'claude-subscription' && existing.protocol !== 'claude-subscription') {
       throw createError({ statusCode: 400, message: 'Use Connect Claude to add a Claude Subscription provider' })
+    }
+    if (nextProtocol === 'antigravity-subscription' && existing.protocol !== 'antigravity-subscription') {
+      throw createError({ statusCode: 400, message: 'Use Connect Google to add an Antigravity Subscription provider' })
     }
 
     // Validate base_url if it's being changed
@@ -63,6 +68,8 @@ export default defineEventHandler(async (event) => {
         delete nested.id_token
         delete nested.device_id
         delete nested.account_id
+        delete nested.project_id
+        delete nested.account_email
         delete nested.base_url
         delete nested.token_expires_at
       }

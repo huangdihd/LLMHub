@@ -365,6 +365,59 @@
             />
           </section>
 
+          <section v-else-if="form.protocol === 'antigravity-subscription'" class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="font-medium text-gray-900 dark:text-white">Google Antigravity subscription</h4>
+                  <UBadge
+                    v-if="editingProvider && !activeLogin"
+                    :color="editingProvider.connection.authenticated ? 'green' : 'red'"
+                    variant="subtle"
+                    size="sm"
+                  >
+                    {{ editingProvider.connection.authenticated ? 'Connected' : 'Not connected' }}
+                  </UBadge>
+                </div>
+                <p class="mt-1 text-sm leading-5 text-gray-500 dark:text-gray-400">
+                  Sign in with Google. When localhost cannot open, copy the full callback URL from the browser address bar and paste it below.
+                </p>
+              </div>
+              <UButton
+                v-if="activeLogin?.status !== 'pending'"
+                type="button"
+                icon="i-heroicons-arrow-top-right-on-square"
+                :loading="startingLogin"
+                @click="startAntigravityLogin"
+              >
+                {{ antigravityConnectLabel }}
+              </UButton>
+            </div>
+
+            <div v-if="activeLogin?.status === 'pending'" class="mt-5 space-y-4 border-t border-gray-200 dark:border-gray-700 pt-5">
+              <UButton type="button" variant="soft" icon="i-heroicons-arrow-top-right-on-square" @click="openAuthorizationPage">Open Google</UButton>
+              <UFormGroup label="Callback URL" help="Paste the complete http://localhost:8086 callback URL so LLMHub can verify the login state.">
+                <div class="flex flex-col gap-2 sm:flex-row">
+                  <UInput v-model="authorizationCode" class="flex-1" placeholder="http://localhost:8086/?code=…&state=…" autocomplete="off" @keyup.enter="completeAntigravityLogin" />
+                  <UButton type="button" :loading="completingLogin" :disabled="!authorizationCode.trim()" @click="completeAntigravityLogin">Complete connection</UButton>
+                </div>
+              </UFormGroup>
+              <div class="flex items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
+                <span>Waiting for Google callback</span>
+                <span>Expires in {{ loginMinutesRemaining }} min</span>
+              </div>
+            </div>
+
+            <UAlert
+              v-else-if="activeLogin?.status === 'failed'"
+              class="mt-4"
+              color="red"
+              variant="subtle"
+              title="Could not connect Antigravity"
+              :description="activeLogin.error"
+            />
+          </section>
+
           <section v-else class="space-y-4">
             <UFormGroup label="Base URL" required :error="errors.base_url" help="The root URL for this provider's API.">
               <UInput v-model="form.base_url" :placeholder="protocolDefaults[form.protocol].baseUrl" />
@@ -444,7 +497,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
-type Protocol = 'openai' | 'claude' | 'gemini' | 'codex-subscription' | 'claude-subscription'
+type Protocol = 'openai' | 'claude' | 'gemini' | 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription'
 type LoginState = {
   login_id: string
   status: 'pending' | 'completed' | 'failed' | 'cancelled'
@@ -518,6 +571,7 @@ const protocolOptions: { value: Protocol; label: string; description: string; ic
   { value: 'openai', label: 'OpenAI compatible', description: 'OpenAI, DeepSeek, OpenRouter, Ollama, and compatible APIs.', icon: 'i-heroicons-command-line' },
   { value: 'codex-subscription', label: 'ChatGPT subscription', description: 'Use Codex models included with a ChatGPT plan. Sign in with OpenAI.', icon: 'i-heroicons-user-circle' },
   { value: 'claude-subscription', label: 'Claude Code subscription', description: 'Use Claude models included with a Claude plan. Sign in with Anthropic.', icon: 'i-heroicons-user-circle' },
+  { value: 'antigravity-subscription', label: 'Google Antigravity subscription', description: 'Use Gemini and Claude models included with Google Antigravity.', icon: 'i-heroicons-sparkles' },
   { value: 'claude', label: 'Anthropic Claude', description: 'Providers using the Anthropic Messages API.', icon: 'i-heroicons-chat-bubble-left-right' },
   { value: 'gemini', label: 'Google Gemini', description: 'Providers using the Gemini generateContent API.', icon: 'i-heroicons-sparkles' }
 ]
@@ -527,7 +581,8 @@ const protocolDefaults: Record<Protocol, { baseUrl: string; keyPlaceholder: stri
   claude: { baseUrl: 'https://api.anthropic.com', keyPlaceholder: 'sk-ant-…' },
   gemini: { baseUrl: 'https://generativelanguage.googleapis.com', keyPlaceholder: 'Google API key' },
   'codex-subscription': { baseUrl: '', keyPlaceholder: '' },
-  'claude-subscription': { baseUrl: '', keyPlaceholder: '' }
+  'claude-subscription': { baseUrl: '', keyPlaceholder: '' },
+  'antigravity-subscription': { baseUrl: '', keyPlaceholder: '' }
 }
 
 const form = reactive({
@@ -549,6 +604,11 @@ const claudeConnectLabel = computed(() => {
   if (activeLogin.value?.status === 'failed') return 'Try again'
   if (editingProvider.value) return 'Reconnect'
   return 'Connect Claude'
+})
+const antigravityConnectLabel = computed(() => {
+  if (activeLogin.value?.status === 'failed') return 'Try again'
+  if (editingProvider.value) return 'Reconnect'
+  return 'Connect Google'
 })
 const loginMinutesRemaining = computed(() => activeLogin.value
   ? Math.max(0, Math.ceil((activeLogin.value.expires_at - loginNow.value) / 60000))
@@ -740,11 +800,15 @@ function chooseProtocol(protocol: Protocol) {
   } else if (protocol === 'claude-subscription') {
     form.display_name = 'Claude Subscription'
     form.name = 'claude-sub'
+  } else if (protocol === 'antigravity-subscription') {
+    form.display_name = 'Antigravity Subscription'
+    form.name = 'antigravity'
   } else {
     form.display_name = option.label
     form.name = slugify(form.display_name)
   }
   form.base_url = protocolDefaults[protocol].baseUrl
+  form.timeout = protocol === 'antigravity-subscription' ? 120000 : 30000
   nameTouched.value = false
   protocolChosen.value = true
 }
@@ -867,6 +931,53 @@ async function completeClaudeLogin() {
   }
 }
 
+async function startAntigravityLogin() {
+  if (!validateBasics()) return
+  startingLogin.value = true
+  try {
+    const models = form.use_custom_models ? form.custom_models.filter(model => model.id.trim()) : []
+    activeLogin.value = await $fetch<LoginState>('/api/hub/providers/antigravity-login/start' as any, {
+      method: 'POST',
+      body: {
+        name: form.name, display_name: form.display_name, enabled: form.enabled,
+        normalize_cch: form.normalize_cch, timeout: form.timeout,
+        enable_timeout: form.enable_timeout, max_retries: form.max_retries,
+        use_custom_models: form.use_custom_models, models,
+        reconnect: Boolean(editingProvider.value)
+      }
+    })
+    authorizationCode.value = ''
+    loginNow.value = Date.now()
+    openAuthorizationPage()
+  } catch (error: any) {
+    showError(error, 'Unable to start Google login')
+  } finally {
+    startingLogin.value = false
+  }
+}
+
+async function completeAntigravityLogin() {
+  if (!activeLogin.value || !authorizationCode.value.trim()) return
+  completingLogin.value = true
+  try {
+    const status = await $fetch<LoginState>(`/api/hub/providers/antigravity-login/${activeLogin.value.login_id}/complete` as any, {
+      method: 'POST',
+      body: { code: authorizationCode.value.trim() }
+    })
+    activeLogin.value = status
+    if (status.status === 'completed') {
+      toast.add({ title: 'Google connected', description: `${form.display_name} is ready to use.`, color: 'green', icon: 'i-heroicons-check-circle' })
+      isModalOpen.value = false
+      await loadProviders()
+    }
+  } catch (error: any) {
+    if (error?.statusCode === 401) return navigateTo('/login')
+    showError(error, 'Unable to complete Google login')
+  } finally {
+    completingLogin.value = false
+  }
+}
+
 function schedulePoll() {
   stopPolling()
   pollTimer = setTimeout(pollLogin, 1500)
@@ -906,7 +1017,11 @@ async function cancelActiveLogin() {
   const login = activeLogin.value
   activeLogin.value = null
   if (!login) return
-  const loginType = form.protocol === 'claude-subscription' ? 'claude-login' : 'codex-login'
+  const loginType = form.protocol === 'claude-subscription'
+    ? 'claude-login'
+    : form.protocol === 'antigravity-subscription'
+      ? 'antigravity-login'
+      : 'codex-login'
   await $fetch(`/api/hub/providers/${loginType}/${login.login_id}` as any, { method: 'DELETE' }).catch(() => {})
 }
 
@@ -995,11 +1110,15 @@ function clearErrors() {
 }
 
 function isSubscriptionProtocol(protocol: Protocol): boolean {
-  return protocol === 'codex-subscription' || protocol === 'claude-subscription'
+  return protocol === 'codex-subscription'
+    || protocol === 'claude-subscription'
+    || protocol === 'antigravity-subscription'
 }
 
 function subscriptionConnectedLabel(protocol: Protocol): string {
-  return protocol === 'codex-subscription' ? 'ChatGPT connected' : 'Claude connected'
+  if (protocol === 'codex-subscription') return 'ChatGPT connected'
+  if (protocol === 'antigravity-subscription') return 'Google connected'
+  return 'Claude connected'
 }
 
 function protocolLabel(protocol: Protocol): string {

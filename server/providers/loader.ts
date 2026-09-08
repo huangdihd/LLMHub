@@ -5,6 +5,7 @@ import { CODEX_DEFAULT_CLIENT_VERSION, extractChatGptAccountId } from '../utils/
 import { ensureCodexAccessToken } from '../services/codex-token-manager'
 import { ensureClaudeAccessToken } from '../services/claude-token-manager'
 import { CLAUDE_CODE_BETA } from '../utils/claude-auth'
+import { fetchAntigravityModels } from './antigravity'
 
 const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 const MODEL_DISCOVERY_TIMEOUT = 10_000
@@ -69,6 +70,18 @@ export class ProviderLoader {
         return await this.fetchCodexModels(config)
       } else if (config.protocol === 'claude-subscription') {
         return await this.fetchClaudeSubscriptionModels(config)
+      } else if (config.protocol === 'antigravity-subscription') {
+        const fetcher = (url: string | URL | Request, init?: RequestInit) => fetchWithRetry(String(url), {
+          ...init,
+          ...MODEL_DISCOVERY_FETCH_OPTIONS
+        }, config.connection)
+        return (await fetchAntigravityModels(config, fetcher)).map(model => ({
+          id: `${config.name}/${model.id}`,
+          provider: config.name,
+          name: model.id,
+          display_name: model.display_name,
+          capabilities: model.capabilities
+        }))
       }
     } catch (error) {
       console.error(`Failed to fetch models from ${providerName}:`, error)

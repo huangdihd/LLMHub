@@ -186,7 +186,7 @@ export interface ToolCallDelta {
 export interface ProviderConfig {
   name: string
   display_name: string
-  protocol: 'openai' | 'claude' | 'gemini' | 'codex-subscription' | 'claude-subscription'
+  protocol: 'openai' | 'claude' | 'gemini' | 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription'
   enabled: boolean
   use_custom_models: boolean
   normalize_cch?: boolean
@@ -215,6 +215,10 @@ export interface ProviderConfig {
     subscription_type?: string
     /** Non-secret upstream rate-limit tier reported during OAuth. */
     rate_limit_tier?: string
+    /** Google Cloud Code project selected for an Antigravity subscription. */
+    project_id?: string
+    /** Google account email used by Antigravity. Never returned by provider APIs. */
+    account_email?: string
   }
   models: ModelConfig[]
   defaults?: {

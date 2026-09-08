@@ -11,10 +11,10 @@ rm -rf "$BUILD_DIR"
 echo "== compiling adapters (tsc) =="
 npx tsc .nuxt/types/nitro-imports.d.ts \
   server/providers/openai.ts server/providers/claude.ts server/providers/gemini.ts server/providers/codex.ts \
-  server/providers/claude-subscription.ts server/providers/loader.ts \
-  server/services/subscription-usage.ts server/services/thinking-policy.ts server/services/model-token-billing.ts \
-  server/stores/thinking.store.ts server/stores/model-token-ratios.store.ts \
-  server/utils/codex-auth.ts server/utils/claude-auth.ts \
+  server/providers/claude-subscription.ts server/providers/antigravity.ts server/providers/loader.ts \
+  server/services/antigravity-token-manager.ts server/services/subscription-usage.ts server/services/thinking-policy.ts server/services/model-token-billing.ts \
+  server/stores/provider.store.ts server/stores/thinking.store.ts server/stores/model-token-ratios.store.ts \
+  server/utils/codex-auth.ts server/utils/claude-auth.ts server/utils/antigravity-auth.ts \
   server/protocols/gemini-generate.ts server/protocols/gemini-generate-serializer.ts \
   --outDir "$BUILD_DIR" \
   --module commonjs --target es2022 --moduleResolution node \

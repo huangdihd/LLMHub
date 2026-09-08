@@ -5,7 +5,7 @@ import { sanitizeGeminiSchema } from '../utils/sanitize-gemini-schema'
 export class GeminiAdapter implements ProviderAdapter {
   name = 'gemini'
 
-  constructor(private config: ProviderConfig) {}
+  constructor(protected config: ProviderConfig) {}
 
       toProviderRequest(request: LLMRequest): any {
     const contents: any[] = []

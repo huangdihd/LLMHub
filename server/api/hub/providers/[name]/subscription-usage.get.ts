@@ -8,7 +8,9 @@ export default defineEventHandler(async (event) => {
 
     const provider = await getProviderStore().get(name)
     if (!provider) throw createError({ statusCode: 404, message: 'Provider not found' })
-    if (provider.protocol !== 'codex-subscription' && provider.protocol !== 'claude-subscription') {
+    if (provider.protocol !== 'codex-subscription'
+      && provider.protocol !== 'claude-subscription'
+      && provider.protocol !== 'antigravity-subscription') {
       throw createError({ statusCode: 400, message: 'Provider does not use a supported subscription' })
     }
 

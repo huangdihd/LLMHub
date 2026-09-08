@@ -105,9 +105,11 @@ export class ProviderStore {
   }
 
   /** Strip credentials from provider API responses. */
-  sanitize(config: ProviderConfig): Omit<ProviderConfig, 'connection'> & { connection: Omit<ProviderConfig['connection'], 'api_key' | 'refresh_token' | 'id_token' | 'device_id' | 'account_id'> & { authenticated: boolean } } {
+  sanitize(config: ProviderConfig): Omit<ProviderConfig, 'connection'> & { connection: Omit<ProviderConfig['connection'], 'api_key' | 'refresh_token' | 'id_token' | 'device_id' | 'account_id' | 'project_id' | 'account_email'> & { authenticated: boolean } } {
     const { connection, ...rest } = config
-    const authenticated = config.protocol === 'codex-subscription' || config.protocol === 'claude-subscription'
+    const authenticated = config.protocol === 'codex-subscription'
+      || config.protocol === 'claude-subscription'
+      || config.protocol === 'antigravity-subscription'
       ? Boolean(connection.api_key && connection.refresh_token)
       : Boolean(connection.api_key)
     const {
@@ -116,6 +118,8 @@ export class ProviderStore {
       id_token: _idToken,
       device_id: _deviceId,
       account_id: _accountId,
+      project_id: _projectId,
+      account_email: _accountEmail,
       ...safeConnection
     } = connection
     return {
@@ -169,7 +173,9 @@ export class ProviderStore {
           ? { auto_reset_on_quota_exhausted: connection.auto_reset_on_quota_exhausted }
           : {}),
         ...(connection?.subscription_type ? { subscription_type: connection.subscription_type } : {}),
-        ...(connection?.rate_limit_tier ? { rate_limit_tier: connection.rate_limit_tier } : {})
+        ...(connection?.rate_limit_tier ? { rate_limit_tier: connection.rate_limit_tier } : {}),
+        ...(connection?.project_id ? { project_id: connection.project_id } : {}),
+        ...(connection?.account_email ? { account_email: connection.account_email } : {})
       },
       models: models ?? [],
       ...(defaults ? { defaults } : {})

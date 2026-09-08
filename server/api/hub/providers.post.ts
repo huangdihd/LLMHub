@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
     if (body.protocol === 'claude-subscription') {
       throw createError({ statusCode: 400, message: 'Use Connect Claude to add a Claude Subscription provider' })
     }
+    if (body.protocol === 'antigravity-subscription') {
+      throw createError({ statusCode: 400, message: 'Use Connect Google to add an Antigravity Subscription provider' })
+    }
 
     if (body.base_url) {
       const ssrfConfig = await getAuthStore().getSSRFConfig()

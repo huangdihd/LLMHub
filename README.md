@@ -37,7 +37,7 @@ Navigate to **Providers** page to add your LLM providers:
 | Field | Description |
 |-------|-------------|
 | Name | Unique identifier (e.g., `openai`, `deepseek`, `gemini`) |
-| Protocol | `openai`, `codex-subscription`, `claude`, `claude-subscription`, or `gemini` |
+| Protocol | `openai`, `codex-subscription`, `claude`, `claude-subscription`, `antigravity-subscription`, or `gemini` |
 | Base URL | Provider API endpoint (API-key providers) |
 | API Key | Your provider API key (API-key providers) |
 
@@ -52,6 +52,17 @@ Claude**. Complete Anthropic's browser authorization, then paste the displayed
 authorization code into LLMHub. Access and refresh tokens stay on the server and
 are refreshed automatically. This is an unofficial subscription integration;
 availability depends on Anthropic's account eligibility and service terms.
+
+For a Google Antigravity plan, configure `ANTIGRAVITY_OAUTH_CLIENT_ID` and
+`ANTIGRAVITY_OAUTH_CLIENT_SECRET` in the server environment, then choose
+**Google Antigravity subscription** and select **Connect Google**. After Google
+redirects to `http://localhost:8086`,
+copy the complete callback URL from the browser address bar into LLMHub (the
+localhost page itself does not need to load). LLMHub discovers the associated
+Cloud Code project, keeps OAuth credentials server-side, refreshes access tokens,
+and loads the account's available models and model quotas. Antigravity uses an
+undocumented Google internal API, so Google may change or withdraw it without
+notice; use it only where your account and applicable terms permit.
 
 Connected subscription providers have a **Details** panel that reads the
 providers' subscription-usage endpoints and displays available plan metadata,
@@ -190,6 +201,7 @@ LLMHub/
 │   │   ├── codex.ts          #     ChatGPT subscription Codex adapter
 │   │   ├── claude.ts         #     Claude API-key adapter
 │   │   ├── claude-subscription.ts # Claude Code subscription adapter
+│   │   ├── antigravity.ts    #     Google Antigravity subscription adapter
 │   │   └── gemini.ts         #     Gemini adapter
 │   ├── stores/               #   Data persistence
 │   │   ├── auth.store.ts     #     Keys, sessions, brute-force

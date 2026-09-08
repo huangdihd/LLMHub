@@ -225,4 +225,36 @@ await test('Claude usage request uses official OAuth endpoint and persisted plan
   assert.equal(usage.windows[0].used_percent, 10)
 })
 
+await test('Antigravity model quotas become subscription usage windows', async () => {
+  let captured: any
+  const config = {
+    name: 'antigravity-usage-request',
+    protocol: 'antigravity-subscription',
+    connection: {
+      base_url: 'https://daily-cloudcode-pa.googleapis.com',
+      api_key: 'access',
+      refresh_token: 'refresh',
+      token_expires_at: Date.now() + 3600000,
+      project_id: 'project-123',
+      subscription_type: 'Google AI Pro'
+    },
+    models: []
+  }
+  const usage = await getSubscriptionUsage(config, true, async (url: string, init: RequestInit) => {
+    captured = { url, headers: init.headers as Record<string, string>, body: JSON.parse(String(init.body)) }
+    return Response.json({
+      models: {
+        'gemini-3-flash': { quotaInfo: { remainingFraction: 0.75, resetTime: '2030-01-01T00:00:00Z' } }
+      }
+    })
+  })
+  assert.match(captured.url, /v1internal:fetchAvailableModels$/)
+  assert.equal(captured.headers.Authorization, 'Bearer access')
+  assert.deepEqual(captured.body, { project: 'project-123' })
+  assert.equal(usage.protocol, 'antigravity-subscription')
+  assert.equal(usage.plan, 'Google AI Pro')
+  assert.equal(usage.windows[0].used_percent, 25)
+  assert.equal(usage.windows[0].reset_at, '2030-01-01T00:00:00.000Z')
+})
+
 console.log(`\n${passed} subscription usage test groups passed${process.exitCode ? ', with FAILURES' : ''}`)

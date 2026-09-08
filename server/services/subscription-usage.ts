@@ -3,6 +3,7 @@ import { ensureClaudeAccessToken } from './claude-token-manager'
 import { ensureCodexAccessToken } from './codex-token-manager'
 import { extractChatGptAccountId, extractChatGptPlanType } from '../utils/codex-auth'
 import { CLAUDE_CODE_BETA } from '../utils/claude-auth'
+import { fetchAntigravityQuota } from '../providers/antigravity'
 
 const CACHE_TTL_MS = 60 * 1000
 const CODEX_API_BASE_URL = 'https://chatgpt.com/backend-api/wham'
@@ -30,7 +31,7 @@ export interface SubscriptionResetCredit {
 
 export interface SubscriptionUsage {
   provider: string
-  protocol: 'codex-subscription' | 'claude-subscription'
+  protocol: 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription'
   plan?: string
   windows: SubscriptionUsageWindow[]
   credits?: {
@@ -52,7 +53,9 @@ export async function getSubscriptionUsage(
   force = false,
   fetcher: typeof fetch = fetch
 ): Promise<SubscriptionUsage> {
-  if (config.protocol !== 'codex-subscription' && config.protocol !== 'claude-subscription') {
+  if (config.protocol !== 'codex-subscription'
+    && config.protocol !== 'claude-subscription'
+    && config.protocol !== 'antigravity-subscription') {
     throw usageError('Subscription usage is only available for subscription providers', 400)
   }
 
@@ -61,7 +64,9 @@ export async function getSubscriptionUsage(
 
   const value = config.protocol === 'codex-subscription'
     ? await fetchCodexUsage(config, fetcher)
-    : await fetchClaudeUsage(config, fetcher)
+    : config.protocol === 'antigravity-subscription'
+      ? await fetchAntigravityUsage(config, fetcher)
+      : await fetchClaudeUsage(config, fetcher)
   cache.set(config.name, { expiresAt: Date.now() + CACHE_TTL_MS, value })
   return value
 }
@@ -232,6 +237,29 @@ async function fetchCodexUsage(config: ProviderConfig, fetcher: typeof fetch): P
   const plan = extractChatGptPlanType(active.connection.id_token)
     || extractChatGptPlanType(active.connection.api_key)
   return normalizeCodexUsage(config.name, data, plan, resetCreditDetails)
+}
+
+async function fetchAntigravityUsage(config: ProviderConfig, fetcher: typeof fetch): Promise<SubscriptionUsage> {
+  const data = await fetchAntigravityQuota(config, fetcher)
+  const windows: SubscriptionUsageWindow[] = []
+  for (const [model, details] of Object.entries<any>(data?.models || {})) {
+    const quota = details?.quotaInfo || details?.quota_info
+    const remaining = Number(quota?.remainingFraction ?? quota?.remaining_fraction)
+    if (!Number.isFinite(remaining)) continue
+    windows.push({
+      id: model,
+      label: model,
+      used_percent: percent((1 - remaining) * 100),
+      ...optionalReset(quota?.resetTime || quota?.reset_time)
+    })
+  }
+  return {
+    provider: config.name,
+    protocol: 'antigravity-subscription',
+    ...optionalPlan(config.connection.subscription_type),
+    windows,
+    fetched_at: new Date().toISOString()
+  }
 }
 
 async function fetchClaudeUsage(config: ProviderConfig, fetcher: typeof fetch): Promise<SubscriptionUsage> {

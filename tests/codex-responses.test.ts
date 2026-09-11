@@ -223,6 +223,71 @@ await test('sync call sends Codex auth headers and collects terminal SSE respons
   }
 })
 
+await test('stream setup rejects with the upstream HTTP status and error body before returning a stream', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async () => Response.json({
+    error: {
+      message: 'Your authentication token is invalid',
+      type: 'invalid_request_error',
+      code: 'invalid_api_key'
+    }
+  }, { status: 401 })) as any
+
+  try {
+    const adapter = new CodexAdapter(config)
+    await assert.rejects(
+      adapter.callStream({ model: 'gpt-5.3-codex', input: [] }),
+      (error: any) => {
+        assert.equal(error._providerError, true)
+        assert.equal(error._statusCode, 401)
+        assert.equal(error._source, config.name)
+        assert.deepEqual(error._errorBody, {
+          error: {
+            message: 'Your authentication token is invalid',
+            type: 'invalid_request_error',
+            code: 'invalid_api_key'
+          }
+        })
+        return true
+      }
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('stream surfaces upstream response.failed events with their error details', async () => {
+  const originalFetch = globalThis.fetch
+  const upstreamError = {
+    code: 'rate_limit_exceeded',
+    message: 'You have no weighted tokens left'
+  }
+  const failedEvent = {
+    type: 'response.failed',
+    response: { id: 'resp_failed', status: 'failed', error: upstreamError }
+  }
+  globalThis.fetch = (async () => new Response(
+    `data: ${JSON.stringify(failedEvent)}\n\n`,
+    { status: 200, headers: { 'content-type': 'text/event-stream' } }
+  )) as any
+
+  try {
+    const adapter = new CodexAdapter(config)
+    const stream = await adapter.callStream({ model: 'gpt-5.3-codex', input: [] })
+    const reader = stream.getReader()
+    await assert.rejects(reader.read(), (error: any) => {
+      assert.equal(error._providerError, true)
+      assert.equal(error._statusCode, 502)
+      assert.equal(error._source, config.name)
+      assert.deepEqual(error._errorBody, upstreamError)
+      assert.equal(error.message, upstreamError.message)
+      return true
+    })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 await test('quota rejection automatically consumes one banked reset and retries a sync request once', async () => {
   const originalFetch = globalThis.fetch
   const urls: string[] = []
@@ -283,7 +348,7 @@ await test('quota rejection automatically consumes one banked reset and retries 
       ...config,
       connection: { ...config.connection, auto_reset_on_quota_exhausted: true }
     })
-    const reader = adapter.callStream({ model: 'gpt-5.3-codex', input: [] }).getReader()
+    const reader = (await adapter.callStream({ model: 'gpt-5.3-codex', input: [] })).getReader()
     let output = ''
     while (true) {
       const { done, value } = await reader.read()

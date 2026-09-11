@@ -272,7 +272,7 @@ export interface ProviderAdapter {
   name: string
   toProviderRequest(request: LLMRequest): any
   call(request: any): Promise<any>
-  callStream(request: any): ReadableStream
+  callStream(request: any): ReadableStream | Promise<ReadableStream>
   fromProviderResponse(response: any): LLMResponse
   fromProviderStreamChunk(chunk: any, state?: any): LLMStreamChunk | LLMStreamChunk[]
   embed(request: EmbeddingRequest): Promise<EmbeddingResponse>

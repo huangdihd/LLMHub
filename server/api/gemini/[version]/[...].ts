@@ -130,6 +130,7 @@ export default defineEventHandler(async (event) => {
 
     const adapter = resolved.adapter
     const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
+    const stream = await adapter.callStream(providerRequest)
 
     let keepAliveTimer: any = null
     const collected: any[] = []
@@ -155,7 +156,6 @@ export default defineEventHandler(async (event) => {
 
     try {
       const serializer = manager.getSerializer('gemini-generate')
-      const stream = adapter.callStream(providerRequest)
       const reader = stream.getReader()
       const decoder = new TextDecoder()
       let lineBuffer = ''

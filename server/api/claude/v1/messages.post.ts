@@ -44,6 +44,7 @@ export default defineEventHandler(async (event) => {
 
     if (request.stream && adapter) {
       const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
+      const stream = await adapter.callStream(providerRequest)
 
       try {
         setResponseHeaders(event, {
@@ -84,7 +85,6 @@ export default defineEventHandler(async (event) => {
           }
         }, 15000)
 
-        const stream = adapter.callStream(providerRequest)
         const reader = stream.getReader()
         const decoder = new TextDecoder()
 
@@ -323,6 +323,7 @@ export default defineEventHandler(async (event) => {
     trackUsage(event, u || 0, request.model)
     return serializer.serializeResponse(response)
   } catch (error: any) {
+    if (error?._providerError) throwFormattedError(error)
     throw createError({ statusCode: 400, message: error.message })
   }
 })

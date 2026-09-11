@@ -195,25 +195,43 @@ export class CodexAdapter implements ProviderAdapter {
     return terminal
   }
 
-  callStream(request: any): ReadableStream {
+  async callStream(request: any): Promise<ReadableStream> {
     const adapter = this
     const config = this.config
     const url = this.responsesUrl()
     const encoder = new TextEncoder()
     const decoder = new TextDecoder()
+    const abortController = new AbortController()
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    if (config.connection.enable_timeout) {
+      timeoutId = setTimeout(
+        () => abortController.abort(),
+        config.connection.timeout || 30000
+      )
+    }
+
+    const requestBody = JSON.stringify({ ...request, stream: true, store: false })
+    const sendRequest = async () => fetch(url, {
+      method: 'POST',
+      headers: await adapter.headers(),
+      body: requestBody,
+      signal: abortController.signal
+    })
+
+    let response: Response
+    try {
+      response = await sendRequest()
+      if (response.status === 429 && await adapter.tryAutomaticReset()) {
+        response = await sendRequest()
+      }
+      if (!response.ok) throw await adapter.providerError(response)
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
 
     return new ReadableStream({
       start(controller) {
         ;(async () => {
-          const abortController = new AbortController()
-          let timeoutId: ReturnType<typeof setTimeout> | undefined
-          if (config.connection.enable_timeout) {
-            timeoutId = setTimeout(
-              () => abortController.abort(),
-              config.connection.timeout || 30000
-            )
-          }
-
           let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
           let closed = false
           const close = () => {
@@ -226,32 +244,21 @@ export class CodexAdapter implements ProviderAdapter {
             closed = true
             try { controller.error(error) } catch {}
           }
+          const enqueueLine = (line: string) => {
+            const trimmed = line.trim()
+            if (!trimmed.startsWith('data:')) return
+            const data = trimmed.slice(5).trim()
+            if (data && data !== '[DONE]') {
+              let event: any
+              try { event = JSON.parse(data) } catch {}
+              if (event?.type === 'response.failed' || event?.type === 'error') {
+                throw adapter.eventError(event)
+              }
+            }
+            controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+          }
 
           try {
-            const requestBody = JSON.stringify({ ...request, stream: true, store: false })
-            const sendRequest = async () => fetch(url, {
-              method: 'POST',
-              headers: await adapter.headers(),
-              body: requestBody,
-              signal: abortController.signal
-            })
-            let response = await sendRequest()
-            if (response.status === 429 && await adapter.tryAutomaticReset()) {
-              response = await sendRequest()
-            }
-            if (timeoutId) clearTimeout(timeoutId)
-            if (!response.ok) {
-              const text = await response.text().catch(() => '')
-              let errorBody: any
-              try { errorBody = JSON.parse(text) } catch { errorBody = { message: text || response.statusText } }
-              const error: any = new Error(JSON.stringify(errorBody))
-              error._providerError = true
-              error._statusCode = response.status
-              error._errorBody = errorBody
-              error._source = config.name
-              throw error
-            }
-
             reader = response.body?.getReader()
             if (!reader) throw new Error('Codex response has no body')
             let buffer = ''
@@ -261,19 +268,12 @@ export class CodexAdapter implements ProviderAdapter {
               buffer += decoder.decode(value, { stream: true })
               const lines = buffer.split(/\r?\n/)
               buffer = lines.pop() || ''
-              for (const line of lines) {
-                const trimmed = line.trim()
-                if (!trimmed.startsWith('data:')) continue
-                controller.enqueue(encoder.encode(`data: ${trimmed.slice(5).trim()}\n\n`))
-              }
+              for (const line of lines) enqueueLine(line)
             }
-            if (buffer.trim().startsWith('data:')) {
-              controller.enqueue(encoder.encode(`data: ${buffer.trim().slice(5).trim()}\n\n`))
-            }
+            if (buffer.trim()) enqueueLine(buffer)
           } catch (error) {
             fail(error)
           } finally {
-            if (timeoutId) clearTimeout(timeoutId)
             if (reader) reader.cancel().catch(() => {})
             close()
           }

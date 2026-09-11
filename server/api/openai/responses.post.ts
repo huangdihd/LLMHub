@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
 
     if (request.stream && adapter) {
       const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
+      const stream = await adapter.callStream(providerRequest)
 
       setResponseHeaders(event, {
         'Content-Type': 'text/event-stream',
@@ -50,7 +51,6 @@ export default defineEventHandler(async (event) => {
       writeEvents(serializer.startEvents())
 
       try {
-        const stream = adapter.callStream(providerRequest)
         const reader = stream.getReader()
         const decoder = new TextDecoder()
 

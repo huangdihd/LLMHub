@@ -88,6 +88,28 @@ test('reasoning and following assistant message stay in one assistant turn', () 
   ])
 })
 
+test('function call after assistant text remains in the same reasoning turn', () => {
+  const req = new OpenAIResponsesParser().parseRequest({
+    input: [
+      { role: 'user', content: 'update the file' },
+      { type: 'reasoning', summary: [{ type: 'summary_text', text: 'I should edit it.' }] },
+      { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Now the edit:' }] },
+      { type: 'function_call', call_id: 'call_1', name: 'edit_file', arguments: '{"path":"README.md"}' },
+      { type: 'function_call_output', call_id: 'call_1', output: 'edited' }
+    ]
+  })
+
+  assert.equal(req.messages.length, 3)
+  const assistant = req.messages[1]
+  assert.deepEqual(assistant.content, [
+    { type: 'thinking', thinking: 'I should edit it.' },
+    { type: 'text', text: 'Now the edit:' }
+  ])
+  assert.deepEqual(assistant.meta.toolCalls, [
+    { id: 'call_1', name: 'edit_file', input: { path: 'README.md' } }
+  ])
+})
+
 test('input_image with string image_url (Responses format)', () => {
   const req = new OpenAIResponsesParser().parseRequest({
     input: [{

@@ -28,7 +28,7 @@ export class OpenAIResponsesParser implements ProtocolParser {
       }
       if (call.id && call.name) toolNameById[call.id] = call.name
       const last = parsedMessages[parsedMessages.length - 1]
-      if (last?.role === 'assistant' && (last.meta?.toolCalls || isReasoningOnlyAssistant(last))) {
+      if (last?.role === 'assistant') {
         last.meta ||= {}
         last.meta.toolCalls ||= []
         last.meta.toolCalls.push(call)

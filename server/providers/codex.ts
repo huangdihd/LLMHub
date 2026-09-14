@@ -251,7 +251,11 @@ export class CodexAdapter implements ProviderAdapter {
             if (data && data !== '[DONE]') {
               let event: any
               try { event = JSON.parse(data) } catch {}
-              if (event?.type === 'response.failed' || event?.type === 'error') {
+              if (
+                event?.type === 'response.failed' ||
+                event?.type === 'error' ||
+                event?.code === 'rate_limit_exceeded'
+              ) {
                 throw adapter.eventError(event)
               }
             }

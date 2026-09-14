@@ -288,6 +288,28 @@ await test('stream surfaces upstream response.failed events with their error det
   }
 })
 
+await test('stream detects rate-limit errors without an explicit event type', async () => {
+  const originalFetch = globalThis.fetch
+  const upstreamError = { code: 'rate_limit_exceeded', message: 'rate limit reached' }
+  globalThis.fetch = (async () => new Response(
+    `event: error\ndata: ${JSON.stringify(upstreamError)}\n\n`,
+    { status: 200, headers: { 'content-type': 'text/event-stream' } }
+  )) as any
+
+  try {
+    const adapter = new CodexAdapter(config)
+    const reader = (await adapter.callStream({ model: 'gpt-5.3-codex', input: [] })).getReader()
+    await assert.rejects(reader.read(), (error: any) => {
+      assert.equal(error._errorBody.code, upstreamError.code)
+      assert.equal(error._errorBody.message, upstreamError.message)
+      assert.equal(error.message, upstreamError.message)
+      return true
+    })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 await test('quota rejection automatically consumes one banked reset and retries a sync request once', async () => {
   const originalFetch = globalThis.fetch
   const urls: string[] = []

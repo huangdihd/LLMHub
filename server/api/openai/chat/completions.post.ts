@@ -48,18 +48,31 @@ export default defineEventHandler(async (event) => {
         let nextToolIndex = 0
         let providerState = {}
         let doneSent = false
+        let doneMarkerSent = false
+        let pendingDone: any = null
         let hasContentOrToolCall = false
+
+        const emitDone = (chunk: any) => {
+          if (doneSent) return
+          doneSent = true
+          const u = chunk.usage
+          if (u) trackUsage(event, u, request.model)
+          const serializedChunk = serializer!.serializeStreamChunk(chunk)
+          event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
+        }
+
+        const emitDoneMarker = () => {
+          if (doneMarkerSent) return
+          doneMarkerSent = true
+          event.node.res.write('data: [DONE]\n\n')
+        }
 
         const processLine = (line: string) => {
           if (!line.startsWith('data: ')) return
           const data = line.slice(6).trim()
           if (data === '[DONE]') {
-            if (!doneSent) {
-              doneSent = true
-              const doneChunk = serializer!.serializeStreamChunk({ type: 'done' })
-              event.node.res.write(`data: ${JSON.stringify(doneChunk)}\n\n`)
-            }
-            event.node.res.write('data: [DONE]\n\n')
+            emitDone(pendingDone || { type: 'done' })
+            emitDoneMarker()
             return
           }
           if (!data) return
@@ -87,18 +100,18 @@ export default defineEventHandler(async (event) => {
                   event.node.res.write(`data: ${JSON.stringify(stub)}\n\n`)
                 }
                 if (doneSent) {
-                  // Provider may split usage into a separate chunk — still capture
                   const u = (unifiedChunk as any).usage
                   if (u) trackUsage(event, u, request.model)
-                  return
+                  continue
                 }
-                doneSent = true
-                // Track token usage from the final chunk
-                const u = (unifiedChunk as any).usage
-                if (u) trackUsage(event, u, request.model)
-                const serializedChunk = serializer!.serializeStreamChunk(unifiedChunk)
-                event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
-                event.node.res.write('data: [DONE]\n\n')
+                if (!unifiedChunk.usage) {
+                  // OpenAI-compatible providers may send finish_reason first and
+                  // usage in a later choices: [] chunk. Hold completion until then.
+                  pendingDone = unifiedChunk
+                  continue
+                }
+                emitDone({ ...pendingDone, ...unifiedChunk })
+                pendingDone = null
               } else if (unifiedChunk.type !== 'content' || unifiedChunk.delta) {
                 if (unifiedChunk.type === 'content' || unifiedChunk.type === 'tool_call') {
                   hasContentOrToolCall = true
@@ -123,6 +136,8 @@ export default defineEventHandler(async (event) => {
           }
         }
         if (lineBuffer.trim()) processLine(lineBuffer.trim())
+        emitDone(pendingDone || { type: 'done' })
+        emitDoneMarker()
       } catch (streamError: any) {
         const resp = formatErrorResponse(streamError)
         event.node.res.write(`data: ${JSON.stringify(resp)}\n\n`)

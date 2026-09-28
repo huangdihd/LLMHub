@@ -128,6 +128,36 @@ await test('responses: event sequence, assembled text, usage', async () => {
   assert.ok(completedResponse.usage.input_tokens > 0)
 })
 
+await test('responses: usage arriving after finish_reason reaches the completed event', async () => {
+  const stream = await openai.responses.create({ model: '_e2e-openai/split-usage', input: 'hi', stream: true })
+  let completedResponse = null
+  for await (const ev of stream) {
+    if (ev.type === 'response.completed') completedResponse = ev.response
+  }
+  assert.ok(completedResponse)
+  assert.ok(completedResponse.usage.input_tokens > 0)
+  assert.ok(completedResponse.usage.output_tokens > 0)
+})
+
+await test('chat: usage arriving after finish_reason reaches the final chunk', async () => {
+  const stream = await openai.chat.completions.create({
+    model: '_e2e-openai/split-usage',
+    messages: [{ role: 'user', content: 'hi' }],
+    stream: true,
+    stream_options: { include_usage: true }
+  })
+  let finishReason = null
+  let usage = null
+  for await (const chunk of stream) {
+    if (chunk.choices[0]?.finish_reason) finishReason = chunk.choices[0].finish_reason
+    if (chunk.usage) usage = chunk.usage
+  }
+  assert.equal(finishReason, 'stop')
+  assert.ok(usage)
+  assert.ok(usage.prompt_tokens > 0)
+  assert.ok(usage.completion_tokens > 0)
+})
+
 await test('chat: one id across chunks, tool fragments reassemble', async () => {
   const stream = await openai.chat.completions.create({
     model: '_e2e-openai/tool-call', messages: [{ role: 'user', content: 'weather?' }], stream: true,

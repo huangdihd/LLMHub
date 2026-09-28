@@ -138,6 +138,32 @@ const server = http.createServer((req, res) => {
         return serveStream(res, chunks)
       }
 
+      // OpenAI-compatible providers may put finish_reason and usage in separate
+      // chunks. Reproduce that shape from the regular OpenAI text recording.
+      if (protocol === 'openai' && scenario === 'split-usage' && kind === 'stream') {
+        const rec = loadRecording('openai', 'text', 'stream')
+        if (!rec) return notFound(res, 'base recording missing for split-usage')
+        let usage
+        const chunks = []
+        for (const rawChunk of rec.raw_chunks) {
+          const match = rawChunk.match(/^data: (\{.*\})\n\n?$/s)
+          if (!match) {
+            if (rawChunk.includes('data: [DONE]') && usage) {
+              chunks.push(`data: ${JSON.stringify({ choices: [], usage })}\n\n`)
+            }
+            chunks.push(rawChunk)
+            continue
+          }
+          const event = JSON.parse(match[1])
+          if (event.choices?.some(c => c.finish_reason) && event.usage) {
+            usage = event.usage
+            event.usage = null
+          }
+          chunks.push(`data: ${JSON.stringify(event)}\n\n`)
+        }
+        return serveStream(res, chunks)
+      }
+
       const rec = loadRecording(protocol, scenario, kind)
       if (!rec) return notFound(res, `no recording: ${protocol}/${scenario}-${kind}`)
 

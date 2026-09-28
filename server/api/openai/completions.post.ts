@@ -44,17 +44,30 @@ export default defineEventHandler(async (event) => {
         let lineBuffer = ''
         let providerState = {}
         let doneSent = false
+        let doneMarkerSent = false
+        let pendingDone: any = null
+
+        const emitDone = (chunk: any) => {
+          if (doneSent) return
+          doneSent = true
+          const u = chunk.usage
+          if (u) trackUsage(event, u, request.model)
+          const serializedChunk = serializer!.serializeStreamChunk(chunk)
+          event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
+        }
+
+        const emitDoneMarker = () => {
+          if (doneMarkerSent) return
+          doneMarkerSent = true
+          event.node.res.write('data: [DONE]\n\n')
+        }
 
         const processLine = (line: string) => {
           if (!line.startsWith('data: ')) return
           const data = line.slice(6).trim()
           if (data === '[DONE]') {
-            if (!doneSent) {
-              doneSent = true
-              const doneChunk = serializer!.serializeStreamChunk({ type: 'done' })
-              event.node.res.write(`data: ${JSON.stringify(doneChunk)}\n\n`)
-            }
-            event.node.res.write('data: [DONE]\n\n')
+            emitDone(pendingDone || { type: 'done' })
+            emitDoneMarker()
             return
           }
           if (!data) return
@@ -65,13 +78,18 @@ export default defineEventHandler(async (event) => {
 
             for (const unifiedChunk of unifiedChunks) {
               if (unifiedChunk.type === 'done') {
-                const u = unifiedChunk.usage
-                if (u) trackUsage(event, u, request.model)
-                if (doneSent) continue
-                doneSent = true
-                const serializedChunk = serializer!.serializeStreamChunk(unifiedChunk)
-                event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
-                event.node.res.write('data: [DONE]\n\n')
+                if (doneSent) {
+                  if (unifiedChunk.usage) trackUsage(event, unifiedChunk.usage, request.model)
+                  continue
+                }
+                if (!unifiedChunk.usage) {
+                  // OpenAI-compatible providers may send finish_reason first and
+                  // usage in a later choices: [] chunk. Hold completion until then.
+                  pendingDone = unifiedChunk
+                  continue
+                }
+                emitDone({ ...pendingDone, ...unifiedChunk })
+                pendingDone = null
               } else if (unifiedChunk.type === 'content' && unifiedChunk.delta) {
                 const serializedChunk = serializer!.serializeStreamChunk(unifiedChunk)
                 event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
@@ -95,12 +113,8 @@ export default defineEventHandler(async (event) => {
         }
         if (lineBuffer.trim()) processLine(lineBuffer.trim())
 
-        if (!doneSent) {
-          doneSent = true
-          const doneChunk = serializer!.serializeStreamChunk({ type: 'done' })
-          event.node.res.write(`data: ${JSON.stringify(doneChunk)}\n\n`)
-          event.node.res.write('data: [DONE]\n\n')
-        }
+        emitDone(pendingDone || { type: 'done' })
+        emitDoneMarker()
       } catch (streamError: any) {
         const resp = formatErrorResponse(streamError)
         event.node.res.write(`data: ${JSON.stringify(resp)}\n\n`)

@@ -43,6 +43,7 @@ npx vue-tsc --noEmit # project type-check
 - Add protocol-independent behavior to the unified request/response types instead of coupling ingress routes directly to an upstream format.
 - A new upstream protocol normally requires a provider adapter, registration in `ProviderManager`, model loading in `ProviderLoader`, persisted and sanitized config support, dashboard support, and tests.
 - Preserve streaming and non-streaming behavior across compatible ingress protocols. Tool calls, thinking blocks, finish reasons, and usage are normalized before serialization.
+- OpenAI, Claude, and Gemini adapters use the full provider connection timeout for each upstream stream read, independently of the response-header timeout. Each read resets the idle deadline; disabling timeouts disables both timers.
 - Stored provider names are immutable and become the prefix in public model IDs.
 - Provider model results are cached in memory for five minutes. Expired entries are returned stale while one background refresh runs; configuration changes invalidate the cache so the next request waits for fresh data. Upstream model discovery uses a fixed 10-second timeout with one retry.
 - Subscription refresh tokens, access tokens, account identifiers, and installation/device identifiers are server-side secrets and must never be returned by hub APIs. Subscription plan/quota details are fetched server-side, normalized, and cached briefly; upstreams may omit plan metadata.

@@ -345,7 +345,7 @@ export class OpenAIAdapter implements ProviderAdapter {
             reader = response.body?.getReader()
             if (!reader) throw new Error('No response body')
 
-            const READ_TIMEOUT_MS = config.connection.enable_timeout ? (config.connection.timeout || 30000) / 2 : 0
+            const READ_TIMEOUT_MS = config.connection.enable_timeout ? (config.connection.timeout || 30000) : 0
             const readWithTimeout = async (r: ReadableStreamDefaultReader): Promise<ReadableStreamReadResult<any>> => {
               let idleTimeoutId: any
               const timeoutPromise = new Promise<never>((_, rej) => {

@@ -1,6 +1,16 @@
 import type { Content, ContentBlock, LLMRequest, LLMResponse, LLMStreamChunk, ProviderConfig, ToolCall } from '../core/types'
 import { toResponsesFormat } from '../utils/structured-output'
 
+// Lifecycle and full-text mirrors are deliberately ignored after their deltas.
+const ignoredResponseEvents = new Set([
+  'response.created', 'response.in_progress', 'response.queued',
+  'response.output_item.added', 'response.output_item.done',
+  'response.content_part.added', 'response.content_part.done',
+  'response.output_text.done', 'response.refusal.done',
+  'response.reasoning_summary_part.added', 'response.reasoning_summary_part.done',
+  'response.reasoning_summary_text.done', 'response.function_call_arguments.done'
+])
+
 /** Shared wire mapping only: no authentication or transport policy. */
 export class ResponsesCodec {
   constructor(protected config: ProviderConfig) {}
@@ -134,7 +144,11 @@ export class ResponsesCodec {
     for (const item of response.output || []) {
       if (item.type === 'reasoning') {
         const summary = (item.summary || []).map((part: any) => part.text || '').join('')
-        if (summary) content.push({ type: 'thinking', thinking: summary })
+        if (summary) content.push({ type: 'thinking', thinking: summary, reasoningKind: 'summary' })
+        const raw = (item.content || [])
+          .filter((part: any) => part.type === 'reasoning_text')
+          .map((part: any) => part.text || '').join('')
+        if (raw) content.push({ type: 'thinking', thinking: raw, reasoningKind: 'raw' })
         if (item.encrypted_content) {
           content.push({ type: 'redacted_thinking', signature: item.encrypted_content, data: item.encrypted_content, reasoningProvider: 'openai' })
         }
@@ -168,7 +182,19 @@ export class ResponsesCodec {
       return { type: 'content', delta: chunk.delta || '', ...(chunk.logprobs?.length ? { logprobs: chunk.logprobs } : {}) }
     }
     if (chunk.type === 'response.reasoning_summary_text.delta') {
-      return { type: 'thinking', delta: chunk.delta || '' }
+      return { type: 'thinking', delta: chunk.delta || '', reasoningKind: 'summary' }
+    }
+    if (chunk.type === 'response.reasoning_text.delta' || chunk.type === 'response.reasoning_text.done') {
+      state.rawReasoningParts ||= new Set<string>()
+      const key = JSON.stringify([chunk.item_id ?? chunk.output_index, chunk.content_index ?? 0])
+      if (chunk.type === 'response.reasoning_text.delta') {
+        if (chunk.delta) state.rawReasoningParts.add(key)
+        return { type: 'thinking', delta: chunk.delta || '', reasoningKind: 'raw' }
+      }
+      // Done carries the whole part, not another delta. Also tolerate done-only streams.
+      if (state.rawReasoningParts.has(key)) return { type: 'content', delta: '' }
+      state.rawReasoningParts.add(key)
+      return { type: 'thinking', delta: chunk.text || '', reasoningKind: 'raw' }
     }
     if (chunk.type === 'response.output_item.done' && chunk.item?.type === 'reasoning' && chunk.item.encrypted_content) {
       return { type: 'thinking', encryptedContent: chunk.item.encrypted_content }
@@ -217,6 +243,13 @@ export class ResponsesCodec {
     }
     if (chunk.type === 'response.failed' || chunk.type === 'error') {
       return { type: 'done', finishReason: 'error' }
+    }
+    if (!ignoredResponseEvents.has(chunk.type)) {
+      state.unknownEventTypes ||= new Set<string>()
+      if (!state.unknownEventTypes.has(chunk.type)) {
+        state.unknownEventTypes.add(chunk.type)
+        console.warn(`[LLMHub] Responses provider ${this.config.name}: unknown event type ${String(chunk.type)}`)
+      }
     }
     return { type: 'content', delta: '' }
   }

@@ -21,6 +21,8 @@ export interface ContentBlock {
   type: 'text' | 'image' | 'tool_use' | 'tool_result' | 'thinking' | 'redacted_thinking'
   text?: string
   thinking?: string
+  /** Visible reasoning channel; absent preserves legacy summary serialization. */
+  reasoningKind?: 'raw' | 'summary'
   /** Anthropic signature for a visible thinking block. */
   signature?: string
   /** Anthropic redacted-thinking payload or OpenAI/Codex encrypted reasoning state. */
@@ -167,6 +169,8 @@ export interface EmbeddingResponse {
 export interface LLMStreamChunk {
   type: 'content' | 'thinking' | 'opaque_reasoning' | 'tool_call' | 'done' | 'error'
   delta?: string
+  /** Visible reasoning channel; independent of opaque/encrypted reasoning state. */
+  reasoningKind?: 'raw' | 'summary'
   toolCall?: ToolCallDelta
   finishReason?: string
   usage?: Usage

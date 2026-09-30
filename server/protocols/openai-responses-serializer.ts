@@ -78,6 +78,7 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     const output: any[] = []
     let text = ''
     let thinking = ''
+    let rawThinking = ''
     let encryptedThinking = ''
 
     if (typeof response.content === 'string') {
@@ -85,16 +86,20 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     } else {
       for (const block of response.content) {
         if (block.type === 'text') text += block.text || ''
-        else if (block.type === 'thinking') thinking += block.thinking || ''
+        else if (block.type === 'thinking') {
+          if (block.reasoningKind === 'raw') rawThinking += block.thinking || ''
+          else thinking += block.thinking || ''
+        }
         else if (block.type === 'redacted_thinking' && block.reasoningProvider === 'openai') encryptedThinking = block.data || ''
       }
     }
 
-    if (thinking || encryptedThinking) {
+    if (thinking || rawThinking || encryptedThinking) {
       output.push({
         type: 'reasoning',
         id: this.nextId('rs'),
         summary: thinking ? [{ type: 'summary_text', text: thinking }] : [],
+        ...(rawThinking ? { content: [{ type: 'reasoning_text', text: rawThinking }] } : {}),
         ...(encryptedThinking ? { encrypted_content: encryptedThinking } : {})
       })
     }
@@ -193,14 +198,19 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     }
 
     if (chunk.type === 'thinking') {
-      const events = this.ensureItem('reasoning')
+      // Opaque-only updates belong to the active reasoning item, not a new channel.
+      const reasoningKind = chunk.reasoningKind ?? (
+        !chunk.delta && this.currentItem?.type === 'reasoning' ? this.currentItem.reasoningKind : 'summary'
+      )
+      const raw = reasoningKind === 'raw'
+      const events = this.ensureItem('reasoning', reasoningKind)
       this.currentItem.text += chunk.delta || ''
       if (chunk.encryptedContent) this.currentItem.encryptedContent = chunk.encryptedContent
       if (chunk.delta) {
-        events.push(this.event('response.reasoning_summary_text.delta', {
+        events.push(this.event(raw ? 'response.reasoning_text.delta' : 'response.reasoning_summary_text.delta', {
           item_id: this.currentItem.id,
           output_index: this.outputIndex,
-          summary_index: 0,
+          ...(raw ? { content_index: 0 } : { summary_index: 0 }),
           delta: chunk.delta
         }))
       }
@@ -261,12 +271,12 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     return []
   }
 
-  private ensureItem(type: 'message' | 'reasoning'): ResponsesStreamEvent[] {
-    if (this.currentItem?.type === type) return []
+  private ensureItem(type: 'message' | 'reasoning', reasoningKind: 'raw' | 'summary' = 'summary'): ResponsesStreamEvent[] {
+    if (this.currentItem?.type === type && (type !== 'reasoning' || this.currentItem.reasoningKind === reasoningKind)) return []
     const events = this.closeCurrentItem()
     this.outputIndex++
     const id = this.nextId(type === 'message' ? 'msg' : 'rs')
-    this.currentItem = { type, id, text: '' }
+    this.currentItem = { type, id, text: '', reasoningKind }
 
     if (type === 'message') {
       events.push(this.event('response.output_item.added', {
@@ -280,15 +290,16 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
         part: { type: 'output_text', text: '', annotations: [] }
       }))
     } else {
+      const raw = reasoningKind === 'raw'
       events.push(this.event('response.output_item.added', {
         output_index: this.outputIndex,
-        item: { type: 'reasoning', id, summary: [] }
+        item: { type: 'reasoning', id, summary: [], ...(raw ? { content: [] } : {}) }
       }))
-      events.push(this.event('response.reasoning_summary_part.added', {
+      events.push(this.event(raw ? 'response.content_part.added' : 'response.reasoning_summary_part.added', {
         item_id: id,
         output_index: this.outputIndex,
-        summary_index: 0,
-        part: { type: 'summary_text', text: '' }
+        ...(raw ? { content_index: 0 } : { summary_index: 0 }),
+        part: { type: raw ? 'reasoning_text' : 'summary_text', text: '' }
       }))
     }
     return events
@@ -339,22 +350,26 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
       events.push(this.event('response.output_item.done', { output_index: this.outputIndex, item: full }))
       this.completedItems.push(full)
     } else {
-      events.push(this.event('response.reasoning_summary_text.done', {
+      const raw = item.reasoningKind === 'raw'
+      const index = raw ? { content_index: 0 } : { summary_index: 0 }
+      const part = { type: raw ? 'reasoning_text' : 'summary_text', text: item.text }
+      events.push(this.event(raw ? 'response.reasoning_text.done' : 'response.reasoning_summary_text.done', {
         item_id: item.id,
         output_index: this.outputIndex,
-        summary_index: 0,
+        ...index,
         text: item.text
       }))
-      events.push(this.event('response.reasoning_summary_part.done', {
+      events.push(this.event(raw ? 'response.content_part.done' : 'response.reasoning_summary_part.done', {
         item_id: item.id,
         output_index: this.outputIndex,
-        summary_index: 0,
-        part: { type: 'summary_text', text: item.text }
+        ...index,
+        part
       }))
       const full = {
         type: 'reasoning',
         id: item.id,
-        summary: item.text ? [{ type: 'summary_text', text: item.text }] : [],
+        summary: !raw && item.text ? [part] : [],
+        ...(raw ? { content: [part] } : {}),
         ...(item.encryptedContent ? { encrypted_content: item.encryptedContent } : {})
       }
       events.push(this.event('response.output_item.done', { output_index: this.outputIndex, item: full }))

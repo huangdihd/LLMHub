@@ -392,7 +392,7 @@ await test('stream events normalize text, reasoning, tool calls and usage', () =
     type: 'content', delta: 'hi'
   })
   assert.deepEqual(adapter.fromProviderStreamChunk({ type: 'response.reasoning_summary_text.delta', delta: 'think' }, state), {
-    type: 'thinking', delta: 'think'
+    type: 'thinking', delta: 'think', reasoningKind: 'summary'
   })
   assert.deepEqual(adapter.fromProviderStreamChunk({
     type: 'response.output_item.added', output_index: 1,

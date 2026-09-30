@@ -1,17 +1,15 @@
 import type {
-  Content,
   ContentBlock,
   EmbeddingRequest,
   EmbeddingResponse,
   LLMRequest,
-  LLMResponse,
-  LLMStreamChunk,
   ModelInfo,
   ProviderAdapter,
-  ProviderConfig,
-  ToolCall
+  ProviderConfig
 } from '../core/types'
+import { ResponsesCodec } from './responses-codec'
 import { fetchWithRetry } from '../utils/fetch'
+import { toResponsesFormat } from '../utils/structured-output'
 import { extractChatGptAccountId } from '../utils/codex-auth'
 import { ensureCodexAccessToken } from '../services/codex-token-manager'
 import { consumeCodexResetCredit } from '../services/subscription-usage'
@@ -24,13 +22,13 @@ type CodexHeaders = Record<string, string>
  * The upstream is stream-only. `call()` therefore consumes its SSE response and
  * returns the terminal Responses object for non-streaming gateway clients.
  */
-export class CodexAdapter implements ProviderAdapter {
+export class CodexAdapter extends ResponsesCodec implements ProviderAdapter {
   name = 'codex-subscription'
   private resetInFlight?: Promise<boolean>
 
-  constructor(private config: ProviderConfig) {}
+  constructor(config: ProviderConfig) { super(config) }
 
-  toProviderRequest(request: LLMRequest): any {
+  override toProviderRequest(request: LLMRequest): any {
     const input: any[] = []
 
     for (const message of request.messages) {
@@ -117,6 +115,9 @@ export class CodexAdapter implements ProviderAdapter {
         'x-codex-installation-id': this.config.connection.device_id
       }
     }
+
+    const format = toResponsesFormat(request.config.outputFormat)
+    if (format) payload.text = { format }
 
     const thinking = request.config.thinking
     const effort = thinking?.effort || request.config.reasoningEffort
@@ -286,99 +287,6 @@ export class CodexAdapter implements ProviderAdapter {
     })
   }
 
-  fromProviderResponse(response: any): LLMResponse {
-    const content: ContentBlock[] = []
-    const toolCalls: ToolCall[] = []
-
-    for (const item of response.output || []) {
-      if (item.type === 'reasoning') {
-        const summary = (item.summary || []).map((part: any) => part.text || '').join('')
-        if (summary) content.push({ type: 'thinking', thinking: summary })
-        if (item.encrypted_content) {
-          content.push({ type: 'redacted_thinking', signature: item.encrypted_content })
-        }
-      } else if (item.type === 'message') {
-        for (const part of item.content || []) {
-          if (part.type === 'output_text') content.push({ type: 'text', text: part.text || '' })
-          else if (part.type === 'refusal') content.push({ type: 'text', text: part.refusal || '' })
-        }
-      } else if (item.type === 'function_call') {
-        toolCalls.push({
-          id: item.call_id || item.id,
-          name: item.name,
-          input: safeJsonParse(item.arguments || '{}')
-        })
-      }
-    }
-
-    return {
-      content: content.length > 0 ? content : '',
-      finishReason: mapCodexFinishReason(response, toolCalls.length > 0),
-      ...(toolCalls.length > 0 ? { toolCalls } : {}),
-      usage: mapUsage(response.usage)
-    }
-  }
-
-  fromProviderStreamChunk(chunk: any, state: any = {}): LLMStreamChunk | LLMStreamChunk[] {
-    state.calls ||= new Map<number, any>()
-
-    if (chunk.type === 'response.output_text.delta') {
-      return { type: 'content', delta: chunk.delta || '' }
-    }
-    if (chunk.type === 'response.reasoning_summary_text.delta') {
-      return { type: 'thinking', delta: chunk.delta || '' }
-    }
-    if (chunk.type === 'response.output_item.done' && chunk.item?.type === 'reasoning' && chunk.item.encrypted_content) {
-      return { type: 'thinking', encryptedContent: chunk.item.encrypted_content }
-    }
-    if (chunk.type === 'response.output_item.added' && chunk.item?.type === 'function_call') {
-      const index = chunk.output_index ?? state.calls.size
-      state.calls.set(index, {
-        id: chunk.item.call_id || chunk.item.id,
-        name: chunk.item.name,
-        itemId: chunk.item.id,
-        hasArgsDelta: false
-      })
-      return {
-        type: 'tool_call',
-        toolCall: { index, id: chunk.item.call_id || chunk.item.id, name: chunk.item.name }
-      }
-    }
-    if (chunk.type === 'response.function_call_arguments.delta') {
-      const index = chunk.output_index ?? this.findCallIndex(state.calls, chunk.item_id)
-      const call = state.calls.get(index)
-      if (call) call.hasArgsDelta = true
-      return { type: 'tool_call', toolCall: { index, inputDelta: chunk.delta || '' } }
-    }
-    if (chunk.type === 'response.output_item.done' && chunk.item?.type === 'function_call') {
-      const index = chunk.output_index ?? this.findCallIndex(state.calls, chunk.item.id)
-      const call = state.calls.get(index)
-      if (call?.hasArgsDelta) return { type: 'content', delta: '' }
-      return {
-        type: 'tool_call',
-        toolCall: {
-          index,
-          id: chunk.item.call_id || chunk.item.id,
-          name: chunk.item.name,
-          inputDelta: chunk.item.arguments || ''
-        }
-      }
-    }
-    if (chunk.type === 'response.completed' || chunk.type === 'response.incomplete') {
-      const response = chunk.response || {}
-      const hasToolCalls = (response.output || []).some((item: any) => item.type === 'function_call')
-      return {
-        type: 'done',
-        finishReason: mapCodexFinishReason(response, hasToolCalls),
-        usage: mapUsage(response.usage)
-      }
-    }
-    if (chunk.type === 'response.failed' || chunk.type === 'error') {
-      return { type: 'done', finishReason: 'error' }
-    }
-    return { type: 'content', delta: '' }
-  }
-
   async embed(_request: EmbeddingRequest): Promise<EmbeddingResponse> {
     const error: any = new Error('Codex subscription providers do not support embeddings')
     error._providerError = true
@@ -400,36 +308,6 @@ export class CodexAdapter implements ProviderAdapter {
       display_name: model.display_name,
       capabilities: model.capabilities
     }))
-  }
-
-  private convertContentBlock(block: ContentBlock, assistant: boolean): any {
-    if (block.type === 'text') {
-      return { type: assistant ? 'output_text' : 'input_text', text: block.text || '' }
-    }
-    if (block.type === 'image') {
-      const imageUrl = block.imageUrl || (
-        block.imageBase64
-          ? `data:${block.imageMediaType || 'image/png'};base64,${block.imageBase64}`
-          : undefined
-      )
-      return imageUrl ? { type: 'input_image', image_url: imageUrl } : null
-    }
-    return null
-  }
-
-  private convertToolOutput(content: Content): any {
-    if (typeof content === 'string') return content
-    const parts = content
-      .map(block => this.convertContentBlock(block, false))
-      .filter(Boolean)
-    if (parts.length === 1 && parts[0].type === 'input_text') return parts[0].text
-    return parts
-  }
-
-  private convertToolChoice(choice: LLMRequest['toolChoice']): any {
-    if (!choice) return undefined
-    if (typeof choice === 'string') return choice
-    return { type: 'function', name: choice.name }
   }
 
   private responsesUrl(): string {
@@ -494,37 +372,10 @@ export class CodexAdapter implements ProviderAdapter {
     return error
   }
 
-  private findCallIndex(calls: Map<number, any>, itemId: string | undefined): number {
-    for (const [index, call] of calls) {
-      if (call.itemId === itemId) return index
-    }
-    return calls.size
-  }
 }
 
 function stripProviderPrefix(model?: string): string | undefined {
   if (!model) return undefined
   const slash = model.indexOf('/')
   return slash >= 0 ? model.slice(slash + 1) : model
-}
-
-function safeJsonParse(value: string): object {
-  try { return JSON.parse(value) } catch { return {} }
-}
-
-function mapUsage(usage: any): { promptTokens: number; completionTokens: number; cachedTokens?: number } {
-  const cachedTokens = usage?.input_tokens_details?.cached_tokens
-  return {
-    promptTokens: usage?.input_tokens || 0,
-    completionTokens: usage?.output_tokens || 0,
-    ...(cachedTokens != null ? { cachedTokens } : {})
-  }
-}
-
-function mapCodexFinishReason(response: any, hasToolCalls: boolean): 'stop' | 'length' | 'tool_calls' | 'error' {
-  if (response.status === 'failed' || response.error) return 'error'
-  if (response.status === 'incomplete') {
-    return response.incomplete_details?.reason === 'max_output_tokens' ? 'length' : 'error'
-  }
-  return hasToolCalls ? 'tool_calls' : 'stop'
 }

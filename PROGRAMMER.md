@@ -42,11 +42,14 @@ npx vue-tsc --noEmit # project type-check
 
 - Add protocol-independent behavior to the unified request/response types instead of coupling ingress routes directly to an upstream format.
 - A new upstream protocol normally requires a provider adapter, registration in `ProviderManager`, model loading in `ProviderLoader`, persisted and sanitized config support, dashboard support, and tests.
+- Structured output is normalized in `GenerateConfig.outputFormat` via `server/utils/structured-output.ts`. Preserve schema dialect and explicit strictness; incompatible conversions fail with 400 rather than dropping constraints. Responses serializers receive request format for sync and stream metadata. Model enforcement remains upstream.
 - Preserve streaming and non-streaming behavior across compatible ingress protocols. Tool calls, thinking blocks, finish reasons, and usage are normalized before serialization.
 - OpenAI, Claude, and Gemini adapters use the full provider connection timeout for each upstream stream read, independently of the response-header timeout. Each read resets the idle deadline; disabling timeouts disables both timers.
+- OpenAI upstream selection is stored in `connection.api_type` (`responses` or `chat_completions`), independently of ingress protocol. Newly created OpenAI providers default to Responses; missing legacy values retain Chat Completions. Do not silently fall back between APIs.
 - Stored provider names are immutable and become the prefix in public model IDs.
 - Provider model results are cached in memory for five minutes. Expired entries are returned stale while one background refresh runs; configuration changes invalidate the cache so the next request waits for fresh data. Upstream model discovery uses a fixed 10-second timeout with one retry.
 - Subscription refresh tokens, access tokens, account identifiers, and installation/device identifiers are server-side secrets and must never be returned by hub APIs. Subscription plan/quota details are fetched server-side, normalized, and cached briefly; upstreams may omit plan metadata.
+- Runtime helper imports in native-Node parser tests use `.ts` extensions; project type checking allows them and test precompilation uses `--rewriteRelativeImportExtensions`.
 - `tests/run-all.sh` explicitly lists provider and utility files that need precompilation; update it when tests import a new adapter using TypeScript syntax unsupported by Node type stripping.
 - E2E tests modify `.data/`, start local processes, and restore seeded state through their cleanup trap. They may rebuild `.output/`.
 - There is no configured standalone linter. Type checking is the available continuous diagnostic checker.

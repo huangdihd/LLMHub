@@ -1,5 +1,6 @@
 import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock, EmbeddingRequest, EmbeddingResponse } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
+import { toChatResponseFormat } from '../utils/structured-output'
 
 export class OpenAIAdapter implements ProviderAdapter {
   name = 'openai'
@@ -180,6 +181,9 @@ export class OpenAIAdapter implements ProviderAdapter {
       stop: request.config.stop,
       stream: request.stream
     }
+
+    const responseFormat = toChatResponseFormat(request.config.outputFormat)
+    if (responseFormat) payload.response_format = responseFormat
 
     if (maxTokens != null) {
       payload.max_tokens = maxTokens

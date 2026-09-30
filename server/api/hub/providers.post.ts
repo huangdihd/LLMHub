@@ -1,5 +1,5 @@
 import type { ProviderConfig } from '../../core/types'
-import { getProviderStore } from '../../stores/provider.store'
+import { getProviderStore, validateProviderApiType } from '../../stores/provider.store'
 import { getAuthStore } from '../../stores/auth.store'
 import { ProviderLoader } from '../../providers/loader'
 import { validateBaseUrl } from '../../utils/validate-url'
@@ -8,6 +8,10 @@ export default defineEventHandler(async (event) => {
   try {
     const body = await readBody(event)
     const store = getProviderStore()
+
+    // Validate both representations before merging so neither can mask invalid input.
+    validateProviderApiType(body.api_type)
+    validateProviderApiType(body.connection?.api_type)
 
     if (!body.name) {
       throw createError({ statusCode: 400, message: 'Provider name is required' })
@@ -38,6 +42,9 @@ export default defineEventHandler(async (event) => {
       enabled: body.enabled !== false,
       use_custom_models: body.use_custom_models || false,
       connection: {
+        ...(body.connection?.api_type !== undefined || body.api_type !== undefined
+          ? { api_type: body.connection?.api_type ?? body.api_type }
+          : {}),
         api_key: body.api_key || '',
         base_url: body.base_url || '',
         timeout: body.timeout || 30000,

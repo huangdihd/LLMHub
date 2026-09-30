@@ -1,3 +1,4 @@
+import { parseClaudeOutputFormat } from '../utils/structured-output.ts'
 import type { ProtocolParser, LLMRequest, LLMStreamChunk, ContentBlock } from '../core/types'
 
 export class ClaudeMessagesParser implements ProtocolParser {
@@ -25,6 +26,7 @@ export class ClaudeMessagesParser implements ProtocolParser {
       model: body.model,
       messages: parsedMessages,
       config: {
+        outputFormat: parseClaudeOutputFormat(body.output_config?.format),
         maxTokens: body.max_tokens ?? undefined,
         temperature: body.temperature,
         topP: body.top_p,

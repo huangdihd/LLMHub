@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import type { ModelConfig, ProviderConfig } from '../core/types'
+import type { LLMRequest, ModelConfig, ProviderConfig } from '../core/types'
 import { ensureAntigravityAccessToken } from '../services/antigravity-token-manager'
 import {
   ANTIGRAVITY_API_BASE_URL,
@@ -9,6 +9,7 @@ import {
 } from '../utils/antigravity-auth'
 import { fetchWithRetry } from '../utils/fetch'
 import { GeminiAdapter } from './gemini'
+import { assertNoStructuredOutput } from '../utils/structured-output'
 
 export const DEFAULT_ANTIGRAVITY_MODELS: ModelConfig[] = [
   { id: 'gemini-3-flash', display_name: 'Gemini 3 Flash', capabilities: { vision: true, tools: true, streaming: true } },
@@ -20,6 +21,15 @@ export const DEFAULT_ANTIGRAVITY_MODELS: ModelConfig[] = [
 
 export class AntigravityAdapter extends GeminiAdapter {
   override name = 'antigravity'
+
+  override toProviderRequest(request: LLMRequest): any {
+    const model = request.model || this.config.models[0]?.id || ''
+    // The Claude bridge has no documented structured-output mapping.
+    if (model.toLowerCase().includes('claude')) {
+      assertNoStructuredOutput(request.config.outputFormat, 'Antigravity Claude')
+    }
+    return super.toProviderRequest(request)
+  }
 
   override async call(input: any): Promise<any> {
     const { modelId: model, payload } = input

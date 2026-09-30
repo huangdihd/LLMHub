@@ -1,5 +1,6 @@
 import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock, EmbeddingRequest, EmbeddingResponse } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
+import { toGeminiOutputConfig } from '../utils/structured-output'
 import { sanitizeGeminiSchema } from '../utils/sanitize-gemini-schema'
 
 export class GeminiAdapter implements ProviderAdapter {
@@ -82,7 +83,7 @@ export class GeminiAdapter implements ProviderAdapter {
 
     const payload: any = {
       contents,
-      generationConfig: {}
+      generationConfig: { ...toGeminiOutputConfig(request.config.outputFormat) }
     }
 
     if (request.config.systemPrompt) {

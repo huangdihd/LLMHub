@@ -11,9 +11,8 @@ export default defineEventHandler(async (event) => {
     throwFormattedError(manager.buildGatewayError('Invalid request', 400))
   }
 
-  const request = parser.parseRequest(body)
-
   try {
+    const request = parser.parseRequest(body)
     incrementCalls().catch(() => {})
     const resolved = manager.resolveAdapter(request.model || '', 'openai-chat', request.stream)
     if (resolved) Object.assign(request, await applyThinkingPolicy(request, resolved.providerName))

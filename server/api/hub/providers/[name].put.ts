@@ -1,5 +1,5 @@
 import type { ProviderConfig } from '../../../core/types'
-import { getProviderStore } from '../../../stores/provider.store'
+import { getProviderStore, validateProviderApiType } from '../../../stores/provider.store'
 import { getAuthStore } from '../../../stores/auth.store'
 import { ProviderLoader } from '../../../providers/loader'
 import { validateBaseUrl } from '../../../utils/validate-url'
@@ -9,6 +9,10 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event)
     const name = getRouterParam(event, 'name')
     const store = getProviderStore()
+
+    // Validate both representations before merging so neither can mask invalid input.
+    validateProviderApiType(body.api_type)
+    validateProviderApiType(body.connection?.api_type)
 
     if (!name) {
       throw createError({ statusCode: 400, message: 'Provider name is required' })
@@ -45,6 +49,7 @@ export default defineEventHandler(async (event) => {
 
     // Build the connection patch from flat or nested body fields
     const connectionPatch: any = {}
+    if (body.api_type !== undefined) connectionPatch.api_type = body.api_type
     if (body.base_url !== undefined && !subscriptionProtocol) connectionPatch.base_url = body.base_url
     // Sanitized provider responses intentionally omit the current secret, so
     // an empty password field in the edit form means "keep the existing key".

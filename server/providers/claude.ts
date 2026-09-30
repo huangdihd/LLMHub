@@ -10,6 +10,7 @@ import type {
   EmbeddingResponse
 } from '../core/types'
 import { fetchWithRetry } from '../utils/fetch'
+import { toClaudeOutputFormat } from '../utils/structured-output'
 
 export class ClaudeAdapter implements ProviderAdapter {
   name = 'claude'
@@ -112,6 +113,8 @@ export class ClaudeAdapter implements ProviderAdapter {
         payload.thinking = { type: 'enabled', budget_tokens: thinking.budgetTokens }
       }
     }
+    const format = toClaudeOutputFormat(request.config.outputFormat)
+    if (format) payload.output_config = { ...payload.output_config, format }
     return payload
   }
 

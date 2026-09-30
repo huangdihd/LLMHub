@@ -73,7 +73,14 @@ export interface ThinkingRequest {
   summary?: 'auto' | 'concise' | 'detailed'
 }
 
+export type OutputFormat =
+  | { type: 'text' }
+  | { type: 'json_object' }
+  | { type: 'json_schema'; schema: Record<string, any>; name?: string; description?: string; strict?: boolean | null; schemaDialect?: 'json_schema' | 'gemini' }
+
 export interface GenerateConfig {
+  /** Requested output contract; capability enforcement remains upstream. */
+  outputFormat?: OutputFormat
   maxTokens?: number
   temperature?: number
   topP?: number
@@ -193,6 +200,8 @@ export interface ProviderConfig {
   connection: {
     api_key: string
     base_url: string
+    /** OpenAI upstream API. Absent on legacy providers means Chat Completions. */
+    api_type?: 'responses' | 'chat_completions'
     timeout?: number
     enable_timeout?: boolean
     max_retries?: number

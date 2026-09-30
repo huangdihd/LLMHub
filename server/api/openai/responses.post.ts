@@ -13,9 +13,8 @@ export default defineEventHandler(async (event) => {
     throwFormattedError(manager.buildGatewayError('Invalid request', 400))
   }
 
-  const request = parser.parseRequest(body)
-
   try {
+    const request = parser.parseRequest(body)
     incrementCalls().catch(() => {})
     const resolved = manager.resolveAdapter(request.model || '', 'openai-responses', request.stream)
     if (resolved) Object.assign(request, await applyThinkingPolicy(request, resolved.providerName))
@@ -41,7 +40,7 @@ export default defineEventHandler(async (event) => {
       }, 15000)
 
       // Streaming serialization is stateful (item ids, output_index, sequence_number)
-      const serializer = new OpenAIResponsesSerializer()
+      const serializer = new OpenAIResponsesSerializer(request.config?.outputFormat)
       const writeEvents = (events: ResponsesStreamEvent[]) => {
         for (const e of events) {
           event.node.res.write(`event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`)
@@ -135,10 +134,7 @@ export default defineEventHandler(async (event) => {
 
     const response = await manager.callLLM(request)
 
-    const serializer = manager.getSerializer('openai-responses')
-    if (!serializer) {
-      throw manager.buildGatewayError('Serializer not found', 500)
-    }
+    const serializer = new OpenAIResponsesSerializer(request.config?.outputFormat)
 
     const u = response.usage
     trackUsage(event, u || 0, request.model)

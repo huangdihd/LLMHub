@@ -30,6 +30,35 @@ Open http://localhost:3000 and set up your admin password.
 
 The **Thinking** dashboard page configures the global effort-to-token-budget mapping used when requests cross Claude, OpenAI/Codex, and Gemini protocols. Explicit client settings are respected by default. Claude signatures/redacted thinking and Codex encrypted reasoning remain opaque and are only replayed to compatible upstreams.
 
+### Structured Output
+
+Structured-output requests share `GenerateConfig.outputFormat` across synchronous
+and streaming calls. Responses `text.format` and Chat `response_format` preserve
+JSON mode or JSON Schema (`name`, `description`, `schema`, and `strict`, including
+`false`/`null`) when routed to Codex or OpenAI. Responses metadata echoes the
+requested format, including stream lifecycle events; this is not a claim that the
+model successfully obeyed the schema.
+
+Claude `output_config.format` is preserved alongside `output_config.effort`.
+Gemini `generationConfig.responseMimeType`, `responseSchema`, and
+`responseJsonSchema` are normalized and restored without sanitizing the output
+schema. JSON Schema without an explicit boolean `strict` flag can cross these
+providers; missing OpenAI schema names default to `structured_output`. Schema
+names/descriptions are OpenAI format metadata, not Claude/Gemini format fields.
+
+Incompatible contracts return HTTP 400 rather than silently downgrading:
+- Explicit OpenAI `strict: true` **or** `strict: false` routed to Claude/Gemini.
+- Gemini's native `responseSchema` dialect routed to OpenAI/Claude (use
+  `responseJsonSchema` for portable JSON Schema).
+- Schema-less JSON mode routed to Claude, or structured output routed to the
+  undocumented Antigravity Claude bridge.
+- Unsupported format/MIME types, conflicting Gemini schema fields, or Gemini
+  schemas without `responseMimeType: "application/json"`.
+
+Upstream model/schema support still applies. LLMHub forwards the contract but
+neither validates generated JSON nor guarantees strict enforcement by models
+that do not support it.
+
 ### Adding Providers
 
 Navigate to **Providers** page to add your LLM providers:
@@ -40,6 +69,21 @@ Navigate to **Providers** page to add your LLM providers:
 | Protocol | `openai`, `codex-subscription`, `claude`, `claude-subscription`, `antigravity-subscription`, or `gemini` |
 | Base URL | Provider API endpoint (API-key providers) |
 | API Key | Your provider API key (API-key providers) |
+| OpenAI API | Responses (default for new providers) or Chat Completions |
+
+For OpenAI-compatible upstreams, select the actual API supported by the server:
+**Responses** sends generation requests to `/responses`; **Chat Completions**
+sends them to `/chat/completions` under the configured base URL. This selection
+is independent of the client's ingress protocol and applies to both synchronous
+and streaming generation. Model discovery and embeddings retain their existing
+endpoints. Both APIs can carry strict JSON Schema when supported by the model.
+
+Existing providers without `connection.api_type` retain Chat Completions for
+backward compatibility; editing them shows that selection. New OpenAI providers
+default to Responses. The provider management API accepts `api_type` (or nested
+`connection.api_type`) with values `responses` and `chat_completions`. For
+Chat-only compatible servers, explicitly choose Chat Completions; there is no
+silent fallback to a different upstream API.
 
 For a ChatGPT subscription provider, choose **ChatGPT subscription** and select
 **Connect ChatGPT**. LLMHub shows OpenAI's one-time device code, keeps OAuth

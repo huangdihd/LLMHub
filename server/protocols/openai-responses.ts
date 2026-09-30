@@ -1,3 +1,4 @@
+import { parseResponsesFormat } from '../utils/structured-output.ts'
 import type { ProtocolParser, LLMRequest, LLMStreamChunk, ContentBlock } from '../core/types'
 
 export class OpenAIResponsesParser implements ProtocolParser {
@@ -102,6 +103,7 @@ export class OpenAIResponsesParser implements ProtocolParser {
       model: body.model,
       messages: parsedMessages,
       config: {
+        outputFormat: parseResponsesFormat(body.text?.format),
         maxTokens: body.max_output_tokens ?? undefined,
         temperature: body.temperature,
         topP: body.top_p,

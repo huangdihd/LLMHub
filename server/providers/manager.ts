@@ -1,6 +1,7 @@
 import type { ProviderAdapter, ProtocolParser, ProtocolSerializer, ModelInfo, LLMRequest, LLMResponse, EmbeddingRequest, EmbeddingResponse } from '../core/types'
 import { ProviderLoader } from './loader'
 import { OpenAIAdapter } from './openai'
+import { OpenAIResponsesAdapter } from './openai-responses'
 import { ClaudeAdapter } from './claude'
 import { GeminiAdapter } from './gemini'
 import { CodexAdapter } from './codex'
@@ -50,7 +51,9 @@ export class ProviderManager {
 
     for (const config of this.loader.getAllProviders()) {
       if (config.protocol === 'openai') {
-        this.adapters.set(config.name, new OpenAIAdapter(config))
+        this.adapters.set(config.name, config.connection.api_type === 'responses'
+          ? new OpenAIResponsesAdapter(config)
+          : new OpenAIAdapter(config))
       } else if (config.protocol === 'claude') {
         this.adapters.set(config.name, new ClaudeAdapter(config))
       } else if (config.protocol === 'gemini') {

@@ -1,3 +1,5 @@
+import { toResponsesFormat } from '../utils/structured-output.ts'
+import type { OutputFormat } from '../core/types'
 import type { ProtocolSerializer, LLMResponse, LLMStreamChunk, Usage } from '../core/types'
 
 export interface ResponsesStreamEvent {
@@ -7,6 +9,12 @@ export interface ResponsesStreamEvent {
 
 export class OpenAIResponsesSerializer implements ProtocolSerializer {
   name = 'openai-responses'
+
+  private outputFormat?: OutputFormat
+
+  constructor(outputFormat?: OutputFormat) {
+    this.outputFormat = outputFormat
+  }
 
   private responseId = `resp_${Date.now()}${Math.random().toString(36).slice(2, 8)}`
   private createdAt = Math.floor(Date.now() / 1000)
@@ -43,7 +51,7 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
       reasoning: { effort: null, summary: null },
       store: false,
       temperature: null,
-      text: { format: { type: 'text' } },
+      text: { format: toResponsesFormat(this.outputFormat) ?? { type: 'text' } },
       tool_choice: 'auto',
       tools: [],
       top_p: null,

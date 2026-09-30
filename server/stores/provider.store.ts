@@ -2,6 +2,12 @@ import type { ProviderConfig } from '../core/types'
 
 const STORAGE_PREFIX = 'providers:'
 
+export function validateProviderApiType(value: unknown): void {
+  if (value !== undefined && value !== 'responses' && value !== 'chat_completions') {
+    throw createError({ statusCode: 400, message: 'Invalid API protocol: api_type must be responses or chat_completions' })
+  }
+}
+
 /**
  * Centralized provider storage using Nitro's built-in storage layer.
  *
@@ -57,6 +63,9 @@ export class ProviderStore {
 
     // Normalise: ensure no duplicate root-level legacy fields leak through
     const clean = this.normalise(config)
+    if (clean.protocol === 'openai' && clean.connection.api_type === undefined) {
+      clean.connection.api_type = 'responses'
+    }
     await storage.setItem(key, clean)
     return clean
   }
@@ -149,6 +158,7 @@ export class ProviderStore {
    */
   private normalise(config: ProviderConfig): ProviderConfig {
     const { name, display_name, protocol, enabled, use_custom_models, normalize_cch, connection, models, defaults } = config
+    validateProviderApiType(connection?.api_type)
 
     const clean: ProviderConfig = {
       name,
@@ -162,6 +172,7 @@ export class ProviderStore {
         timeout: connection?.timeout ?? 30000,
         enable_timeout: connection?.enable_timeout ?? true,
         max_retries: connection?.max_retries ?? 3,
+        ...(connection?.api_type !== undefined ? { api_type: connection.api_type } : {}),
         ...(connection?.version ? { version: connection.version } : {}),
         ...(connection?.device_id ? { device_id: connection.device_id } : {}),
         ...(connection?.account_id ? { account_id: connection.account_id } : {}),

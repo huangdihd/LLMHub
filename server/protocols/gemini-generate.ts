@@ -1,3 +1,4 @@
+import { parseGeminiOutputConfig } from '../utils/structured-output.ts'
 import type { ProtocolParser, LLMRequest, LLMStreamChunk, ContentBlock } from '../core/types'
 import { sanitizeGeminiSchema } from '../utils/sanitize-gemini-schema'
 
@@ -114,6 +115,7 @@ export class GeminiGenerateParser implements ProtocolParser {
       model: modelId,
       messages: parsedMessages,
       config: {
+        outputFormat: parseGeminiOutputConfig(genConfig),
         maxTokens: genConfig.maxOutputTokens ?? undefined,
         temperature: genConfig.temperature,
         topP: genConfig.topP,

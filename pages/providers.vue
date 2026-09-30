@@ -419,6 +419,12 @@
           </section>
 
           <section v-else class="space-y-4">
+            <UFormGroup v-if="form.protocol === 'openai'" label="API protocol">
+              <USelect v-model="form.api_type" :options="[
+                { value: 'responses', label: 'Responses (default)' },
+                { value: 'chat_completions', label: 'Chat Completions' }
+              ]" />
+            </UFormGroup>
             <UFormGroup label="Base URL" required :error="errors.base_url" help="The root URL for this provider's API.">
               <UInput v-model="form.base_url" :placeholder="protocolDefaults[form.protocol].baseUrl" />
             </UFormGroup>
@@ -588,6 +594,7 @@ const protocolDefaults: Record<Protocol, { baseUrl: string; keyPlaceholder: stri
 const form = reactive({
   name: '', display_name: '', protocol: 'openai' as Protocol, enabled: true,
   use_custom_models: false, custom_models: [] as { id: string; display_name: string }[],
+  api_type: 'responses' as 'responses' | 'chat_completions',
   base_url: '', api_key: '', timeout: 30000, enable_timeout: true,
   max_retries: 3, version: '2023-06-01', normalize_cch: false,
   client_version: '0.149.0'
@@ -829,6 +836,7 @@ function editProvider(provider: any) {
   form.enabled = provider.enabled
   form.use_custom_models = provider.use_custom_models || false
   form.custom_models = (provider.models || []).map((model: any) => ({ id: model.id, display_name: model.display_name }))
+  form.api_type = provider.connection.api_type ?? 'chat_completions'
   form.base_url = provider.connection.base_url || ''
   form.timeout = provider.connection.timeout || 30000
   form.enable_timeout = provider.connection.enable_timeout ?? true
@@ -848,7 +856,7 @@ function resetForm() {
   Object.assign(form, {
     name: '', display_name: '', protocol: 'openai', enabled: true,
     use_custom_models: false, custom_models: [], base_url: '', api_key: '',
-    timeout: 30000, enable_timeout: true, max_retries: 3,
+    api_type: 'responses', timeout: 30000, enable_timeout: true, max_retries: 3,
     version: '2023-06-01', normalize_cch: false, client_version: '0.149.0'
   })
 }
@@ -1053,6 +1061,7 @@ async function saveProvider() {
       client_version: form.client_version,
       models, normalize_cch: form.normalize_cch
     }
+    if (form.protocol === 'openai') body.api_type = form.api_type
     if (!isSubscriptionProtocol(form.protocol)) {
       body.base_url = form.base_url
       body.api_key = form.api_key

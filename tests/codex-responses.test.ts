@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
+import { OpenAIResponsesParser } from '../server/protocols/openai-responses.ts'
 
 const require = createRequire(import.meta.url)
 const buildDir = process.env.ADAPTER_BUILD
@@ -218,6 +219,52 @@ await test('sync call sends Codex auth headers and collects terminal SSE respons
       finishReason: 'stop',
       usage: { promptTokens: 4, completionTokens: 2 }
     })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('developer-only and mixed roles survive parser, Codex conversion and final fetch bodies', async () => {
+  const originalFetch = globalThis.fetch
+  const captured: any[] = []
+  globalThis.fetch = (async (_url: any, options: any) => {
+    captured.push(JSON.parse(options.body))
+    return new Response(`data: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output: [] } })}\n\n`, {
+      headers: { 'content-type': 'text/event-stream' }
+    })
+  }) as any
+  try {
+    const adapter = new CodexAdapter(config)
+    const parser = new OpenAIResponsesParser()
+    const developer = { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'Delegate task.' }] }
+    for (const stream of [false, true]) {
+      const request = parser.parseRequest({ model: 'gpt-5.3-codex', instructions: 'System instruction.', input: [developer], stream })
+      const payload = adapter.toProviderRequest(request)
+      if (stream) await new Response(await adapter.callStream(payload)).text()
+      else await adapter.call(payload)
+      assert.deepEqual(captured.at(-1).input, [developer])
+      assert.equal(captured.at(-1).instructions, 'System instruction.')
+      assert.equal(captured.at(-1).stream, true)
+      assert.equal(captured.at(-1).store, false)
+    }
+    const payload = adapter.toProviderRequest({
+      model: 'gpt-5.3-codex', config: {}, messages: [
+        { role: 'system', content: 'System.' },
+        { role: 'developer', content: 'First.' },
+        { role: 'user', content: 'Question.' },
+        { role: 'assistant', content: 'Answer.' },
+        { role: 'developer', content: 'Second.' },
+        { role: 'tool', content: 'Result.', meta: { toolCallId: 'call_test' } }
+      ]
+    })
+    assert.deepEqual(payload.input, [
+      { type: 'message', role: 'system', content: [{ type: 'input_text', text: 'System.' }] },
+      { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'First.' }] },
+      { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Question.' }] },
+      { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Answer.' }] },
+      { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'Second.' }] },
+      { type: 'function_call_output', call_id: 'call_test', output: 'Result.' }
+    ])
   } finally {
     globalThis.fetch = originalFetch
   }

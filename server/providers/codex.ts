@@ -79,7 +79,7 @@ export class CodexAdapter extends ResponsesCodec implements ProviderAdapter {
       if (message.role !== 'tool' && messageParts.length > 0) {
         input.push({
           type: 'message',
-          role: message.role === 'assistant' ? 'assistant' : 'user',
+          role: message.role,
           content: messageParts
         })
       }

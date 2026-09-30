@@ -41,7 +41,7 @@ npx vue-tsc --noEmit # project type-check
 ## Conventions and Durable Gotchas
 
 - Add protocol-independent behavior to the unified request/response types instead of coupling ingress routes directly to an upstream format.
-- Unified messages support `developer`. Responses ingress preserves developer messages and their order; Responses egress retains that role in `input`, rather than moving it into `instructions`. System items and explicit instructions keep their existing normalization. No new fallback for upstreams without developer support is defined.
+- Unified messages support `developer`. Responses ingress preserves developer messages and their order; Responses and Codex egress retain that role in `input`, rather than moving it into `instructions` or coercing it to `user`. System items and explicit instructions keep their existing normalization. No new fallback for upstreams without developer support is defined.
 - A new upstream protocol normally requires a provider adapter, registration in `ProviderManager`, model loading in `ProviderLoader`, persisted and sanitized config support, dashboard support, and tests.
 - Structured output is normalized in `GenerateConfig.outputFormat` via `server/utils/structured-output.ts`. Preserve schema dialect and explicit strictness; incompatible conversions fail with 400 rather than dropping constraints. Responses serializers receive request format for sync and stream metadata. Model enforcement remains upstream.
 - Preserve streaming and non-streaming behavior across compatible ingress protocols. Tool calls, thinking blocks, finish reasons, and usage are normalized before serialization.

@@ -72,11 +72,11 @@ export class OpenAIResponsesParser implements ProtocolParser {
         }
         if (item.type && item.type !== 'message') continue
 
-        if (item.role === 'system' || item.role === 'developer') {
+        if (item.role === 'system') {
           const text = typeof item.content === 'string' ? item.content : this.flattenText(item.content)
           systemPrompt = systemPrompt ? `${systemPrompt}\n${text}` : text
         } else {
-          const role = item.role === 'assistant' ? 'assistant' : 'user'
+          const role = item.role === 'assistant' || item.role === 'developer' ? item.role : 'user'
           const content = this.parseContent(item.content)
           const last = parsedMessages[parsedMessages.length - 1]
 

@@ -10,7 +10,7 @@ export interface LLMRequest {
 
 // ============ 消息 ============
 export interface Message {
-  role: 'user' | 'assistant' | 'system' | 'tool'
+  role: 'user' | 'assistant' | 'system' | 'developer' | 'tool'
   content: Content
   meta?: MessageMeta
 }

@@ -22,7 +22,7 @@ test('string input becomes a single user message', () => {
   assert.deepEqual(req.messages, [{ role: 'user', content: 'hello' }])
 })
 
-test('system/developer items and instructions merge into systemPrompt', () => {
+test('developer stays a message while system and instructions merge into systemPrompt', () => {
   const req = new OpenAIResponsesParser().parseRequest({
     instructions: 'INST',
     input: [
@@ -31,9 +31,11 @@ test('system/developer items and instructions merge into systemPrompt', () => {
       { role: 'user', content: 'hi' }
     ]
   })
-  assert.equal(req.config.systemPrompt, 'INST\nSYS\nDEV')
-  assert.equal(req.messages.length, 1)
-  assert.equal(req.messages[0].role, 'user')
+  assert.equal(req.config.systemPrompt, 'INST\nSYS')
+  assert.deepEqual(req.messages, [
+    { role: 'developer', content: [{ type: 'text', text: 'DEV' }] },
+    { role: 'user', content: 'hi' }
+  ])
 })
 
 test('function_call items merge into one assistant message with parsed arguments', () => {

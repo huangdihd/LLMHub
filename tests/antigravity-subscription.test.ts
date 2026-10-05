@@ -168,7 +168,7 @@ await test('signed thinking survives response, Claude history and second Antigra
   })
 })
 
-await test('non-stream Claude collection preserves signatures arriving in later SSE frames', async () => {
+await test('non-stream Claude responses preserve text and signature-only parts', async () => {
   const originalFetch = globalThis.fetch
   const parts = [
     { thought: true, text: 'Think' },
@@ -176,18 +176,18 @@ await test('non-stream Claude collection preserves signatures arriving in later 
     { thought: true, thoughtSignature: 'second' },
     { text: 'Hello' }
   ]
-  globalThis.fetch = (async () => new Response(parts.map(part =>
-    `data: ${JSON.stringify({ response: { candidates: [{ content: { parts: [part] } }] } })}\n\n`
-  ).join(''))) as any
+  globalThis.fetch = (async () => Response.json({ response: { candidates: [{ content: { parts } }] } })) as any
   try {
     const adapter = new AntigravityAdapter(config)
-    const response = adapter.fromProviderResponse(await adapter.call({
+    const response = await adapter.call({
       modelId: 'claude-opus-4-6-thinking', payload: { contents: [] }
-    }))
-    assert.deepEqual(response.content[0], {
-      type: 'thinking', thinking: 'Thinking', signature: 'first-second'
     })
-    assert.deepEqual(response.content[1], { type: 'text', text: 'Hello' })
+    assert.deepEqual(response.candidates[0].content.parts, parts)
+    const converted = adapter.fromProviderResponse(response)
+    const thinking = converted.content.filter((block: any) => block.type === 'thinking')
+    assert.equal(thinking.map((block: any) => block.thinking).join(''), 'Thinking')
+    assert.equal(thinking.map((block: any) => block.signature || '').join(''), 'first-second')
+    assert.deepEqual(converted.content.at(-1), { type: 'text', text: 'Hello' })
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -246,6 +246,124 @@ await test('adapter wraps Gemini payload and unwraps non-stream response', async
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+await test('language model requests share agent envelopes without model behavior configuration', async () => {
+  const originalFetch = globalThis.fetch
+  const captured: any[] = []
+  globalThis.fetch = (async (url: string, init: RequestInit) => {
+    captured.push(JSON.parse(String(init.body)))
+    assert.match(url, /v1internal:generateContent$/)
+    return Response.json({ response: { candidates: [] } })
+  }) as any
+  try {
+    const adapter = new AntigravityAdapter(config)
+    for (const model of ['claude-opus-5-5-high', 'gemini-3-flash', 'custom-image-review-alias']) {
+      await adapter.call(adapter.toProviderRequest({
+        model: `antigravity/${model}`,
+        config: {
+          maxTokens: 123,
+          outputFormat: { type: 'json_schema', schema: { type: 'object', properties: { scene: { type: 'string' } } } }
+        },
+        messages: [{ role: 'user', content: 'Describe the scene' }]
+      }))
+    }
+    for (const body of captured) {
+      assert.equal(body.requestType, 'agent')
+      assert.match(body.requestId, /^agent-/)
+      assert.equal(typeof body.request.sessionId, 'string')
+      assert.equal(body.request.generationConfig.maxOutputTokens, 123)
+      assert.equal(body.request.generationConfig.responseMimeType, 'application/json')
+      assert.deepEqual(body.request.generationConfig.responseJsonSchema, {
+        type: 'object', properties: { scene: { type: 'string' } }
+      })
+    }
+    const { DEFAULT_ANTIGRAVITY_MODELS } = require(`${buildDir}/providers/antigravity.js`)
+    assert.deepEqual(DEFAULT_ANTIGRAVITY_MODELS.map((model: any) => model.id), [
+      'gemini-3-flash', 'gemini-pro-agent', 'claude-sonnet-4-6', 'claude-opus-4-6-thinking'
+    ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('all model names preserve upstream text, signatures, tools and usage on sync requests', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async (url: string) => {
+    assert.match(url, /v1internal:generateContent$/)
+    return Response.json({ response: {
+      candidates: [{ content: { parts: [
+        { thought: true, text: 'Thinking', thoughtSignature: 'signature-' },
+        { thought: true, thoughtSignature: 'end' },
+        { text: 'Hello' },
+        { functionCall: { id: 'tool-1', name: 'inspect', args: { scene: 1 } } }
+      ] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 9, candidatesTokenCount: 4, cachedContentTokenCount: 2 }
+    } })
+  }) as any
+  try {
+    const adapter = new AntigravityAdapter(config)
+    for (const model of ['claude-opus-5-5-high', 'gemini-3-flash', 'arbitrary-alias']) {
+      const response = adapter.fromProviderResponse(await adapter.call({ modelId: model, payload: { contents: [] } }))
+      assert.deepEqual(response.content, [
+        { type: 'thinking', thinking: 'Thinking', signature: 'signature-end' },
+        { type: 'text', text: 'Hello' }
+      ])
+      assert.equal(response.toolCalls.length, 1)
+      assert.equal(response.toolCalls[0].id, 'tool-1')
+      assert.equal(response.toolCalls[0].name, 'inspect')
+      assert.deepEqual(response.toolCalls[0].input, { scene: 1 })
+      assert.deepEqual(response.usage, { promptTokens: 9, completionTokens: 4, cachedTokens: 2 })
+      assert.equal(response.finishReason, 'tool_calls')
+    }
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('stream requests use the streaming endpoint for every model name', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async (url: string) => {
+    assert.match(url, /v1internal:streamGenerateContent\?\$alt=sse$/)
+    return new Response('data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}}\n\n')
+  }) as any
+  try {
+    const adapter = new AntigravityAdapter(config)
+    for (const model of ['claude-opus-5-5-high', 'gemini-3-flash', 'arbitrary-alias']) {
+      const reader = adapter.callStream({ modelId: model, payload: { contents: [] } }).getReader()
+      let output = ''
+      const decoder = new TextDecoder()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        output += decoder.decode(value, { stream: true })
+      }
+      assert.match(output, /"text":"ok"/)
+      assert.match(output, /"finishReason":"STOP"/)
+    }
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('Antigravity preserves visual inputs and images returned by tools', () => {
+  const adapter = new AntigravityAdapter(config)
+  const inlineImage = { type: 'image', imageBase64: 'AAAA', imageMediaType: 'image/png' }
+  const remoteImage = { type: 'image', imageUrl: 'https://example.com/scene.jpg', imageMediaType: 'image/jpeg' }
+  const { payload } = adapter.toProviderRequest({
+    model: 'antigravity/custom-vlm', config: {}, messages: [
+      { role: 'user', content: [{ type: 'text', text: 'Describe' }, inlineImage, remoteImage] },
+      { role: 'assistant', content: '', meta: { toolCalls: [{ id: 'image-tool', name: 'inspect', input: {} }] } },
+      { role: 'tool', content: [{ type: 'text', text: 'Screenshot' }, inlineImage, remoteImage],
+        meta: { toolCallId: 'image-tool', toolName: 'inspect' } }
+    ]
+  })
+  assert.deepEqual(payload.contents[0].parts[1], { inlineData: { data: 'AAAA', mimeType: 'image/png' } })
+  assert.deepEqual(payload.contents[0].parts[2], { fileData: { fileUri: remoteImage.imageUrl, mimeType: 'image/jpeg' } })
+  assert.deepEqual(payload.contents[2].parts[0].functionResponse.parts, [
+    { inlineData: { data: 'AAAA', mimeType: 'image/png' } }
+  ])
+  assert.deepEqual(payload.contents[2].parts[1], { fileData: { fileUri: remoteImage.imageUrl, mimeType: 'image/jpeg' } })
 })
 
 await test('adapter unwraps SSE envelopes and adds a terminal chunk on clean EOF', async () => {

@@ -174,11 +174,21 @@ await test('Gemini dialect uses responseSchema without rewriting the schema', ()
   }
 })
 
-await test('Antigravity Claude explicitly rejects structured output', () => {
-  const entry = { ...cases[5], model: 'claude-sonnet-4-6' }
-  const adapter = adapterFor(entry)
-  for (const outputFormat of [format, { type: 'json_object' }]) {
-    assert.throws(() => adapter.toProviderRequest(requestFor(entry, outputFormat)), (error: any) => error.statusCode === 400)
+await test('Antigravity converts output parameters identically regardless of model name', () => {
+  for (const model of ['claude-sonnet-4-6', 'gemini-3-flash', 'arbitrary-alias']) {
+    const entry = { ...cases[5], model }
+    const adapter = adapterFor(entry)
+    for (const outputFormat of [format, { type: 'json_object' }, { type: 'text' }]) {
+      const mapped = adapter.toProviderRequest(requestFor(entry, outputFormat))
+      assert.equal(mapped.payload.generationConfig.maxOutputTokens, 100)
+      if (outputFormat.type === 'json_schema') {
+        assert.deepEqual(mapped.payload.generationConfig.responseJsonSchema, schema)
+        assert.equal(mapped.payload.generationConfig.responseMimeType, 'application/json')
+      } else if (outputFormat.type === 'json_object') {
+        assert.equal(mapped.payload.generationConfig.responseMimeType, 'application/json')
+      } else {
+        assert.equal(mapped.payload.generationConfig.responseMimeType, 'text/plain')
+      }
+    }
   }
-  assert.doesNotThrow(() => adapter.toProviderRequest(requestFor(entry, { type: 'text' })))
 })

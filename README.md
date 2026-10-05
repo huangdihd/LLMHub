@@ -73,8 +73,7 @@ Incompatible contracts return HTTP 400 rather than silently downgrading:
 - Explicit OpenAI `strict: true` **or** `strict: false` routed to Claude/Gemini.
 - Gemini's native `responseSchema` dialect routed to OpenAI/Claude (use
   `responseJsonSchema` for portable JSON Schema).
-- Schema-less JSON mode routed to Claude, or structured output routed to the
-  undocumented Antigravity Claude bridge.
+- Schema-less JSON mode routed to the Claude adapter.
 - Unsupported format/MIME types, conflicting Gemini schema fields, or Gemini
   schemas without `responseMimeType: "application/json"`.
 
@@ -130,6 +129,19 @@ Cloud Code project, keeps OAuth credentials server-side, refreshes access tokens
 and loads the account's available models and model quotas. Antigravity uses an
 undocumented Google internal API, so Google may change or withdraw it without
 notice; use it only where your account and applicable terms permit.
+
+LLMHub supports language and vision-language requests, including image inputs
+and images returned by tools. Antigravity requests use the `agent` envelope.
+The client's request mode determines upstream transport: non-stream requests use
+`generateContent`, while stream requests use `streamGenerateContent`. Model names
+do not select the endpoint, and there is no automatic fallback between modes.
+Image generation envelopes and a default image-generation model are not provided.
+Output limits and structured-output parameters use the existing Gemini protocol
+conversion for every Antigravity model, including aliases; model names do not
+remove these parameters or reject the output format. Local conversion and request
+forwarding are regression-tested. Real Antigravity upstream acceptance and
+schema enforcement have not been verified; upstream rejections follow the normal
+API error path, and structured output is not guaranteed.
 
 Connected subscription providers have a **Details** panel that reads the
 providers' subscription-usage endpoints and displays available plan metadata,

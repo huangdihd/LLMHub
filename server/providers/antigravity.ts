@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import type { LLMRequest, ModelConfig, ProviderConfig } from '../core/types'
+import type { ModelConfig, ProviderConfig } from '../core/types'
 import { ensureAntigravityAccessToken } from '../services/antigravity-token-manager'
 import {
   ANTIGRAVITY_API_BASE_URL,
@@ -9,12 +9,10 @@ import {
 } from '../utils/antigravity-auth'
 import { fetchWithRetry } from '../utils/fetch'
 import { GeminiAdapter } from './gemini'
-import { assertNoStructuredOutput } from '../utils/structured-output'
 
 export const DEFAULT_ANTIGRAVITY_MODELS: ModelConfig[] = [
   { id: 'gemini-3-flash', display_name: 'Gemini 3 Flash', capabilities: { vision: true, tools: true, streaming: true } },
   { id: 'gemini-pro-agent', display_name: 'Gemini Pro Agent', capabilities: { vision: true, tools: true, streaming: true } },
-  { id: 'gemini-3.1-flash-image', display_name: 'Gemini 3.1 Flash Image', capabilities: { vision: true, tools: true, streaming: true } },
   { id: 'claude-sonnet-4-6', display_name: 'Claude Sonnet 4.6', capabilities: { vision: true, tools: true, streaming: true } },
   { id: 'claude-opus-4-6-thinking', display_name: 'Claude Opus 4.6 Thinking', capabilities: { vision: true, tools: true, streaming: true } }
 ]
@@ -22,29 +20,11 @@ export const DEFAULT_ANTIGRAVITY_MODELS: ModelConfig[] = [
 export class AntigravityAdapter extends GeminiAdapter {
   override name = 'antigravity'
 
-  override toProviderRequest(request: LLMRequest): any {
-    const model = request.model || this.config.models[0]?.id || ''
-    // The Claude bridge has no documented structured-output mapping.
-    if (model.toLowerCase().includes('claude')) {
-      assertNoStructuredOutput(request.config.outputFormat, 'Antigravity Claude')
-    }
-    return super.toProviderRequest(request)
-  }
-
   override async call(input: any): Promise<any> {
     const { modelId: model, payload } = input
     const config = await ensureAntigravityAccessToken(this.config)
     const request = wrapAntigravityRequest(model, payload, config.connection.project_id!)
     const baseUrl = config.connection.base_url || ANTIGRAVITY_API_BASE_URL
-
-    // Antigravity exposes Claude, Gemini 3 Pro, and image generation through its stream endpoint.
-    if (requiresStreamForNonStream(model)) {
-      const stream = await this.fetchStream(config, baseUrl, request)
-      return collectAntigravityStream(
-        stream,
-        config.connection.enable_timeout === false ? 0 : config.connection.timeout ?? 120000
-      )
-    }
 
     const body = await this.fetchJson(config, baseUrl, request)
     if (!body?.response) throw new Error('Antigravity returned an invalid response')
@@ -172,19 +152,13 @@ async function fetchAntigravityControlWithFallback(
 function wrapAntigravityRequest(model: string, payload: any, project: string): any {
   const request = JSON.parse(JSON.stringify(payload || {}))
   delete request.safetySettings
-  const imageRequest = model.toLowerCase().includes('image')
-  if (!imageRequest) request.sessionId ||= stableSessionId(request)
-  if (!model.toLowerCase().includes('claude') && request.generationConfig) {
-    delete request.generationConfig.maxOutputTokens
-  }
+  request.sessionId ||= stableSessionId(request)
   return {
     project,
     model,
     userAgent: 'antigravity',
-    requestType: imageRequest ? 'image_gen' : 'agent',
-    requestId: imageRequest
-      ? `image_gen/${Date.now()}/${randomUUID()}/12`
-      : `agent-${randomUUID()}`,
+    requestType: 'agent',
+    requestId: `agent-${randomUUID()}`,
     request
   }
 }
@@ -204,11 +178,6 @@ function stableSessionId(request: any): string {
   bytes[0] &= 0x7f
   const id = bytes.readBigUInt64BE()
   return `-${(id || BigInt(1)).toString()}`
-}
-
-function requiresStreamForNonStream(model: string): boolean {
-  const name = model.toLowerCase()
-  return name.includes('claude') || name.includes('gemini-3-pro') || name.includes('flash-image')
 }
 
 function antigravityBaseUrls(configured: string): string[] {
@@ -255,29 +224,6 @@ async function pipeUnwrappedSse(
     controller.enqueue(encoder.encode('data: {"candidates":[{"finishReason":"STOP"}]}\n\n'))
   }
   controller.close()
-}
-
-async function collectAntigravityStream(response: Response, idleTimeoutMs: number): Promise<any> {
-  let usageMetadata: any
-  let finishReason: string | undefined
-  const parts: any[] = []
-  for await (const data of readAntigravityStream(response, idleTimeoutMs)) {
-    if (data === '[DONE]') continue
-    try {
-      const body = JSON.parse(data)
-      for (const envelope of Array.isArray(body) ? body : [body]) {
-        const chunk = envelope?.response
-        if (chunk?.usageMetadata) usageMetadata = chunk.usageMetadata
-        const candidate = chunk?.candidates?.[0]
-        if (candidate?.finishReason) finishReason = candidate.finishReason
-        for (const part of candidate?.content?.parts || []) appendPart(parts, part)
-      }
-    } catch {}
-  }
-  return {
-    candidates: [{ content: { role: 'model', parts }, finishReason: finishReason || 'STOP' }],
-    ...(usageMetadata ? { usageMetadata } : {})
-  }
 }
 
 async function* readAntigravityStream(response: Response, idleTimeoutMs: number): AsyncGenerator<string> {
@@ -334,18 +280,6 @@ function sseFrameData(frame: string): string {
     .filter(line => line.startsWith('data:'))
     .map(line => line.slice(5).trimStart())
     .join('\n')
-}
-
-function appendPart(parts: any[], part: any) {
-  const previous = parts.at(-1)
-  if (typeof part?.text === 'string' && previous && typeof previous.text === 'string'
-    && Boolean(previous.thought) === Boolean(part.thought)) {
-    previous.text += part.text
-    const signature = part.thoughtSignature || part.thought_signature
-    if (signature) previous.thoughtSignature = (previous.thoughtSignature || previous.thought_signature || '') + signature
-  } else {
-    parts.push(part)
-  }
 }
 
 function antigravityModelDisplayName(id: string): string {

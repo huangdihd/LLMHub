@@ -40,3 +40,34 @@ for (const output of [streamOutput, syncOutput]) {
 const native = new OpenAIResponsesParser().parseRequest({ input: [{ type: 'reasoning', encrypted_content: 'native-openai-state', summary: [] }] })
 assert.deepEqual(native.messages[0].content, [{ type: 'redacted_thinking', data: 'native-openai-state', reasoningProvider: 'openai' }])
 console.log('ok - Responses signed thinking sync/stream replay, native state and invalid envelopes')
+
+for (const toolOutput of ['tool succeeded', 'tool failed: memory store is busy']) {
+  const adapter = new AntigravityAdapter({ name: 'antigravity', connection: {}, models: [] })
+  const serializer = new OpenAIResponsesSerializer()
+  const state = {}
+  const upstream = [
+    { candidates: [{ content: { parts: [{ thought: true, text: signed.thinking, thoughtSignature: signed.signature }] } }] },
+    { candidates: [{ content: { parts: [{ functionCall: { id: 'toolu_original', name: 'memory', args: { action: 'recall' } } }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 } }
+  ]
+  const events = upstream.flatMap(chunk => {
+    const converted = adapter.fromProviderStreamChunk(chunk, state)
+    return (Array.isArray(converted) ? converted : [converted]).flatMap(value => serializer.serializeStreamChunk(value))
+  })
+  const output = events.find(event => event.event === 'response.completed')!.data.response.output
+  const call = output.find((item: any) => item.type === 'function_call')
+  assert.equal(call.call_id, 'toolu_original')
+  const request = new OpenAIResponsesParser().parseRequest({
+    model: 'antigravity/claude-opus-5-5-high', input: [
+      { role: 'user', content: 'Recall memory' }, ...output,
+      { type: 'function_call_output', call_id: call.call_id, output: toolOutput }
+    ]
+  })
+  const contents = adapter.toProviderRequest(request).payload.contents
+  const calls = contents[1].parts.filter((part: any) => part.functionCall)
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0].functionCall, { id: 'toolu_original', name: 'memory', args: { action: 'recall' } })
+  assert.equal(contents[1].parts[0].thoughtSignature, signed.signature)
+  assert.equal(contents[2].parts[0].functionResponse.id, 'toolu_original')
+  assert.equal(contents[2].parts[0].functionResponse.response.output, toolOutput)
+}
+console.log('ok - Responses tool success/failure replay preserves call/result IDs and thinking signatures')

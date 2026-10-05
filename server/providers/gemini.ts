@@ -21,6 +21,7 @@ export class GeminiAdapter implements ProviderAdapter {
         for (const tc of msg.meta.toolCalls) {
           const fcPart: any = {
             functionCall: {
+              id: tc.id,
               name: tc.name,
               args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input
             },

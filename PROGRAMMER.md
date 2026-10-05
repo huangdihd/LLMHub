@@ -59,3 +59,5 @@ npx vue-tsc --noEmit # project type-check
 - `tests/run-all.sh` explicitly lists provider and utility files that need precompilation; update it when tests import a new adapter using TypeScript syntax unsupported by Node type stripping.
 - E2E tests modify `.data/`, start local processes, and restore seeded state through their cleanup trap. They may rebuild `.output/`.
 - There is no configured standalone linter. Type checking is the available continuous diagnostic checker.
+
+- Gemini tool signature placeholders are injected only when the current assistant message has no real thinking/tool signature. Never select this behavior by model name or borrow a signature from a previous turn.

@@ -71,3 +71,37 @@ for (const toolOutput of ['tool succeeded', 'tool failed: memory store is busy']
   assert.equal(contents[2].parts[0].functionResponse.response.output, toolOutput)
 }
 console.log('ok - Responses tool success/failure replay preserves call/result IDs and thinking signatures')
+
+for (const model of ['claude-opus-5-5-high', 'gemini-3-flash', 'custom-alias']) {
+  const adapter = new AntigravityAdapter({ name: 'antigravity', connection: {}, models: [] })
+  for (const useContentBlock of [false, true]) {
+    const request = {
+      model: `antigravity/${model}`, config: {}, messages: [{
+        role: 'assistant',
+        content: [signed, ...(useContentBlock ? [{ type: 'tool_use', toolUse: { id: 'call-1', name: 'memory', input: {} } }] : [])],
+        ...(!useContentBlock ? { meta: { toolCalls: [{ id: 'call-1', name: 'memory', input: {} }] } } : {})
+      }]
+    }
+    const original = structuredClone(request)
+    const parts = adapter.toProviderRequest(request).payload.contents[0].parts
+    assert.equal(parts[0].thoughtSignature, signed.signature)
+    const call = parts.find((part: any) => part.functionCall)
+    assert.equal(call.functionCall.id, 'call-1')
+    assert.equal(call.thought_signature, undefined)
+    assert.deepEqual(request, original)
+  }
+  const parts = adapter.toProviderRequest({
+    model: `antigravity/${model}`, config: {}, messages: [{ role: 'assistant', content: [signed],
+      meta: { toolCalls: [{ id: 'call-1', name: 'memory', input: {}, thoughtSignature: 'real-tool-signature' }] }
+    }]
+  }).payload.contents[0].parts
+  assert.equal(parts[1].thought_signature, 'real-tool-signature')
+}
+const unsignedAdapter = new AntigravityAdapter({ name: 'antigravity', connection: {}, models: [] })
+const mixed = unsignedAdapter.toProviderRequest({ model: 'antigravity/custom-alias', config: {}, messages: [
+  { role: 'assistant', content: [signed] },
+  { role: 'user', content: 'next' },
+  { role: 'assistant', content: '', meta: { toolCalls: [{ id: 'unsigned', name: 'memory', input: {} }] } }
+]}).payload.contents
+assert.equal(mixed[2].parts[0].thought_signature, 'skip_thought_signature_validator')
+console.log('ok - Signature presence, not model names, controls placeholders per assistant message')

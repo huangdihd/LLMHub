@@ -25,7 +25,7 @@ export class GeminiAdapter implements ProviderAdapter {
               name: tc.name,
               args: typeof tc.input === 'string' ? this.safeJsonParse(tc.input || '{}') : tc.input
             },
-                        thought_signature: tc.thoughtSignature || 'skip_thought_signature_validator'
+                        ...(tc.thoughtSignature ? { thought_signature: tc.thoughtSignature } : {})
           }
           parts.push(fcPart)
         }
@@ -68,6 +68,15 @@ export class GeminiAdapter implements ProviderAdapter {
           }
         })
         parts.push(...result.externalParts)
+      }
+
+      // Decide per assistant message: earlier turns cannot supply this turn's signature.
+      const hasSignature = parts.some(part => [part.thoughtSignature, part.thought_signature]
+        .some(signature => signature && signature !== 'skip_thought_signature_validator'))
+      if (role === 'model' && !hasSignature) {
+        for (const part of parts) {
+          if (part.functionCall) part.thought_signature = 'skip_thought_signature_validator'
+        }
       }
 
       if (parts.length > 0) {
@@ -175,8 +184,7 @@ export class GeminiAdapter implements ProviderAdapter {
               args: typeof block.toolUse.input === 'string'
                 ? this.safeJsonParse(block.toolUse.input || '{}')
                 : block.toolUse.input
-          },
-          thought_signature: 'skip_thought_signature_validator'
+          }
         })
       } else if (block.type === 'tool_result' && (role === 'tool' || role === 'user')) {
         const result = this.convertToolResultContent(block.toolResult.content)

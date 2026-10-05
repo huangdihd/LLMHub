@@ -93,7 +93,7 @@ export default defineEventHandler(async (event) => {
                 }
                 emitDone({ ...pendingDone, ...unifiedChunk })
                 pendingDone = null
-              } else if ((unifiedChunk.type !== 'content' && unifiedChunk.type !== 'thinking') || unifiedChunk.delta || unifiedChunk.encryptedContent) {
+              } else if ((unifiedChunk.type !== 'content' && unifiedChunk.type !== 'thinking') || unifiedChunk.delta || unifiedChunk.encryptedContent || unifiedChunk.signature) {
                 writeEvents(serializer.serializeStreamChunk(unifiedChunk))
               }
             }

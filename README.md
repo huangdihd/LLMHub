@@ -33,7 +33,15 @@ The **Thinking** dashboard page configures the global effort-to-token-budget map
 ### Antigravity Thinking History
 
 Antigravity thinking signatures are preserved through Gemini response conversion,
-Claude signature deltas, and signed thinking history replay. Sessions whose earlier
+Claude signature deltas, and signed thinking history replay. Responses transports
+signed thinking in `encrypted_content` using a versioned `llmhub:thinking:v1:`
+envelope containing the original thinking text and signature. Clients must preserve
+this field for replay through LLMHub. The envelope is encoded, not encrypted; it is
+not native OpenAI state and must not be sent directly to another provider. Native
+OpenAI encrypted reasoning remains unchanged. Malformed gateway envelopes return
+HTTP 400.
+
+Sessions whose earlier
 responses lost their signatures cannot recover those signatures from text; start a
 new session after updating rather than replaying that unsigned history.
 

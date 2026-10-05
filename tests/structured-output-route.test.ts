@@ -20,7 +20,7 @@ const format = { type: 'json_schema', name: 'memory_selection', description: 'Se
 const answer = '{"memory_ids":["memory-1"]}'
 const plain = (value: any) => JSON.parse(JSON.stringify(value))
 
-function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude') {
+function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', signedThinking = false) {
   const payloads: any[] = []
   const writes: string[] = []
   const usage: any[] = []
@@ -62,12 +62,13 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude') {
     'server/protocols/openai-responses.ts',
     'server/protocols/openai-responses-serializer.ts',
     'server/utils/structured-output.ts',
+    'server/utils/responses-thinking-state.ts',
     'server/providers/responses-codec.ts',
     'server/providers/openai.ts',
     `server/providers/${provider}.ts`
   ].map(path => resolve(root, path)))
   const globals = {
-    TextDecoder, console, fetch: forbidden,
+    Buffer, TextDecoder, console, fetch: forbidden,
     defineEventHandler: (handler: any) => handler,
     readBody: async (event: any) => event.body,
     incrementCalls: async () => {},
@@ -112,6 +113,14 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude') {
     const chunks = (provider === 'codex' || provider === 'openai-responses')
       ? [{ type: 'response.output_text.delta', delta: answer }, { type: 'response.completed', response: upstream }]
       : [{ choices: [{ delta: { content: answer } }] }, { choices: [{ delta: {}, finish_reason: 'stop' }] }, { choices: [], usage: upstream.usage }]
+    if (signedThinking) {
+      chunks.splice(0, chunks.length,
+        { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Original thought' } } as any,
+        { type: 'content_block_delta', delta: { type: 'signature_delta', signature: 'opaque-signature' } } as any,
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' } } as any,
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 3 } } as any
+      )
+    }
     const sse = chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n'
     return new ReadableStream({
       start(controller) {
@@ -215,3 +224,18 @@ for (const stream of [false, true]) {
     assert.equal(h.flushed, false)
   })
 }
+
+test('actual Responses route forwards signature-only thinking chunks', async () => {
+  const h = harness('claude', true)
+  await h.invoke(true, { type: 'text' })
+  const frames = h.writes.join('').split('\n\n')
+  const completed = frames.map(frame => frame.split('\n').find(line => line.startsWith('data: ')))
+    .filter((line): line is string => !!line && line !== 'data: [DONE]')
+    .map(line => JSON.parse(line.slice(6)))
+    .find(event => event.type === 'response.completed')
+  const state = completed.response.output.find((item: any) => item.type === 'reasoning').encrypted_content
+  assert.ok(state.startsWith('llmhub:thinking:v1:'))
+  assert.deepEqual(JSON.parse(Buffer.from(state.slice('llmhub:thinking:v1:'.length), 'base64url').toString()), [
+    { thinking: 'Original thought', signature: 'opaque-signature' }
+  ])
+})

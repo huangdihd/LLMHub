@@ -1,5 +1,6 @@
+import { encodeThinkingState } from '../utils/responses-thinking-state.ts'
 import { toResponsesFormat } from '../utils/structured-output.ts'
-import type { OutputFormat } from '../core/types'
+import type { ContentBlock, OutputFormat } from '../core/types'
 import type { ProtocolSerializer, LLMResponse, LLMStreamChunk, Usage } from '../core/types'
 
 export interface ResponsesStreamEvent {
@@ -80,6 +81,7 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     let thinking = ''
     let rawThinking = ''
     let encryptedThinking = ''
+    const signedThinking: ContentBlock[] = []
 
     if (typeof response.content === 'string') {
       text = response.content
@@ -87,6 +89,7 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
       for (const block of response.content) {
         if (block.type === 'text') text += block.text || ''
         else if (block.type === 'thinking') {
+          if (block.signature) signedThinking.push(block)
           if (block.reasoningKind === 'raw') rawThinking += block.thinking || ''
           else thinking += block.thinking || ''
         }
@@ -94,6 +97,10 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
       }
     }
 
+    if (signedThinking.length > 0) {
+      if (encryptedThinking) throw new Error('Cannot combine native encrypted reasoning with signed thinking')
+      encryptedThinking = encodeThinkingState(signedThinking)
+    }
     if (thinking || rawThinking || encryptedThinking) {
       output.push({
         type: 'reasoning',
@@ -206,6 +213,7 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
       const events = this.ensureItem('reasoning', reasoningKind)
       this.currentItem.text += chunk.delta || ''
       if (chunk.encryptedContent) this.currentItem.encryptedContent = chunk.encryptedContent
+      if (chunk.signature) this.currentItem.signature = (this.currentItem.signature || '') + chunk.signature
       if (chunk.delta) {
         events.push(this.event(raw ? 'response.reasoning_text.delta' : 'response.reasoning_summary_text.delta', {
           item_id: this.currentItem.id,
@@ -350,6 +358,10 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
       events.push(this.event('response.output_item.done', { output_index: this.outputIndex, item: full }))
       this.completedItems.push(full)
     } else {
+      if (item.signature) {
+        if (item.encryptedContent) throw new Error('Cannot combine native encrypted reasoning with signed thinking')
+        item.encryptedContent = encodeThinkingState([{ type: 'thinking', thinking: item.text, signature: item.signature }])
+      }
       const raw = item.reasoningKind === 'raw'
       const index = raw ? { content_index: 0 } : { summary_index: 0 }
       const part = { type: raw ? 'reasoning_text' : 'summary_text', text: item.text }

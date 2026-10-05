@@ -1,3 +1,4 @@
+import { decodeThinkingState } from '../utils/responses-thinking-state.ts'
 import { parseResponsesFormat } from '../utils/structured-output.ts'
 import type { ProtocolParser, LLMRequest, LLMStreamChunk, ContentBlock } from '../core/types'
 
@@ -55,12 +56,13 @@ export class OpenAIResponsesParser implements ProtocolParser {
           continue
         }
         if (item.type === 'reasoning') {
-          const blocks: ContentBlock[] = []
+          const restored = decodeThinkingState(item.encrypted_content)
+          const blocks: ContentBlock[] = restored || []
           const summary = Array.isArray(item.summary)
             ? item.summary.map((part: any) => part.text || '').join('')
             : ''
-          if (summary) blocks.push({ type: 'thinking', thinking: summary })
-          if (item.encrypted_content) {
+          if (!restored && summary) blocks.push({ type: 'thinking', thinking: summary })
+          if (!restored && item.encrypted_content) {
             blocks.push({ type: 'redacted_thinking', data: item.encrypted_content, reasoningProvider: 'openai' })
           }
           if (blocks.length > 0) {

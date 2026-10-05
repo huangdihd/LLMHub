@@ -30,6 +30,13 @@ Open http://localhost:3000 and set up your admin password.
 
 The **Thinking** dashboard page configures the global effort-to-token-budget mapping used when requests cross Claude, OpenAI/Codex, and Gemini protocols. Explicit client settings are respected by default. Claude signatures/redacted thinking and Codex encrypted reasoning remain opaque and are only replayed to compatible upstreams.
 
+### Antigravity Thinking History
+
+Antigravity thinking signatures are preserved through Gemini response conversion,
+Claude signature deltas, and signed thinking history replay. Sessions whose earlier
+responses lost their signatures cannot recover those signatures from text; start a
+new session after updating rather than replaying that unsigned history.
+
 ### Tool Schema Compatibility
 
 Gemini and Antigravity tool parameters convert JSON Schema nullable type arrays

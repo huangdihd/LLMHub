@@ -341,6 +341,8 @@ function appendPart(parts: any[], part: any) {
   if (typeof part?.text === 'string' && previous && typeof previous.text === 'string'
     && Boolean(previous.thought) === Boolean(part.thought)) {
     previous.text += part.text
+    const signature = part.thoughtSignature || part.thought_signature
+    if (signature) previous.thoughtSignature = (previous.thoughtSignature || previous.thought_signature || '') + signature
   } else {
     parts.push(part)
   }

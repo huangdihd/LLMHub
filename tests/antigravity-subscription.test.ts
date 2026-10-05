@@ -141,7 +141,78 @@ await test('provider responses hide OAuth and Google account identifiers', () =>
   assert.equal('account_email' in sanitized.connection, false)
 })
 
+const { ClaudeMessagesParser } = require(`${buildDir}/protocols/claude-messages.js`)
+const { ClaudeMessagesSerializer } = require(`${buildDir}/protocols/claude-messages-serializer.js`)
+
 console.log('antigravity adapter')
+
+await test('signed thinking survives response, Claude history and second Antigravity request', () => {
+  const adapter = new AntigravityAdapter(config)
+  const response = adapter.fromProviderResponse({ candidates: [{ content: { parts: [
+    { thought: true, text: 'Thinking', thoughtSignature: 'opaque-signature' },
+    { text: 'Hello' }
+  ] }, finishReason: 'STOP' }] })
+  const message = new ClaudeMessagesSerializer().serializeResponse(response)
+  assert.equal(message.content[0].signature, 'opaque-signature')
+  const next = new ClaudeMessagesParser().parseRequest({
+    model: 'antigravity/claude-opus-4-6-thinking',
+    messages: [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: message.content },
+      { role: 'user', content: 'again' }
+    ]
+  })
+  const { payload } = adapter.toProviderRequest(next)
+  assert.deepEqual(payload.contents[1].parts[0], {
+    text: 'Thinking', thought: true, thoughtSignature: 'opaque-signature'
+  })
+})
+
+await test('non-stream Claude collection preserves signatures arriving in later SSE frames', async () => {
+  const originalFetch = globalThis.fetch
+  const parts = [
+    { thought: true, text: 'Think' },
+    { thought: true, text: 'ing', thoughtSignature: 'first-' },
+    { thought: true, thoughtSignature: 'second' },
+    { text: 'Hello' }
+  ]
+  globalThis.fetch = (async () => new Response(parts.map(part =>
+    `data: ${JSON.stringify({ response: { candidates: [{ content: { parts: [part] } }] } })}\n\n`
+  ).join(''))) as any
+  try {
+    const adapter = new AntigravityAdapter(config)
+    const response = adapter.fromProviderResponse(await adapter.call({
+      modelId: 'claude-opus-4-6-thinking', payload: { contents: [] }
+    }))
+    assert.deepEqual(response.content[0], {
+      type: 'thinking', thinking: 'Thinking', signature: 'first-second'
+    })
+    assert.deepEqual(response.content[1], { type: 'text', text: 'Hello' })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('thinking text and signature-only stream parts emit separate deltas', () => {
+  const adapter = new AntigravityAdapter(config)
+  const serializer = new ClaudeMessagesSerializer()
+  for (const signatureKey of ['thoughtSignature', 'thought_signature']) {
+    const chunks = adapter.fromProviderStreamChunk({ candidates: [{ content: { parts: [
+      { thought: true, text: 'Thinking', [signatureKey]: 'first-signature' },
+      { thought: true, [signatureKey]: 'last-signature' }
+    ] } }] })
+    assert.deepEqual(chunks, [
+      { type: 'thinking', delta: 'Thinking' },
+      { type: 'thinking', signature: 'first-signature' },
+      { type: 'thinking', signature: 'last-signature' }
+    ])
+    assert.deepEqual(chunks.map((chunk: any) => serializer.serializeStreamChunk(chunk).delta), [
+      { type: 'thinking_delta', thinking: 'Thinking' },
+      { type: 'signature_delta', signature: 'first-signature' },
+      { type: 'signature_delta', signature: 'last-signature' }
+    ])
+  }
+})
 
 await test('adapter wraps Gemini payload and unwraps non-stream response', async () => {
   const originalFetch = globalThis.fetch

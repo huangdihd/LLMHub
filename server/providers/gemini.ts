@@ -189,7 +189,10 @@ export class GeminiAdapter implements ProviderAdapter {
         })
         parts.push(...result.externalParts)
       } else if (block.type === 'thinking') {
-        parts.push({ text: block.thinking || '', thought: true })
+        parts.push({
+          text: block.thinking || '', thought: true,
+          ...(block.signature ? { thoughtSignature: block.signature } : {})
+        })
       }
     }
     return parts
@@ -419,9 +422,19 @@ export class GeminiAdapter implements ProviderAdapter {
     for (const part of parts) {
       if (part.text) {
         if (part.thought === true) {
-          content.push({ type: 'thinking', thinking: part.text })
+          content.push({
+            type: 'thinking', thinking: part.text,
+            ...((part.thoughtSignature || part.thought_signature)
+              ? { signature: part.thoughtSignature || part.thought_signature } : {})
+          })
         } else {
           content.push({ type: 'text', text: part.text })
+        }
+      }
+      if (part.thought === true && !part.text && (part.thoughtSignature || part.thought_signature)) {
+        const previous = content.at(-1)
+        if (previous?.type === 'thinking') {
+          previous.signature = (previous.signature || '') + (part.thoughtSignature || part.thought_signature)
         }
       }
                   if (part.functionCall) {
@@ -478,6 +491,10 @@ export class GeminiAdapter implements ProviderAdapter {
         } else {
           chunks.push({ type: 'content', delta: part.text })
         }
+      }
+      if (part.thought === true && (part.thoughtSignature || part.thought_signature)) {
+        // Emit separately: Claude serializes text and signature as different delta types.
+        chunks.push({ type: 'thinking', signature: part.thoughtSignature || part.thought_signature })
       }
                                     if (part.functionCall) {
         state._hasToolCall = true

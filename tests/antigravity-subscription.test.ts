@@ -206,4 +206,37 @@ await test('adapter unwraps SSE envelopes and adds a terminal chunk on clean EOF
   }
 })
 
+await test('Claude stream sends nullable tool parameters as scalar Google types', async () => {
+  const originalFetch = globalThis.fetch
+  let captured: any
+  globalThis.fetch = (async (_url: string, init: RequestInit) => {
+    captured = JSON.parse(String(init.body))
+    return new Response('data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}}\n\n')
+  }) as any
+  try {
+    const adapter = new AntigravityAdapter(config)
+    const request = adapter.toProviderRequest({
+      model: 'antigravity/claude-opus-4-6-thinking',
+      messages: [{ role: 'user', content: 'hi' }],
+      config: {},
+      tools: [{ name: 'command', parameters: {
+        type: 'object', properties: {
+          command: { type: 'string' },
+          dir: { type: ['string', 'null'] },
+          timeout: { type: ['integer', 'null'], minimum: 0 }
+        }
+      } }],
+      stream: true
+    })
+    const reader = adapter.callStream(request).getReader()
+    while (!(await reader.read()).done) { /* Drain the stream to observe the outgoing request. */ }
+    const parameters = captured.request.tools[0].functionDeclarations[0].parameters
+    assert.deepEqual(parameters.properties.dir, { type: 'string', nullable: true })
+    assert.deepEqual(parameters.properties.timeout, { type: 'integer', minimum: 0, nullable: true })
+    assert.equal(captured.model, 'claude-opus-4-6-thinking')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 console.log(`\n${passed} Antigravity subscription test groups passed${process.exitCode ? ', with FAILURES' : ''}`)

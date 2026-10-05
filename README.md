@@ -30,6 +30,14 @@ Open http://localhost:3000 and set up your admin password.
 
 The **Thinking** dashboard page configures the global effort-to-token-budget mapping used when requests cross Claude, OpenAI/Codex, and Gemini protocols. Explicit client settings are respected by default. Claude signatures/redacted thinking and Codex encrypted reasoning remain opaque and are only replayed to compatible upstreams.
 
+### Tool Schema Compatibility
+
+Gemini and Antigravity tool parameters convert JSON Schema nullable type arrays
+(e.g. `type: ["string", "null"]`) to a scalar `type` plus `nullable: true`, including
+nested schemas. Single-type arrays are also normalized. Arrays with multiple
+non-null types, null-only arrays, and invalid type arrays are rejected locally
+with HTTP 400 rather than silently narrowing the schema.
+
 ### Structured Output
 
 Structured-output requests share `GenerateConfig.outputFormat` across synchronous

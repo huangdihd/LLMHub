@@ -49,15 +49,21 @@ export interface SubscriptionUsage {
 
 const cache = new Map<string, { expiresAt: number; value: SubscriptionUsage }>()
 
+export function supportsSubscriptionUsage(
+  protocol: ProviderConfig['protocol']
+): protocol is SubscriptionUsage['protocol'] {
+  return protocol === 'codex-subscription'
+    || protocol === 'claude-subscription'
+    || protocol === 'antigravity-subscription'
+    || protocol === 'gemini-cli-subscription'
+}
+
 export async function getSubscriptionUsage(
   config: ProviderConfig,
   force = false,
   fetcher: typeof fetch = fetch
 ): Promise<SubscriptionUsage> {
-  if (config.protocol !== 'codex-subscription'
-    && config.protocol !== 'claude-subscription'
-    && config.protocol !== 'antigravity-subscription'
-    && config.protocol !== 'gemini-cli-subscription') {
+  if (!supportsSubscriptionUsage(config.protocol)) {
     throw usageError('Subscription usage is only available for subscription providers', 400)
   }
 

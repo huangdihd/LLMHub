@@ -1,4 +1,4 @@
-import { getSubscriptionUsage } from '../../../../services/subscription-usage'
+import { getSubscriptionUsage, supportsSubscriptionUsage } from '../../../../services/subscription-usage'
 import { getProviderStore } from '../../../../stores/provider.store'
 
 export default defineEventHandler(async (event) => {
@@ -8,9 +8,7 @@ export default defineEventHandler(async (event) => {
 
     const provider = await getProviderStore().get(name)
     if (!provider) throw createError({ statusCode: 404, message: 'Provider not found' })
-    if (provider.protocol !== 'codex-subscription'
-      && provider.protocol !== 'claude-subscription'
-      && provider.protocol !== 'antigravity-subscription') {
+    if (!supportsSubscriptionUsage(provider.protocol)) {
       throw createError({ statusCode: 400, message: 'Provider does not use a supported subscription' })
     }
 

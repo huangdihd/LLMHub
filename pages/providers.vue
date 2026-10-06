@@ -103,6 +103,19 @@
             />
           </div>
 
+          <div v-if="provider.protocol === 'antigravity-subscription'" class="mt-4 flex items-center justify-between gap-4 rounded-lg bg-amber-50 p-3 dark:bg-amber-950/20">
+            <div>
+              <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Use Google One AI Credits</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Paid usage. Only retry once with AI Credits when Google explicitly reports that the free model quota is exhausted. Rate limits do not trigger it.</p>
+            </div>
+            <UToggle
+              :model-value="provider.connection.use_ai_credits_on_quota_exhausted === true"
+              :disabled="aiCreditsSaving[provider.name]"
+              :aria-label="`Use Google One AI Credits for ${provider.display_name}`"
+              @update:model-value="setAiCredits(provider, $event)"
+            />
+          </div>
+
           <div v-if="usageState(provider.name).loading && !usageState(provider.name).data" class="flex items-center gap-2 py-5 text-sm text-gray-500 dark:text-gray-400">
             <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin" />
             Loading quota details…
@@ -622,6 +635,7 @@ const loginNow = ref(Date.now())
 const usageNow = ref(Date.now())
 const subscriptionUsage = reactive<Record<string, SubscriptionUsageState>>({})
 const autoResetSaving = reactive<Record<string, boolean>>({})
+const aiCreditsSaving = reactive<Record<string, boolean>>({})
 const nameTouched = ref(false)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let usageClockTimer: ReturnType<typeof setInterval> | null = null
@@ -733,6 +747,29 @@ async function setAutoReset(provider: any, enabled: boolean) {
     showError(error, 'Unable to update automatic reset')
   } finally {
     autoResetSaving[provider.name] = false
+  }
+}
+
+async function setAiCredits(provider: any, enabled: boolean) {
+  if (aiCreditsSaving[provider.name]) return
+  aiCreditsSaving[provider.name] = true
+  try {
+    await $fetch(`/api/hub/providers/${encodeURIComponent(provider.name)}`, {
+      method: 'PUT',
+      body: { use_ai_credits_on_quota_exhausted: enabled }
+    })
+    provider.connection.use_ai_credits_on_quota_exhausted = enabled
+    toast.add({
+      title: enabled ? 'Google One AI Credits enabled' : 'Google One AI Credits disabled',
+      description: enabled ? 'Paid credits will only be used after explicit free-quota exhaustion.' : undefined,
+      color: enabled ? 'amber' : 'gray',
+      icon: enabled ? 'i-heroicons-currency-dollar' : 'i-heroicons-information-circle'
+    })
+  } catch (error: any) {
+    if (error?.statusCode === 401) return navigateTo('/login')
+    showError(error, 'Unable to update AI Credits usage')
+  } finally {
+    aiCreditsSaving[provider.name] = false
   }
 }
 

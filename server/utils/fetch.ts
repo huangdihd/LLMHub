@@ -5,6 +5,7 @@ export interface FetchOptions extends RequestInit {
   enable_timeout?: boolean
   maxRetries?: number
   retryDelay?: number
+  retryOnRateLimit?: boolean
 }
 
 /**
@@ -19,6 +20,7 @@ export async function fetchWithRetry(
   const enableTimeout = options.enable_timeout ?? config?.enable_timeout ?? true
   const maxRetries = options.maxRetries ?? config?.max_retries ?? 3
   const retryDelay = options.retryDelay ?? 1000
+  const retryOnRateLimit = options.retryOnRateLimit ?? true
 
   let lastError: any
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -38,7 +40,7 @@ export async function fetchWithRetry(
       if (timeoutId) clearTimeout(timeoutId)
 
       // Retry on 5xx errors or 429 (Rate Limit)
-      if (attempt < maxRetries && (response.status >= 500 || response.status === 429)) {
+      if (attempt < maxRetries && (response.status >= 500 || (retryOnRateLimit && response.status === 429))) {
         console.warn(`[LLMHub] Fetch attempt ${attempt + 1} failed with status ${response.status}. Retrying in ${retryDelay * Math.pow(2, attempt)}ms...`)
         await new Promise(resolve => setTimeout(resolve, retryDelay * Math.pow(2, attempt)))
         continue

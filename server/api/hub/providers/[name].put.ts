@@ -64,9 +64,14 @@ export default defineEventHandler(async (event) => {
     if (body.auto_reset_on_quota_exhausted !== undefined && nextProtocol === 'codex-subscription') {
       connectionPatch.auto_reset_on_quota_exhausted = body.auto_reset_on_quota_exhausted === true
     }
+    if (body.use_ai_credits_on_quota_exhausted !== undefined && nextProtocol === 'antigravity-subscription') {
+      connectionPatch.use_ai_credits_on_quota_exhausted = body.use_ai_credits_on_quota_exhausted === true
+    }
     // Also merge any nested connection object
     if (body.connection && typeof body.connection === 'object') {
       const nested = { ...body.connection }
+      delete nested.auto_reset_on_quota_exhausted
+      delete nested.use_ai_credits_on_quota_exhausted
       if (subscriptionProtocol) {
         delete nested.api_key
         delete nested.refresh_token

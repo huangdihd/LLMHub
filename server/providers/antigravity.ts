@@ -58,15 +58,29 @@ export class AntigravityAdapter extends GeminiAdapter {
 
   private async fetchJson(config: ProviderConfig, baseUrl: string, request: any): Promise<any> {
     let lastError: unknown
+    let aiCreditsAttempted = false
     for (const candidate of antigravityBaseUrls(baseUrl)) {
       try {
-        const response = await fetchWithRetry(`${candidate}/v1internal:generateContent`, {
+        const url = `${candidate}/v1internal:generateContent`
+        const options = {
           method: 'POST',
           headers: antigravityHeaders(config.connection.api_key),
           body: JSON.stringify(request)
-        }, config.connection)
+        }
+        let response = await fetchWithRetry(url, { ...options, retryOnRateLimit: false }, config.connection)
         if (response.ok) return response.json()
-        const error = await antigravityApiError(response)
+
+        let error = await antigravityApiError(response)
+        if (shouldRetryWithAiCredits(config, error) && !aiCreditsAttempted) {
+          aiCreditsAttempted = true
+          response = await fetchWithRetry(url, {
+            ...options,
+            body: JSON.stringify(withAiCredits(request)),
+            maxRetries: 0
+          }, config.connection)
+          if (response.ok) return response.json()
+          error = await antigravityApiError(response)
+        }
         if (response.status !== 429 && response.status < 500) throw error
         lastError = error
       } catch (error: any) {
@@ -79,31 +93,60 @@ export class AntigravityAdapter extends GeminiAdapter {
 
   private async fetchStream(config: ProviderConfig, baseUrl: string, request: any): Promise<Response> {
     let lastError: unknown
+    let aiCreditsAttempted = false
     for (const candidate of antigravityBaseUrls(baseUrl)) {
-      const abortController = new AbortController()
-      const timeout = config.connection.enable_timeout === false
-        ? undefined
-        : setTimeout(() => abortController.abort(), config.connection.timeout ?? 120000)
       try {
-        const response = await fetch(`${candidate}/v1internal:streamGenerateContent?$alt=sse`, {
-          method: 'POST',
-          headers: { ...antigravityHeaders(config.connection.api_key), 'Accept': 'text/event-stream' },
-          body: JSON.stringify(request),
-          signal: abortController.signal
-        })
-        if (timeout) clearTimeout(timeout)
+        const url = `${candidate}/v1internal:streamGenerateContent?$alt=sse`
+        let response = await fetchAntigravityStream(url, config, request)
         if (response.ok && response.body) return response
-        const error = await antigravityApiError(response)
+
+        let error = await antigravityApiError(response)
+        if (shouldRetryWithAiCredits(config, error) && !aiCreditsAttempted) {
+          aiCreditsAttempted = true
+          response = await fetchAntigravityStream(url, config, withAiCredits(request))
+          if (response.ok && response.body) return response
+          error = await antigravityApiError(response)
+        }
         if (response.status !== 429 && response.status < 500) throw error
         lastError = error
       } catch (error: any) {
-        if (timeout) clearTimeout(timeout)
         if (error?._statusCode && error._statusCode < 500 && error._statusCode !== 429) throw error
         lastError = error
       }
     }
     throw lastError || new Error('All Antigravity endpoints failed')
   }
+}
+
+async function fetchAntigravityStream(
+  url: string,
+  config: ProviderConfig,
+  request: any
+): Promise<Response> {
+  const abortController = new AbortController()
+  const timeout = config.connection.enable_timeout === false
+    ? undefined
+    : setTimeout(() => abortController.abort(), config.connection.timeout ?? 120000)
+  try {
+    return await fetch(url, {
+      method: 'POST',
+      headers: { ...antigravityHeaders(config.connection.api_key), 'Accept': 'text/event-stream' },
+      body: JSON.stringify(request),
+      signal: abortController.signal
+    })
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
+}
+
+function shouldRetryWithAiCredits(config: ProviderConfig, error: any): boolean {
+  return config.connection.use_ai_credits_on_quota_exhausted === true
+    && error?._statusCode === 429
+    && error?._quotaExhausted === true
+}
+
+function withAiCredits(request: any): any {
+  return { ...request, enabledCreditTypes: ['GOOGLE_ONE_AI'] }
 }
 
 export async function fetchAntigravityModels(
@@ -298,6 +341,7 @@ async function antigravityApiError(response: Response): Promise<Error> {
   error._statusCode = response.status
   error._providerError = true
   error._errorBody = { message, type: 'api_error', code: bodyCode(text) }
+  error._quotaExhausted = /quota[_ ]exhausted/i.test(text)
   return error
 }
 

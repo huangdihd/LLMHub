@@ -224,6 +224,8 @@ export interface ProviderConfig {
     client_version?: string
     /** Automatically redeem a banked reset after Codex rejects a request for exhausted quota. */
     auto_reset_on_quota_exhausted?: boolean
+    /** Use Google One AI Credits once after Antigravity explicitly reports exhausted free quota. */
+    use_ai_credits_on_quota_exhausted?: boolean
     /** Non-secret subscription plan reported during OAuth (for example pro or max). */
     subscription_type?: string
     /** Non-secret upstream rate-limit tier reported during OAuth. */

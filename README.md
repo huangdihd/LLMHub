@@ -137,9 +137,14 @@ redirects to `http://localhost:8086`,
 copy the complete callback URL from the browser address bar into LLMHub (the
 localhost page itself does not need to load). LLMHub discovers the associated
 Cloud Code project, keeps OAuth credentials server-side, refreshes access tokens,
-and loads the account's available models and model quotas. Antigravity uses an
-undocumented Google internal API, so Google may change or withdraw it without
-notice; use it only where your account and applicable terms permit.
+and loads the account's available models and model quotas. The provider Details
+panel has an explicit **Use Google One AI Credits** switch, disabled by default.
+When enabled, LLMHub first sends the normal request and uses paid
+`GOOGLE_ONE_AI` credits for one retry only if Google explicitly reports that the
+free model quota is exhausted. Ordinary rate limits, capacity errors, and unknown
+429 responses never trigger paid credits. Antigravity uses an undocumented Google
+internal API, so Google may change or withdraw it without notice; use it only
+where your account and applicable terms permit.
 
 LLMHub supports language and vision-language requests, including image inputs
 and images returned by tools. Antigravity requests use the `agent` envelope.

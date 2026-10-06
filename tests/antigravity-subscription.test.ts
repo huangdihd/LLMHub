@@ -132,9 +132,13 @@ await test('project discovery onboards accounts without a project', async () => 
   assert.equal(account.projectId, 'new-project')
 })
 
-await test('provider responses hide OAuth and Google account identifiers', () => {
-  const sanitized = new ProviderStore().sanitize(config)
+await test('provider responses hide OAuth identifiers and expose the AI Credits preference', () => {
+  const sanitized = new ProviderStore().sanitize({
+    ...config,
+    connection: { ...config.connection, use_ai_credits_on_quota_exhausted: true }
+  })
   assert.equal(sanitized.connection.authenticated, true)
+  assert.equal(sanitized.connection.use_ai_credits_on_quota_exhausted, true)
   assert.equal('api_key' in sanitized.connection, false)
   assert.equal('refresh_token' in sanitized.connection, false)
   assert.equal('project_id' in sanitized.connection, false)
@@ -423,6 +427,123 @@ await test('Claude stream sends nullable tool parameters as scalar Google types'
     assert.deepEqual(parameters.properties.dir, { type: 'string', nullable: true })
     assert.deepEqual(parameters.properties.timeout, { type: 'integer', minimum: 0, nullable: true })
     assert.equal(captured.model, 'claude-opus-4-6-thinking')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('AI Credits are opt-in and used once after explicit free-quota exhaustion', async () => {
+  const originalFetch = globalThis.fetch
+  const bodies: any[] = []
+  globalThis.fetch = (async (_url: string, init: RequestInit) => {
+    bodies.push(JSON.parse(String(init.body)))
+    if (bodies.length === 1) {
+      return Response.json({ error: { status: 'QUOTA_EXHAUSTED', message: 'Quota exhausted' } }, { status: 429 })
+    }
+    return Response.json({ response: { candidates: [] } })
+  }) as any
+  try {
+    const adapter = new AntigravityAdapter({
+      ...config,
+      connection: { ...config.connection, use_ai_credits_on_quota_exhausted: true }
+    })
+    const request = adapter.toProviderRequest({
+      model: 'antigravity/gemini-3-flash',
+      messages: [{ role: 'user', content: 'hello' }],
+      config: {},
+      stream: false
+    })
+    await adapter.call(request)
+    assert.equal(bodies.length, 2)
+    assert.equal('enabledCreditTypes' in bodies[0], false)
+    assert.deepEqual(bodies[1].enabledCreditTypes, ['GOOGLE_ONE_AI'])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('ordinary rate limits never enable AI Credits', async () => {
+  const originalFetch = globalThis.fetch
+  const bodies: any[] = []
+  globalThis.fetch = (async (_url: string, init: RequestInit) => {
+    bodies.push(JSON.parse(String(init.body)))
+    if (bodies.length === 1) {
+      return Response.json({
+        error: { status: 'RESOURCE_EXHAUSTED', message: 'Rate limited', details: [{ reason: 'RATE_LIMIT_EXCEEDED' }] }
+      }, { status: 429 })
+    }
+    return Response.json({ response: { candidates: [] } })
+  }) as any
+  try {
+    const adapter = new AntigravityAdapter({
+      ...config,
+      connection: { ...config.connection, use_ai_credits_on_quota_exhausted: true }
+    })
+    const request = adapter.toProviderRequest({
+      model: 'antigravity/gemini-3-flash',
+      messages: [{ role: 'user', content: 'hello' }],
+      config: {},
+      stream: false
+    })
+    await adapter.call(request)
+    assert.equal(bodies.length, 2)
+    assert.ok(bodies.every(body => !('enabledCreditTypes' in body)))
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('stream requests use AI Credits once after explicit free-quota exhaustion', async () => {
+  const originalFetch = globalThis.fetch
+  const bodies: any[] = []
+  globalThis.fetch = (async (_url: string, init: RequestInit) => {
+    bodies.push(JSON.parse(String(init.body)))
+    if (bodies.length === 1) {
+      return Response.json({ error: { status: 'QUOTA_EXHAUSTED', message: 'Quota exhausted' } }, { status: 429 })
+    }
+    return new Response('data: {"response":{"candidates":[{"finishReason":"STOP"}]}}\n\n')
+  }) as any
+  try {
+    const adapter = new AntigravityAdapter({
+      ...config,
+      connection: { ...config.connection, use_ai_credits_on_quota_exhausted: true }
+    })
+    const request = adapter.toProviderRequest({
+      model: 'antigravity/gemini-3-flash',
+      messages: [{ role: 'user', content: 'hello' }],
+      config: {},
+      stream: true
+    })
+    const reader = adapter.callStream(request).getReader()
+    while (!(await reader.read()).done) { /* Drain the stream. */ }
+    assert.equal(bodies.length, 2)
+    assert.equal('enabledCreditTypes' in bodies[0], false)
+    assert.deepEqual(bodies[1].enabledCreditTypes, ['GOOGLE_ONE_AI'])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('disabled AI Credits never alter requests after quota exhaustion', async () => {
+  const originalFetch = globalThis.fetch
+  const bodies: any[] = []
+  globalThis.fetch = (async (_url: string, init: RequestInit) => {
+    bodies.push(JSON.parse(String(init.body)))
+    if (bodies.length === 1) {
+      return Response.json({ error: { status: 'QUOTA_EXHAUSTED', message: 'Quota exhausted' } }, { status: 429 })
+    }
+    return Response.json({ response: { candidates: [] } })
+  }) as any
+  try {
+    const adapter = new AntigravityAdapter(config)
+    const request = adapter.toProviderRequest({
+      model: 'antigravity/gemini-3-flash',
+      messages: [{ role: 'user', content: 'hello' }],
+      config: {},
+      stream: false
+    })
+    await adapter.call(request)
+    assert.ok(bodies.every(body => !('enabledCreditTypes' in body)))
   } finally {
     globalThis.fetch = originalFetch
   }

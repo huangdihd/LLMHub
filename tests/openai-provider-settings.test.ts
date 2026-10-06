@@ -96,15 +96,40 @@ await test('invalid API types cannot be hidden by flat/nested merge precedence',
   }
   assert.equal((await store.get('test')).connection.api_type, 'responses')
 })
+await test('AI Credits can only be changed through the Antigravity flat setting', async () => {
+  await store.create({ ...config('antigravity', 'antigravity-subscription') })
+  let result = await update({
+    name: 'antigravity',
+    body: { use_ai_credits_on_quota_exhausted: true }
+  })
+  assert.equal(result.provider.connection.use_ai_credits_on_quota_exhausted, true)
+
+  result = await update({
+    name: 'antigravity',
+    body: { connection: { use_ai_credits_on_quota_exhausted: false } }
+  })
+  assert.equal(result.provider.connection.use_ai_credits_on_quota_exhausted, true)
+
+  await store.create(config('openai'))
+  result = await update({ name: 'openai', body: { use_ai_credits_on_quota_exhausted: true } })
+  assert.equal(result.provider.connection.use_ai_credits_on_quota_exhausted, undefined)
+})
 await test('other protocols are not defaulted and unrelated connection settings survive', async () => {
   for (const protocol of ['claude', 'gemini', 'codex-subscription', 'claude-subscription', 'antigravity-subscription']) {
-    const connection = { ...config().connection, version: 'v1', client_version: 'v2', auto_reset_on_quota_exhausted: false }
+    const connection = {
+      ...config().connection,
+      version: 'v1',
+      client_version: 'v2',
+      auto_reset_on_quota_exhausted: false,
+      use_ai_credits_on_quota_exhausted: false
+    }
     await store.create({ ...config(protocol, protocol), connection })
     const result = await update({ name: protocol, body: { display_name: 'Edited' } })
     assert.equal(result.provider.connection.api_type, undefined)
     assert.equal(result.provider.connection.version, 'v1')
     assert.equal(result.provider.connection.client_version, 'v2')
     assert.equal(result.provider.connection.auto_reset_on_quota_exhausted, false)
+    assert.equal(result.provider.connection.use_ai_credits_on_quota_exhausted, false)
   }
 })
 console.log(`${passed} provider settings tests passed`)

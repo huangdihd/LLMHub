@@ -197,7 +197,7 @@ export interface ToolCallDelta {
 export interface ProviderConfig {
   name: string
   display_name: string
-  protocol: 'openai' | 'claude' | 'gemini' | 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription'
+  protocol: 'openai' | 'claude' | 'gemini' | 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription' | 'gemini-cli-subscription'
   enabled: boolean
   use_custom_models: boolean
   normalize_cch?: boolean

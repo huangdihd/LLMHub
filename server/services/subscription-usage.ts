@@ -4,6 +4,8 @@ import { ensureCodexAccessToken } from './codex-token-manager'
 import { extractChatGptAccountId, extractChatGptPlanType } from '../utils/codex-auth'
 import { CLAUDE_CODE_BETA } from '../utils/claude-auth'
 import { fetchAntigravityQuota } from '../providers/antigravity'
+import { ensureGeminiCliAccessToken } from './gemini-cli-token-manager'
+import { fetchGeminiCliAccount } from '../utils/gemini-cli-auth'
 
 const CACHE_TTL_MS = 60 * 1000
 const CODEX_API_BASE_URL = 'https://chatgpt.com/backend-api/wham'
@@ -31,7 +33,7 @@ export interface SubscriptionResetCredit {
 
 export interface SubscriptionUsage {
   provider: string
-  protocol: 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription'
+  protocol: 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription' | 'gemini-cli-subscription'
   plan?: string
   windows: SubscriptionUsageWindow[]
   credits?: {
@@ -55,18 +57,24 @@ export async function getSubscriptionUsage(
 ): Promise<SubscriptionUsage> {
   if (config.protocol !== 'codex-subscription'
     && config.protocol !== 'claude-subscription'
-    && config.protocol !== 'antigravity-subscription') {
+    && config.protocol !== 'antigravity-subscription'
+    && config.protocol !== 'gemini-cli-subscription') {
     throw usageError('Subscription usage is only available for subscription providers', 400)
   }
 
   const cached = cache.get(config.name)
   if (!force && cached && cached.expiresAt > Date.now()) return cached.value
 
-  const value = config.protocol === 'codex-subscription'
-    ? await fetchCodexUsage(config, fetcher)
-    : config.protocol === 'antigravity-subscription'
-      ? await fetchAntigravityUsage(config, fetcher)
-      : await fetchClaudeUsage(config, fetcher)
+  let value: SubscriptionUsage
+  if (config.protocol === 'codex-subscription') {
+    value = await fetchCodexUsage(config, fetcher)
+  } else if (config.protocol === 'antigravity-subscription') {
+    value = await fetchAntigravityUsage(config, fetcher)
+  } else if (config.protocol === 'gemini-cli-subscription') {
+    value = await fetchGeminiCliUsage(config, fetcher)
+  } else {
+    value = await fetchClaudeUsage(config, fetcher)
+  }
   cache.set(config.name, { expiresAt: Date.now() + CACHE_TTL_MS, value })
   return value
 }
@@ -258,6 +266,33 @@ async function fetchAntigravityUsage(config: ProviderConfig, fetcher: typeof fet
     protocol: 'antigravity-subscription',
     ...optionalPlan(config.connection.subscription_type),
     windows,
+    fetched_at: new Date().toISOString()
+  }
+}
+
+async function fetchGeminiCliUsage(config: ProviderConfig, fetcher: typeof fetch): Promise<SubscriptionUsage> {
+  const active = await ensureGeminiCliAccessToken(config)
+  const data = await fetchGeminiCliAccount(
+    active.connection.api_key,
+    active.connection.project_id!,
+    fetcher
+  )
+  const paidTier = data?.paidTier
+  const googleOneCredits = Array.isArray(paidTier?.availableCredits)
+    ? paidTier.availableCredits.filter((credit: any) => credit?.creditType === 'GOOGLE_ONE_AI')
+    : []
+  const balance = googleOneCredits.reduce((total: number, credit: any) => {
+    const amount = Number.parseInt(String(credit?.creditAmount || '0'), 10)
+    return total + (Number.isFinite(amount) ? amount : 0)
+  }, 0)
+  return {
+    provider: config.name,
+    protocol: 'gemini-cli-subscription',
+    ...optionalPlan(paidTier?.name || data?.currentTier?.name || active.connection.subscription_type),
+    windows: [],
+    ...(googleOneCredits.length > 0 ? {
+      credits: { balance, detail: 'Google One AI credits' }
+    } : {}),
     fetched_at: new Date().toISOString()
   }
 }

@@ -7,6 +7,7 @@ import { GeminiAdapter } from './gemini'
 import { CodexAdapter } from './codex'
 import { ClaudeSubscriptionAdapter } from './claude-subscription'
 import { AntigravityAdapter } from './antigravity'
+import { GeminiCliAdapter } from './gemini-cli'
 import { OpenAIChatParser } from '../protocols/openai-chat'
 import { OpenAICompletionParser } from '../protocols/openai-completion'
 import { OpenAIResponsesParser } from '../protocols/openai-responses'
@@ -64,6 +65,8 @@ export class ProviderManager {
         this.adapters.set(config.name, new ClaudeSubscriptionAdapter(config))
       } else if (config.protocol === 'antigravity-subscription') {
         this.adapters.set(config.name, new AntigravityAdapter(config))
+      } else if (config.protocol === 'gemini-cli-subscription') {
+        this.adapters.set(config.name, new GeminiCliAdapter(config))
       }
     }
   }

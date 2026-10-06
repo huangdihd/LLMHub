@@ -88,7 +88,7 @@ Navigate to **Providers** page to add your LLM providers:
 | Field | Description |
 |-------|-------------|
 | Name | Unique identifier (e.g., `openai`, `deepseek`, `gemini`) |
-| Protocol | `openai`, `codex-subscription`, `claude`, `claude-subscription`, `antigravity-subscription`, or `gemini` |
+| Protocol | `openai`, `codex-subscription`, `claude`, `claude-subscription`, `antigravity-subscription`, `gemini-cli-subscription`, or `gemini` |
 | Base URL | Provider API endpoint (API-key providers) |
 | API Key | Your provider API key (API-key providers) |
 | OpenAI API | Responses (default for new providers) or Chat Completions |
@@ -106,6 +106,17 @@ default to Responses. The provider management API accepts `api_type` (or nested
 `connection.api_type`) with values `responses` and `chat_completions`. For
 Chat-only compatible servers, explicitly choose Chat Completions; there is no
 silent fallback to a different upstream API.
+
+For Gemini CLI's Google-account access, choose **Gemini CLI / Google One** and
+select **Connect Google**. LLMHub uses Gemini CLI's installed-app OAuth client,
+onboards eligible accounts through the Code Assist backend, stores and refreshes
+tokens server-side, and exposes Google One AI credits in provider details when
+the account reports them. The browser eventually redirects to
+`http://127.0.0.1:8085/oauth2callback`; if no local listener is running, copy the
+complete failed callback URL into LLMHub. Configure Gemini CLI's installed-app
+credentials as `GEMINI_CLI_OAUTH_CLIENT_ID` and `GEMINI_CLI_OAUTH_CLIENT_SECRET`
+in the server environment. Accounts whose tier requires an explicit Google Cloud
+project are rejected rather than silently choosing or creating a billable project.
 
 For a ChatGPT subscription provider, choose **ChatGPT subscription** and select
 **Connect ChatGPT**. LLMHub shows OpenAI's one-time device code, keeps OAuth

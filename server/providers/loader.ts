@@ -6,6 +6,7 @@ import { ensureCodexAccessToken } from '../services/codex-token-manager'
 import { ensureClaudeAccessToken } from '../services/claude-token-manager'
 import { CLAUDE_CODE_BETA } from '../utils/claude-auth'
 import { fetchAntigravityModels } from './antigravity'
+import { DEFAULT_GEMINI_CLI_MODELS } from './gemini-cli'
 
 const MODEL_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 const MODEL_DISCOVERY_TIMEOUT = 10_000
@@ -76,6 +77,14 @@ export class ProviderLoader {
           ...MODEL_DISCOVERY_FETCH_OPTIONS
         }, config.connection)
         return (await fetchAntigravityModels(config, fetcher)).map(model => ({
+          id: `${config.name}/${model.id}`,
+          provider: config.name,
+          name: model.id,
+          display_name: model.display_name,
+          capabilities: model.capabilities
+        }))
+      } else if (config.protocol === 'gemini-cli-subscription') {
+        return DEFAULT_GEMINI_CLI_MODELS.map(model => ({
           id: `${config.name}/${model.id}`,
           provider: config.name,
           name: model.id,

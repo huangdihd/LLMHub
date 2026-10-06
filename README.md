@@ -109,14 +109,14 @@ silent fallback to a different upstream API.
 
 For Gemini CLI's Google-account access, choose **Gemini CLI / Google One** and
 select **Connect Google**. LLMHub uses Gemini CLI's installed-app OAuth client,
-onboards eligible accounts through the Code Assist backend, stores and refreshes
-tokens server-side, and exposes Google One AI credits in provider details when
-the account reports them. The browser eventually redirects to
-`http://127.0.0.1:8085/oauth2callback`; if no local listener is running, copy the
-complete failed callback URL into LLMHub. Configure Gemini CLI's installed-app
-credentials as `GEMINI_CLI_OAUTH_CLIENT_ID` and `GEMINI_CLI_OAUTH_CLIENT_SECRET`
-in the server environment. Accounts whose tier requires an explicit Google Cloud
-project are rejected rather than silently choosing or creating a billable project.
+stores and refreshes tokens server-side, and calls the Gemini API directly with
+the signed-in Google One account; no Google Cloud project is required. The
+browser eventually redirects to `http://127.0.0.1:8085/oauth2callback`; if no
+local listener is running, copy the complete failed callback URL into LLMHub.
+Configure Gemini CLI's installed-app credentials as `GEMINI_CLI_OAUTH_CLIENT_ID`
+and `GEMINI_CLI_OAUTH_CLIENT_SECRET` in the server environment. Google One quota
+and credit details are not currently reported because Google does not expose them
+through the Gemini API used for inference.
 
 For a ChatGPT subscription provider, choose **ChatGPT subscription** and select
 **Connect ChatGPT**. LLMHub shows OpenAI's one-time device code, keeps OAuth

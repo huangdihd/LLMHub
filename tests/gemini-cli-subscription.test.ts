@@ -17,8 +17,8 @@ const {
   GEMINI_CLI_CLIENT_ID,
   GEMINI_CLI_REDIRECT_URI,
   createGeminiCliAuthorization,
-  discoverGeminiCliAccount,
   exchangeGeminiCliAuthorizationCode,
+  fetchGeminiCliIdentity,
   parseGeminiCliAuthorizationCode,
   refreshGeminiCliTokens
 } = require(`${buildDir}/utils/gemini-cli-auth.js`)
@@ -100,42 +100,15 @@ await test('token exchange and refresh use Gemini CLI client credentials', async
   assert.equal(new URLSearchParams(refreshBody).get('grant_type'), 'refresh_token')
 })
 
-await test('account discovery uses existing Code Assist project and Google One tier', async () => {
-  const account = await discoverGeminiCliAccount('access', async (url: string, init?: RequestInit) => {
-    if (url.includes('userinfo')) return Response.json({ email: 'person@example.com' })
-    assert.match(url, /v1internal:loadCodeAssist$/)
-    const body = JSON.parse(String(init?.body))
-    assert.equal(body.metadata.pluginType, 'GEMINI')
-    return Response.json({
-      cloudaicompanionProject: 'managed-project',
-      currentTier: { id: 'standard-tier' },
-      paidTier: {
-        name: 'Google AI Pro',
-        availableCredits: [{ creditType: 'GOOGLE_ONE_AI', creditAmount: '500' }]
-      }
-    })
+await test('Google One identity lookup does not call Code Assist onboarding', async () => {
+  const calls: string[] = []
+  const account = await fetchGeminiCliIdentity('access', async (url: string) => {
+    calls.push(url)
+    return Response.json({ email: 'person@example.com' })
   })
-  assert.deepEqual(account, {
-    projectId: 'managed-project',
-    email: 'person@example.com',
-    tier: 'Google AI Pro',
-    credits: [{ creditType: 'GOOGLE_ONE_AI', creditAmount: '500' }]
-  })
-})
-
-await test('free accounts are onboarded without a caller project', async () => {
-  const calls: any[] = []
-  const account = await discoverGeminiCliAccount('access', async (url: string, init?: RequestInit) => {
-    if (url.includes('userinfo')) return Response.json({ email: 'free@example.com' })
-    calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-    if (url.includes('loadCodeAssist')) {
-      return Response.json({ allowedTiers: [{ id: 'free-tier', name: 'Free', isDefault: true }] })
-    }
-    return Response.json({ done: true, response: { cloudaicompanionProject: { id: 'free-project' } } })
-  })
-  assert.equal(calls[1].body.tierId, 'free-tier')
-  assert.equal(calls[1].body.cloudaicompanionProject, undefined)
-  assert.equal(account.projectId, 'free-project')
+  assert.deepEqual(account, { email: 'person@example.com' })
+  assert.equal(calls.length, 1)
+  assert.match(calls[0], /userinfo/)
 })
 
 await test('provider responses hide Gemini CLI credentials and project identifiers', () => {
@@ -149,6 +122,16 @@ await test('provider responses hide Gemini CLI credentials and project identifie
 
 console.log('gemini cli adapter')
 
+const googleOneConfig = {
+  ...config,
+  name: 'gemini-cli-google-one',
+  connection: {
+    ...config.connection,
+    base_url: 'https://generativelanguage.googleapis.com'
+  }
+}
+delete (googleOneConfig.connection as any).project_id
+
 await test('request wrapper uses Code Assist envelope', () => {
   const wrapped = wrapGeminiCliRequest('gemini-2.5-pro', { contents: [{ role: 'user', parts: [{ text: 'hi' }] }] }, 'project')
   assert.equal(wrapped.model, 'gemini-2.5-pro')
@@ -158,7 +141,33 @@ await test('request wrapper uses Code Assist envelope', () => {
   assert.equal(wrapped.request.contents[0].parts[0].text, 'hi')
 })
 
-await test('sync calls unwrap Code Assist responses', async () => {
+await test('Google One sync calls the Gemini API directly without a project envelope', async () => {
+  const originalFetch = globalThis.fetch
+  let captured: any
+  globalThis.fetch = (async (url: string, init: RequestInit) => {
+    assert.equal(url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent')
+    assert.equal((init.headers as Record<string, string>).Authorization, 'Bearer google-access')
+    captured = JSON.parse(String(init.body))
+    return Response.json({ candidates: [{ content: { parts: [{ text: 'hello' }] } }] })
+  }) as any
+  try {
+    const adapter = new GeminiCliAdapter(googleOneConfig)
+    const request = adapter.toProviderRequest({
+      model: 'gemini-cli-google-one/gemini-2.5-pro',
+      messages: [{ role: 'user', content: 'hi' }],
+      config: {},
+      stream: false
+    })
+    const response = await adapter.call(request)
+    assert.equal('project' in captured, false)
+    assert.equal('request' in captured, false)
+    assert.equal(response.candidates[0].content.parts[0].text, 'hello')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('sync calls unwrap Code Assist responses when a project is configured', async () => {
   const originalFetch = globalThis.fetch
   let captured: any
   globalThis.fetch = (async (url: string, init: RequestInit) => {
@@ -183,7 +192,42 @@ await test('sync calls unwrap Code Assist responses', async () => {
   }
 })
 
-await test('stream calls unwrap each Code Assist SSE response', async () => {
+await test('Google One stream passes through direct Gemini SSE responses', async () => {
+  const originalFetch = globalThis.fetch
+  let requestedUrl = ''
+  globalThis.fetch = (async (url: string) => {
+    requestedUrl = url
+    return new Response(
+      'data: {"candidates":[{"content":{"parts":[{"text":"hello"}]}}]}\n\n' +
+      'data: {"candidates":[{"finishReason":"STOP"}]}\n\n',
+      { headers: { 'Content-Type': 'text/event-stream' } }
+    )
+  }) as any
+  try {
+    const adapter = new GeminiCliAdapter(googleOneConfig)
+    const request = adapter.toProviderRequest({
+      model: 'gemini-cli-google-one/gemini-2.5-pro',
+      messages: [{ role: 'user', content: 'hi' }],
+      config: {},
+      stream: true
+    })
+    const reader = adapter.callStream(request).getReader()
+    let output = ''
+    const decoder = new TextDecoder()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      output += decoder.decode(value, { stream: true })
+    }
+    assert.equal(requestedUrl, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse')
+    assert.match(output, /"text":"hello"/)
+    assert.match(output, /"finishReason":"STOP"/)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+await test('stream calls unwrap each Code Assist SSE response when a project is configured', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = (async () => new Response(
     'data: {"response":{"candidates":[{"content":{"parts":[{"text":"hello"}]}}]}}\n\n' +

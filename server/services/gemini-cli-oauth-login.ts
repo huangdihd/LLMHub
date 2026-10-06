@@ -6,9 +6,9 @@ import { ProviderLoader } from '../providers/loader'
 import { DEFAULT_GEMINI_CLI_MODELS } from '../providers/gemini-cli'
 import { getProviderStore } from '../stores/provider.store'
 import {
-  GEMINI_CLI_API_BASE_URL,
+  GEMINI_CLI_GOOGLE_ONE_BASE_URL,
   createGeminiCliAuthorization,
-  discoverGeminiCliAccount,
+  fetchGeminiCliIdentity,
   exchangeGeminiCliAuthorizationCode,
   parseGeminiCliAuthorizationCode
 } from '../utils/gemini-cli-auth'
@@ -141,17 +141,15 @@ async function finishLogin(session: LoginSession, callbackUrl: string): Promise<
     const code = parseGeminiCliAuthorizationCode(callbackUrl, session.state)
     const tokens = await exchangeGeminiCliAuthorizationCode(code)
     if (!tokens.refresh_token) throw new Error('Google did not return a refresh token. Revoke access and try connecting again.')
-    const account = await discoverGeminiCliAccount(tokens.access_token)
+    const account = await fetchGeminiCliIdentity(tokens.access_token)
     const store = getProviderStore()
     const existing = await store.get(session.draft.name)
     const connection: ProviderConfig['connection'] = {
       api_key: tokens.access_token,
       refresh_token: tokens.refresh_token,
       token_expires_at: Date.now() + tokens.expires_in * 1000,
-      project_id: account.projectId,
       ...(account.email ? { account_email: account.email } : {}),
-      ...(account.tier ? { subscription_type: account.tier } : {}),
-      base_url: existing?.connection.base_url || GEMINI_CLI_API_BASE_URL,
+      base_url: GEMINI_CLI_GOOGLE_ONE_BASE_URL,
       timeout: session.draft.timeout,
       enable_timeout: session.draft.enable_timeout,
       max_retries: session.draft.max_retries

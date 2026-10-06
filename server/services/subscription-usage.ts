@@ -5,7 +5,6 @@ import { extractChatGptAccountId, extractChatGptPlanType } from '../utils/codex-
 import { CLAUDE_CODE_BETA } from '../utils/claude-auth'
 import { fetchAntigravityQuota } from '../providers/antigravity'
 import { ensureGeminiCliAccessToken } from './gemini-cli-token-manager'
-import { fetchGeminiCliAccount } from '../utils/gemini-cli-auth'
 
 const CACHE_TTL_MS = 60 * 1000
 const CODEX_API_BASE_URL = 'https://chatgpt.com/backend-api/wham'
@@ -270,29 +269,13 @@ async function fetchAntigravityUsage(config: ProviderConfig, fetcher: typeof fet
   }
 }
 
-async function fetchGeminiCliUsage(config: ProviderConfig, fetcher: typeof fetch): Promise<SubscriptionUsage> {
+async function fetchGeminiCliUsage(config: ProviderConfig, _fetcher: typeof fetch): Promise<SubscriptionUsage> {
   const active = await ensureGeminiCliAccessToken(config)
-  const data = await fetchGeminiCliAccount(
-    active.connection.api_key,
-    active.connection.project_id!,
-    fetcher
-  )
-  const paidTier = data?.paidTier
-  const googleOneCredits = Array.isArray(paidTier?.availableCredits)
-    ? paidTier.availableCredits.filter((credit: any) => credit?.creditType === 'GOOGLE_ONE_AI')
-    : []
-  const balance = googleOneCredits.reduce((total: number, credit: any) => {
-    const amount = Number.parseInt(String(credit?.creditAmount || '0'), 10)
-    return total + (Number.isFinite(amount) ? amount : 0)
-  }, 0)
   return {
     provider: config.name,
     protocol: 'gemini-cli-subscription',
-    ...optionalPlan(paidTier?.name || data?.currentTier?.name || active.connection.subscription_type),
+    ...optionalPlan(active.connection.subscription_type),
     windows: [],
-    ...(googleOneCredits.length > 0 ? {
-      credits: { balance, detail: 'Google One AI credits' }
-    } : {}),
     fetched_at: new Date().toISOString()
   }
 }

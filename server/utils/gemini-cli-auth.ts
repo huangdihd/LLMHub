@@ -4,6 +4,7 @@ export const GEMINI_CLI_CLIENT_ID = process.env.GEMINI_CLI_OAUTH_CLIENT_ID?.trim
 export const GEMINI_CLI_CLIENT_SECRET = process.env.GEMINI_CLI_OAUTH_CLIENT_SECRET?.trim() || ''
 export const GEMINI_CLI_REDIRECT_URI = 'http://127.0.0.1:8085/oauth2callback'
 export const GEMINI_CLI_API_BASE_URL = 'https://cloudcode-pa.googleapis.com'
+export const GEMINI_CLI_GOOGLE_ONE_BASE_URL = 'https://generativelanguage.googleapis.com'
 export const GEMINI_CLI_USER_AGENT = 'GeminiCLI/0.1.5/gemini-2.5-pro (darwin; arm64)'
 
 const AUTHORIZATION_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -24,10 +25,7 @@ export interface GeminiCliOAuthTokens {
 }
 
 export interface GeminiCliAccount {
-  projectId: string
   email?: string
-  tier?: string
-  credits?: Array<{ creditType?: string; creditAmount?: string }>
 }
 
 export function createGeminiCliAuthorization() {
@@ -105,74 +103,11 @@ export async function refreshGeminiCliTokens(
   return validateTokens(await response.json(), false)
 }
 
-export async function discoverGeminiCliAccount(
+export async function fetchGeminiCliIdentity(
   accessToken: string,
   fetcher: typeof fetch = fetch
 ): Promise<GeminiCliAccount> {
-  const metadata = {
-    ideType: 'IDE_UNSPECIFIED',
-    platform: 'PLATFORM_UNSPECIFIED',
-    pluginType: 'GEMINI'
-  }
-  const loaded = await geminiCliControlRequest('loadCodeAssist', { metadata }, accessToken, fetcher)
-  const email = await fetchGoogleAccountEmail(accessToken, fetcher)
-  const projectId = projectIdFrom(loaded.cloudaicompanionProject)
-  const tier = loaded.paidTier || loaded.currentTier
-
-  if (projectId) {
-    return {
-      projectId,
-      email,
-      ...(tier?.name ? { tier: tier.name } : {}),
-      ...(Array.isArray(loaded.paidTier?.availableCredits)
-        ? { credits: loaded.paidTier.availableCredits }
-        : {})
-    }
-  }
-
-  if (loaded.currentTier) {
-    throw new Error('This Google account requires a Google Cloud project, which LLMHub does not configure automatically')
-  }
-
-  const defaultTier = Array.isArray(loaded.allowedTiers)
-    ? loaded.allowedTiers.find((candidate: any) => candidate?.isDefault)
-    : undefined
-  if (!defaultTier?.id) {
-    const reason = Array.isArray(loaded.ineligibleTiers)
-      ? loaded.ineligibleTiers.map((candidate: any) => candidate?.reasonMessage).filter(Boolean).join(', ')
-      : ''
-    throw new Error(reason || 'This Google account is not eligible for Gemini Code Assist')
-  }
-
-  const operation = await geminiCliControlRequest('onboardUser', {
-    tierId: defaultTier.id,
-    metadata
-  }, accessToken, fetcher)
-  const completed = operation.done ? operation : await waitForOperation(operation.name, accessToken, fetcher)
-  const onboardedProject = projectIdFrom(completed.response?.cloudaicompanionProject)
-  if (!onboardedProject) throw new Error('Gemini CLI onboarding did not return a project')
-  return {
-    projectId: onboardedProject,
-    email,
-    ...(defaultTier.name ? { tier: defaultTier.name } : {})
-  }
-}
-
-export async function fetchGeminiCliAccount(
-  accessToken: string,
-  projectId: string,
-  fetcher: typeof fetch = fetch
-): Promise<any> {
-  return geminiCliControlRequest('loadCodeAssist', {
-    cloudaicompanionProject: projectId,
-    metadata: {
-      ideType: 'IDE_UNSPECIFIED',
-      platform: 'PLATFORM_UNSPECIFIED',
-      pluginType: 'GEMINI',
-      duetProject: projectId
-    },
-    mode: 'HEALTH_CHECK'
-  }, accessToken, fetcher)
+  return { email: await fetchGoogleAccountEmail(accessToken, fetcher) }
 }
 
 export async function geminiCliControlRequest(
@@ -199,20 +134,6 @@ export function geminiCliHeaders(accessToken: string): Record<string, string> {
   }
 }
 
-async function waitForOperation(name: unknown, accessToken: string, fetcher: typeof fetch): Promise<any> {
-  if (typeof name !== 'string' || !name) throw new Error('Gemini CLI onboarding did not return an operation')
-  for (let attempt = 0; attempt < 30; attempt++) {
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    const response = await fetcher(`${GEMINI_CLI_API_BASE_URL}/v1internal/${name}`, {
-      headers: geminiCliHeaders(accessToken)
-    })
-    if (!response.ok) throw await geminiCliAuthError(response, 'Unable to check Gemini CLI onboarding')
-    const operation = await response.json()
-    if (operation.done) return operation
-  }
-  throw new Error('Gemini CLI onboarding timed out')
-}
-
 async function fetchGoogleAccountEmail(accessToken: string, fetcher: typeof fetch): Promise<string | undefined> {
   try {
     const response = await fetcher(USERINFO_URL, {
@@ -224,11 +145,6 @@ async function fetchGoogleAccountEmail(accessToken: string, fetcher: typeof fetc
   } catch {
     return undefined
   }
-}
-
-function projectIdFrom(value: any): string | undefined {
-  if (typeof value === 'string') return value || undefined
-  return value && typeof value.id === 'string' ? value.id || undefined : undefined
 }
 
 function assertGeminiCliOAuthConfigured(): void {

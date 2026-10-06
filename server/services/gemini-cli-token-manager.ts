@@ -1,18 +1,18 @@
 import type { ProviderConfig } from '../core/types'
 import { getProviderStore } from '../stores/provider.store'
-import { discoverGeminiCliAccount, refreshGeminiCliTokens } from '../utils/gemini-cli-auth'
+import { refreshGeminiCliTokens } from '../utils/gemini-cli-auth'
 
 const REFRESH_WINDOW_MS = 5 * 60 * 1000
 const refreshes = new Map<string, Promise<ProviderConfig>>()
 
-/** Return a provider config with a usable Gemini CLI OAuth token and Code Assist project. */
+/** Return a provider config with a usable Gemini CLI OAuth token. */
 export async function ensureGeminiCliAccessToken(config: ProviderConfig): Promise<ProviderConfig> {
   if (config.protocol !== 'gemini-cli-subscription') return config
 
   const needsRefresh = !config.connection.api_key
     || !config.connection.token_expires_at
     || config.connection.token_expires_at <= Date.now() + REFRESH_WINDOW_MS
-  if (!needsRefresh && config.connection.project_id) return config
+  if (!needsRefresh) return config
   if (!config.connection.refresh_token && needsRefresh) throw geminiCliReconnectError()
 
   const existing = refreshes.get(config.name)
@@ -40,18 +40,12 @@ async function refreshAndPersist(config: ProviderConfig, refresh: boolean): Prom
     }
   }
 
-  const account = config.connection.project_id
-    ? undefined
-    : await discoverGeminiCliAccount(accessToken)
   const updated = await getProviderStore().update(config.name, {
     connection: {
       ...config.connection,
       api_key: accessToken,
       refresh_token: refreshToken,
-      token_expires_at: expiresAt,
-      ...(account?.projectId ? { project_id: account.projectId } : {}),
-      ...(account?.email ? { account_email: account.email } : {}),
-      ...(account?.tier ? { subscription_type: account.tier } : {})
+      token_expires_at: expiresAt
     }
   })
   if (!updated) throw new Error(`Provider not found: ${config.name}`)

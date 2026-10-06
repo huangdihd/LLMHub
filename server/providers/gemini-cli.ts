@@ -18,14 +18,16 @@ export class GeminiCliAdapter extends GeminiAdapter {
   override async call(input: any): Promise<any> {
     const { modelId: model, payload } = input
     const config = await ensureGeminiCliAccessToken(this.config)
-    const response = await fetchWithRetry(`${baseUrl(config)}/v1internal:generateContent`, {
+    const project = config.connection.project_id
+    const response = await fetchWithRetry(requestUrl(config, model, false), {
       method: 'POST',
       headers: geminiCliHeaders(config.connection.api_key),
-      body: JSON.stringify(wrapGeminiCliRequest(model, payload, config.connection.project_id!))
+      body: JSON.stringify(project ? wrapGeminiCliRequest(model, payload, project) : payload)
     }, config.connection)
     if (!response.ok) throw await geminiCliApiError(response)
     const body = await response.json() as any
-    if (!body?.response) throw new Error('Gemini CLI returned an invalid response')
+    if (!project) return body
+    if (!body?.response) throw new Error('Gemini CLI returned an invalid Code Assist response')
     return body.response
   }
 
@@ -40,12 +42,13 @@ export class GeminiCliAdapter extends GeminiAdapter {
           const timeout = config.connection.enable_timeout === false
             ? undefined
             : setTimeout(() => abortController.abort(), config.connection.timeout ?? 120000)
+          const project = config.connection.project_id
           let response: Response
           try {
-            response = await fetch(`${baseUrl(config)}/v1internal:streamGenerateContent?alt=sse`, {
+            response = await fetch(requestUrl(config, model, true), {
               method: 'POST',
               headers: { ...geminiCliHeaders(config.connection.api_key), 'Accept': 'text/event-stream' },
-              body: JSON.stringify(wrapGeminiCliRequest(model, payload, config.connection.project_id!)),
+              body: JSON.stringify(project ? wrapGeminiCliRequest(model, payload, project) : payload),
               signal: abortController.signal
             })
           } finally {
@@ -55,7 +58,8 @@ export class GeminiCliAdapter extends GeminiAdapter {
           await pipeGeminiCliSse(
             response,
             controller,
-            config.connection.enable_timeout === false ? 0 : config.connection.timeout ?? 120000
+            config.connection.enable_timeout === false ? 0 : config.connection.timeout ?? 120000,
+            Boolean(project)
           )
         } catch (error) {
           controller.error(error)
@@ -87,7 +91,8 @@ export function wrapGeminiCliRequest(model: string, payload: any, project: strin
 async function pipeGeminiCliSse(
   response: Response,
   controller: ReadableStreamDefaultController<Uint8Array>,
-  idleTimeoutMs: number
+  idleTimeoutMs: number,
+  unwrapCodeAssistResponse: boolean
 ): Promise<void> {
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
@@ -101,10 +106,10 @@ async function pipeGeminiCliSse(
       buffer += decoder.decode(value, { stream: true })
       const frames = buffer.split(/\r?\n\r?\n/)
       buffer = frames.pop() || ''
-      for (const frame of frames) emitFrame(frame, controller, encoder)
+      for (const frame of frames) emitFrame(frame, controller, encoder, unwrapCodeAssistResponse)
     }
     buffer += decoder.decode()
-    if (buffer.trim()) emitFrame(buffer, controller, encoder)
+    if (buffer.trim()) emitFrame(buffer, controller, encoder, unwrapCodeAssistResponse)
     controller.close()
   } finally {
     reader.releaseLock()
@@ -136,7 +141,8 @@ async function readStreamChunk(
 function emitFrame(
   frame: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  unwrapCodeAssistResponse: boolean
 ): void {
   const data = frame.split(/\r?\n/)
     .filter(line => line.startsWith('data:'))
@@ -145,8 +151,17 @@ function emitFrame(
   if (!data) return
 
   const parsed = JSON.parse(data)
-  if (!parsed?.response) return
-  controller.enqueue(encoder.encode(`data: ${JSON.stringify(parsed.response)}\n\n`))
+  const payload = unwrapCodeAssistResponse ? parsed?.response : parsed
+  if (!payload) return
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
+}
+
+function requestUrl(config: ProviderConfig, model: string, stream: boolean): string {
+  if (config.connection.project_id) {
+    return `${baseUrl(config)}/v1internal:${stream ? 'streamGenerateContent?alt=sse' : 'generateContent'}`
+  }
+  const method = stream ? 'streamGenerateContent?alt=sse' : 'generateContent'
+  return `${baseUrl(config)}/v1beta/models/${encodeURIComponent(model)}:${method}`
 }
 
 function baseUrl(config: ProviderConfig): string {

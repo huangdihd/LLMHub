@@ -433,7 +433,7 @@
                   </UBadge>
                 </div>
                 <p class="mt-1 text-sm leading-5 text-gray-500 dark:text-gray-400">
-                  Sign in with the Google account used by Gemini CLI. LLMHub uses the official Gemini CLI OAuth client and Code Assist backend; Google One AI credits are shown in provider details when available.
+                  Sign in with the Google account used by Gemini CLI. Google One connections call the Gemini API directly with OAuth and do not require a Google Cloud project.
                 </p>
               </div>
               <UButton
@@ -631,7 +631,7 @@ const protocolOptions: { value: Protocol; label: string; description: string; ic
   { value: 'codex-subscription', label: 'ChatGPT subscription', description: 'Use Codex models included with a ChatGPT plan. Sign in with OpenAI.', icon: 'i-heroicons-user-circle' },
   { value: 'claude-subscription', label: 'Claude Code subscription', description: 'Use Claude models included with a Claude plan. Sign in with Anthropic.', icon: 'i-heroicons-user-circle' },
   { value: 'antigravity-subscription', label: 'Google Antigravity subscription', description: 'Use Gemini and Claude models included with Google Antigravity.', icon: 'i-heroicons-sparkles' },
-  { value: 'gemini-cli-subscription', label: 'Gemini CLI / Google One', description: 'Use Gemini Code Assist with the Google account and Google One plan used by Gemini CLI.', icon: 'i-heroicons-sparkles' },
+  { value: 'gemini-cli-subscription', label: 'Gemini CLI / Google One', description: 'Use Gemini with the Google account and Google One plan used by Gemini CLI; no GCP project required.', icon: 'i-heroicons-sparkles' },
   { value: 'claude', label: 'Anthropic Claude', description: 'Providers using the Anthropic Messages API.', icon: 'i-heroicons-chat-bubble-left-right' },
   { value: 'gemini', label: 'Google Gemini', description: 'Providers using the Gemini generateContent API.', icon: 'i-heroicons-sparkles' }
 ]

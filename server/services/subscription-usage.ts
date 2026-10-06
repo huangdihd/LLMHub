@@ -4,7 +4,6 @@ import { ensureCodexAccessToken } from './codex-token-manager'
 import { extractChatGptAccountId, extractChatGptPlanType } from '../utils/codex-auth'
 import { CLAUDE_CODE_BETA } from '../utils/claude-auth'
 import { fetchAntigravityQuota } from '../providers/antigravity'
-import { ensureGeminiCliAccessToken } from './gemini-cli-token-manager'
 
 const CACHE_TTL_MS = 60 * 1000
 const CODEX_API_BASE_URL = 'https://chatgpt.com/backend-api/wham'
@@ -32,7 +31,7 @@ export interface SubscriptionResetCredit {
 
 export interface SubscriptionUsage {
   provider: string
-  protocol: 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription' | 'gemini-cli-subscription'
+  protocol: 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription'
   plan?: string
   windows: SubscriptionUsageWindow[]
   credits?: {
@@ -55,7 +54,6 @@ export function supportsSubscriptionUsage(
   return protocol === 'codex-subscription'
     || protocol === 'claude-subscription'
     || protocol === 'antigravity-subscription'
-    || protocol === 'gemini-cli-subscription'
 }
 
 export async function getSubscriptionUsage(
@@ -75,8 +73,6 @@ export async function getSubscriptionUsage(
     value = await fetchCodexUsage(config, fetcher)
   } else if (config.protocol === 'antigravity-subscription') {
     value = await fetchAntigravityUsage(config, fetcher)
-  } else if (config.protocol === 'gemini-cli-subscription') {
-    value = await fetchGeminiCliUsage(config, fetcher)
   } else {
     value = await fetchClaudeUsage(config, fetcher)
   }
@@ -271,17 +267,6 @@ async function fetchAntigravityUsage(config: ProviderConfig, fetcher: typeof fet
     protocol: 'antigravity-subscription',
     ...optionalPlan(config.connection.subscription_type),
     windows,
-    fetched_at: new Date().toISOString()
-  }
-}
-
-async function fetchGeminiCliUsage(config: ProviderConfig, _fetcher: typeof fetch): Promise<SubscriptionUsage> {
-  const active = await ensureGeminiCliAccessToken(config)
-  return {
-    provider: config.name,
-    protocol: 'gemini-cli-subscription',
-    ...optionalPlan(active.connection.subscription_type),
-    windows: [],
     fetched_at: new Date().toISOString()
   }
 }

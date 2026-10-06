@@ -34,7 +34,6 @@ await test('all subscription protocols are accepted by the shared route guard', 
   assert.equal(supportsSubscriptionUsage('codex-subscription'), true)
   assert.equal(supportsSubscriptionUsage('claude-subscription'), true)
   assert.equal(supportsSubscriptionUsage('antigravity-subscription'), true)
-  assert.equal(supportsSubscriptionUsage('gemini-cli-subscription'), true)
   assert.equal(supportsSubscriptionUsage('gemini'), false)
 })
 
@@ -232,26 +231,6 @@ await test('Claude usage request uses official OAuth endpoint and persisted plan
   assert.equal(captured.headers['anthropic-beta'], 'oauth-2025-04-20')
   assert.equal(usage.plan, 'max')
   assert.equal(usage.windows[0].used_percent, 10)
-})
-
-await test('Gemini CLI usage succeeds without plan or quota metadata', async () => {
-  const config = {
-    name: 'gemini-cli-usage-request',
-    protocol: 'gemini-cli-subscription',
-    connection: {
-      base_url: 'https://generativelanguage.googleapis.com',
-      api_key: 'access',
-      refresh_token: 'refresh',
-      token_expires_at: Date.now() + 3600000
-    },
-    models: []
-  }
-  const usage = await getSubscriptionUsage(config, true, async () => {
-    throw new Error('Gemini CLI usage must not call an unsupported quota endpoint')
-  })
-  assert.equal(usage.protocol, 'gemini-cli-subscription')
-  assert.equal(usage.plan, undefined)
-  assert.deepEqual(usage.windows, [])
 })
 
 await test('Antigravity model quotas become subscription usage windows', async () => {

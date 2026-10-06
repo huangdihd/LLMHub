@@ -119,7 +119,6 @@ export class ProviderStore {
     const authenticated = config.protocol === 'codex-subscription'
       || config.protocol === 'claude-subscription'
       || config.protocol === 'antigravity-subscription'
-      || config.protocol === 'gemini-cli-subscription'
       ? Boolean(connection.api_key && connection.refresh_token)
       : Boolean(connection.api_key)
     const {

@@ -1,75 +1,76 @@
 <template>
-  <UContainer class="py-3 sm:py-6 max-w-4xl px-2 sm:px-6">
-    <UCard class="flex flex-col h-[calc(100dvh-6.5rem)] sm:h-[calc(100dvh-8rem)]" :ui="{ body: { base: 'flex-1 overflow-hidden flex flex-col', padding: 'p-0 sm:p-0' }, header: { padding: 'px-3 py-3 sm:px-6 sm:py-5' }, footer: { padding: 'px-3 py-3 sm:px-6 sm:py-4' } }">
+  <UContainer class="py-3 sm:py-6 max-w-5xl px-2 sm:px-6">
+    <UCard class="flex flex-col h-[calc(100dvh-5.5rem)] sm:h-[calc(100dvh-7rem)]" :ui="{ body: { base: 'flex-1 overflow-hidden flex flex-col', padding: 'p-0 sm:p-0' }, header: { padding: 'px-3 py-3 sm:px-4 sm:py-3' }, footer: { padding: 'px-3 py-3 sm:px-4 sm:py-3' } }">
       <template #header>
-        <div class="space-y-3">
+        <div class="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <!-- Model + Endpoint -->
+          <USelectMenu
+            v-model="selectedModel"
+            :options="models"
+            value-attribute="id"
+            option-attribute="id"
+            placeholder="Select a model"
+            class="w-full lg:w-64"
+            searchable
+          >
+            <template #leading>
+              <UIcon name="i-heroicons-cpu-chip" class="w-4 h-4 text-gray-400" />
+            </template>
+          </USelectMenu>
+          <div class="flex items-center gap-3 lg:flex-1">
+            <USelectMenu
+              v-model="selectedEndpoint"
+              :options="endpoints"
+              value-attribute="value"
+              option-attribute="label"
+              class="flex-1 min-w-0 lg:flex-none lg:w-56"
+            />
+            <UCheckbox v-if="!isGeminiEndpoint" v-model="useStream" label="Stream" class="flex-shrink-0" />
+            <span v-else class="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">{{ isGeminiStream ? 'Always streams' : 'Never streams' }}</span>
+          </div>
           <!-- Auth Selection -->
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="flex items-center gap-2">
             <USelectMenu
               v-model="selectedAuthId"
               :options="authOptions"
               value-attribute="id"
               option-attribute="label"
-              class="w-full sm:w-48"
+              class="flex-1 min-w-0 lg:flex-none lg:w-44"
               @update:model-value="onAuthModeChange"
             >
               <template #leading>
-                <UIcon name="i-heroicons-shield-check" class="w-4 h-4 text-primary" />
+                <UIcon name="i-heroicons-key" class="w-4 h-4" :class="apiKey || selectedAuthId === 'session' ? 'text-primary-500' : 'text-amber-500'" />
               </template>
             </USelectMenu>
-
             <UInput
               v-if="selectedAuthId === 'custom'"
               v-model="apiKey"
               type="password"
-              placeholder="Enter Custom API Key"
-              icon="i-heroicons-key"
-              class="flex-1 min-w-0"
-              size="sm"
+              placeholder="API key"
+              class="flex-1 min-w-0 lg:flex-none lg:w-40"
               @update:model-value="onApiKeyChange"
             />
-            <div v-else class="flex-1 min-w-0 flex items-center px-3 py-1 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 text-xs text-gray-500 italic">
-              {{ selectedAuthId === 'session' ? 'Using Admin Session Permissions' : 'Using Pre-defined Token Permissions' }}
-            </div>
-
-            <UBadge v-if="apiKey || selectedAuthId === 'session'" color="green" variant="soft" size="sm" class="flex-shrink-0">Auth Set</UBadge>
-            <UBadge v-else color="gray" variant="soft" size="sm" class="flex-shrink-0">Auth Required</UBadge>
-          </div>
-          <!-- Model + Endpoint -->
-          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <USelectMenu
-              v-model="selectedModel"
-              :options="models"
-              value-attribute="id"
-              option-attribute="id"
-              placeholder="Select a model"
-              class="w-full sm:w-64"
-              searchable
-            />
-            <div class="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
-              <USelectMenu
-                v-model="selectedEndpoint"
-                :options="endpoints"
-                value-attribute="value"
-                option-attribute="label"
-                class="flex-1 min-w-0 sm:w-64"
-              />
-              <UCheckbox v-if="!isGeminiEndpoint" v-model="useStream" label="Stream" class="flex-shrink-0" />
-              <UBadge v-if="isGeminiEndpoint" :color="isGeminiStream ? 'green' : 'gray'" variant="soft" size="sm" class="flex-shrink-0">
-                {{ isGeminiStream ? 'Stream (forced)' : 'No Stream (forced)' }}
-              </UBadge>
-            </div>
+            <UTooltip text="Clear the conversation">
+              <UButton color="gray" variant="ghost" icon="i-heroicons-trash" aria-label="Clear the conversation" :disabled="isLoading || messages.length === 0" @click="messages = []" />
+            </UTooltip>
           </div>
         </div>
       </template>
 
-      <div ref="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref="chatContainer" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div v-if="messages.length === 0" class="h-full flex items-center justify-center">
+          <EmptyState
+            icon="i-heroicons-chat-bubble-left-right"
+            :title="selectedModel ? 'Say something to the model' : 'Pick a model to start'"
+            :description="!apiKey && !hasSession ? 'You also need to log in or enter an API key.' : 'Requests go through the gateway exactly as a client\'s would.'"
+          />
+        </div>
         <div v-for="(msg, index) in messages" :key="index"
           :class="msg.role === 'user' ? 'text-right' : 'text-left'">
           <div :class="msg.role === 'user'
-            ? 'bg-primary-500 text-white'
-            : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'"
-            class="inline-block px-4 py-2 rounded-lg max-w-[85%] text-left shadow-sm">
+            ? 'bg-primary-500 text-white dark:text-gray-900 rounded-2xl rounded-br-md'
+            : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl rounded-bl-md'"
+            class="inline-block px-4 py-2.5 max-w-[85%] text-left">
             <div v-if="msg.role === 'user'" class="whitespace-pre-wrap text-sm">{{ msg.content }}</div>
             <div v-else>
               <details v-if="msg.thinking" class="mb-2">
@@ -85,23 +86,27 @@
       </div>
 
       <template #footer>
-        <form @submit.prevent="sendMessage" class="flex gap-2">
-          <UInput
+        <form @submit.prevent="sendMessage" class="flex items-end gap-2">
+          <UTextarea
             v-model="input"
-            placeholder="Type a message..."
+            placeholder="Message"
             class="flex-1"
+            :rows="1"
+            autoresize
+            :maxrows="8"
             :disabled="isLoading"
             autocomplete="off"
+            @keydown.enter.exact="onEnter"
           />
           <UButton
             type="submit"
-            color="primary"
+            icon="i-heroicons-paper-airplane"
+            aria-label="Send"
             :disabled="!selectedModel || !input || isLoading || (!apiKey && !hasSession)"
             :loading="isLoading"
-          >
-            Send
-          </UButton>
+          />
         </form>
+        <p class="mt-1.5 text-xs text-gray-400 dark:text-gray-500 hidden sm:block">Enter to send, Shift+Enter for a new line.</p>
       </template>
     </UCard>
   </UContainer>
@@ -305,6 +310,13 @@ function makeGeminiClient(): GoogleGenAI {
       headers: extraHeaders()
     }
   })
+}
+
+// Enter confirms an IME candidate while composing (e.g. Chinese input); only send otherwise.
+function onEnter(event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  sendMessage()
 }
 
 async function sendMessage() {

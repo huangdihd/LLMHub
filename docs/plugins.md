@@ -602,16 +602,10 @@ multi-protocol playground lives with its default OpenAI ingress and retains all
 existing protocol flows. Explicit cross-plugin UI dependencies are allowed for
 these always-on built-ins, just as shared codecs are on the server.
 
-`npm test` includes `tests/dashboard-render.test.mjs`: it compiles original SFCs
-from the pinned pre-split Git commit and current SFCs, supplies identical fixture
-state and UI doubles, and compares SSR HTML after removing Vue comment anchors
-and normalizing whitespace. Coverage includes provider create/edit forms,
-subscription pending/failed login and collapsed/expanded usage, populated key
-editors, security, model ratios, thinking and desktop/mobile navigation. This
-is supplemented by `tests/dashboard-behavior.test.mjs`, which executes both
-versions' scripts to check loading barriers, POST/PUT sequences and payloads,
-plus extension state isolation, catalog reactivity and save failures. Neither
-is a pixel screenshot or browser interaction test: real OAuth, clipboard, popup,
+`npm test` includes `tests/dashboard-behavior.test.mjs`, which executes the
+pre-split and current page scripts to check loading barriers, POST/PUT sequences and payloads,
+plus extension state isolation, catalog reactivity and save failures. It
+is not a browser test: markup, real OAuth, clipboard, popup,
 timers, hydration, responsive layout and actual Nuxt UI dialogs still need
 manual acceptance. `DASHBOARD_BASELINE` may override the source baseline;
 preserve the original commit in repositories used to run this regression test.

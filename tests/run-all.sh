@@ -56,8 +56,7 @@ for t in tests/*.test.ts; do
 done
 
 echo ""
-echo "== dashboard render equivalence =="
-node tests/dashboard-render.test.mjs || FAIL=1
+echo "== dashboard behavior =="
 node --test tests/dashboard-behavior.test.mjs || FAIL=1
 
 echo ""

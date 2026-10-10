@@ -16,7 +16,6 @@ const apiModules = ['access-control', 'quota', 'fallback', 'stats'].map(name => 
 const sectionModules = ['rate-limit', 'access-control', 'token-billing'].map(name => `builtin/${name}/dashboard-sections.ts`)
 
 // Execute the actual TypeScript sessions and page scripts, without Nuxt or a browser.
-// Component rendering is covered separately by dashboard-render.test.mjs.
 function harness(fetch) {
   const notifications = []
   const navigations = []

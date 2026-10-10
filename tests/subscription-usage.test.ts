@@ -9,12 +9,11 @@ if (!buildDir) {
 }
 
 const {
-  consumeCodexResetCredit,
   getSubscriptionUsage,
-  normalizeClaudeUsage,
-  normalizeCodexUsage,
   supportsSubscriptionUsage
 } = require(`${buildDir}/services/subscription-usage.js`)
+const { normalizeClaudeUsage } = require(`${buildDir}/../builtin/provider-claude-subscription/subscription-usage.js`)
+const { consumeCodexResetCredit, normalizeCodexUsage } = require(`${buildDir}/../builtin/provider-codex/subscription-usage.js`)
 
 let passed = 0
 function test(name: string, fn: () => void | Promise<void>) {

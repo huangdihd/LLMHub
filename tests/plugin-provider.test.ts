@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const directory = process.env.ADAPTER_BUILD
 if (!directory) throw new Error('Run through tests/run-all.sh')
-const { providerRegistry } = require(`${directory}/providers/builtins.js`)
+const { providerRegistry } = require(`${directory}/core/registry.js`)
 const { ProviderStore, validatePluginConnectionExtra, validateRegisteredProvider } = require(`${directory}/stores/provider.store.js`)
 ;(globalThis as any).createError = (options: any) => Object.assign(new Error(options.message), options)
 
@@ -64,7 +64,7 @@ function loadHandler(path: string) {
   const exports: any = {}
   const mockedRequire = (id: string) => {
     if (id.endsWith('/provider.store')) return require(`${directory}/stores/provider.store.js`)
-    if (id.endsWith('/builtins')) return { providerRegistry }
+    if (id.endsWith('/registry')) return { providerRegistry }
     if (id.endsWith('/auth.store')) return { getAuthStore: () => ({ getSSRFConfig: async () => ({}) }) }
     if (id.endsWith('/loader')) return { ProviderLoader: { invalidateCache() {} } }
     if (id.endsWith('/validate-url')) return { validateBaseUrl: (url: string) => ({ valid: url === 'https://public.example', reason: 'blocked test URL' }) }

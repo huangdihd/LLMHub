@@ -1,5 +1,6 @@
+import { providerRegistry } from '../../core/registry'
 import type { ProviderConfig } from '../../core/types'
-import { getProviderStore, isBuiltinProvider, validatePluginConnectionExtra, validateProviderApiType, validateRegisteredProvider } from '../../stores/provider.store'
+import { getProviderStore, acceptsProviderExtra, validatePluginConnectionExtra, validateProviderApiType, validateRegisteredProvider } from '../../stores/provider.store'
 import { getAuthStore } from '../../stores/auth.store'
 import { ProviderLoader } from '../../providers/loader'
 import { validateBaseUrl } from '../../utils/validate-url'
@@ -17,23 +18,18 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, message: 'Provider name is required' })
     }
 
-    const protocol = body.protocol || 'openai'
+    const protocol = body.protocol || providerRegistry.defaultProviderId
     validateRegisteredProvider(protocol)
-    const pluginExtra = isBuiltinProvider(protocol)
-      ? undefined
-      : validatePluginConnectionExtra(protocol, body.connection?.extra !== undefined ? body.connection.extra : body.extra)
+    const management = providerRegistry.get(protocol)?.management
+    const pluginExtra = acceptsProviderExtra(protocol)
+      ? validatePluginConnectionExtra(protocol, body.connection?.extra !== undefined ? body.connection.extra : body.extra)
+      : undefined
 
-    if (body.protocol === 'codex-subscription') {
-      throw createError({ statusCode: 400, message: 'Use Connect ChatGPT to add a Codex Subscription provider' })
-    }
-    if (body.protocol === 'claude-subscription') {
-      throw createError({ statusCode: 400, message: 'Use Connect Claude to add a Claude Subscription provider' })
-    }
-    if (body.protocol === 'antigravity-subscription') {
-      throw createError({ statusCode: 400, message: 'Use Connect Google to add an Antigravity Subscription provider' })
+    if (management?.creationError) {
+      throw createError({ statusCode: 400, message: management.creationError })
     }
 
-    const baseUrl = isBuiltinProvider(protocol) ? body.base_url : body.connection?.base_url ?? body.base_url
+    const baseUrl = management?.flatCreateCredentials ? body.base_url : body.connection?.base_url ?? body.base_url
     if (baseUrl) {
       const ssrfConfig = await getAuthStore().getSSRFConfig()
       const result = validateBaseUrl(baseUrl, ssrfConfig)
@@ -45,7 +41,7 @@ export default defineEventHandler(async (event) => {
     const newProvider: ProviderConfig = {
       name: body.name,
       display_name: body.display_name || body.name,
-      protocol: body.protocol || 'openai',
+      protocol: body.protocol || providerRegistry.defaultProviderId,
       enabled: body.enabled !== false,
       use_custom_models: body.use_custom_models || false,
       connection: {
@@ -53,7 +49,7 @@ export default defineEventHandler(async (event) => {
           ? { api_type: body.connection?.api_type ?? body.api_type }
           : {}),
         ...(pluginExtra !== undefined ? { extra: pluginExtra } : {}),
-        api_key: (isBuiltinProvider(protocol) ? body.api_key : body.connection?.api_key ?? body.api_key) || '',
+        api_key: (management?.flatCreateCredentials ? body.api_key : body.connection?.api_key ?? body.api_key) || '',
         base_url: baseUrl || '',
         timeout: body.timeout || 30000,
         enable_timeout: body.enable_timeout ?? true,

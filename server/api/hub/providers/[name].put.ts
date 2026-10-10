@@ -1,5 +1,6 @@
+import { providerRegistry } from '../../../core/registry'
 import type { ProviderConfig } from '../../../core/types'
-import { getProviderStore, isBuiltinProvider, validatePluginConnectionExtra, validateProviderApiType, validateRegisteredProvider } from '../../../stores/provider.store'
+import { getProviderStore, acceptsProviderExtra, validatePluginConnectionExtra, validateProviderApiType, validateRegisteredProvider } from '../../../stores/provider.store'
 import { getAuthStore } from '../../../stores/auth.store'
 import { ProviderLoader } from '../../../providers/loader'
 import { validateBaseUrl } from '../../../utils/validate-url'
@@ -25,25 +26,18 @@ export default defineEventHandler(async (event) => {
 
     const nextProtocol = body.protocol ?? existing.protocol
     validateRegisteredProvider(nextProtocol)
-    const pluginExtra = isBuiltinProvider(nextProtocol)
-      ? undefined
-      : validatePluginConnectionExtra(
+    const management = providerRegistry.get(nextProtocol)?.management
+    const pluginExtra = acceptsProviderExtra(nextProtocol)
+      ? validatePluginConnectionExtra(
         nextProtocol,
         body.connection?.extra !== undefined ? body.connection.extra : body.extra,
         nextProtocol === existing.protocol ? existing.connection.extra : undefined
       )
-    const subscriptionProtocol = nextProtocol === 'codex-subscription'
-      || nextProtocol === 'claude-subscription'
-      || nextProtocol === 'antigravity-subscription'
-    if (nextProtocol === 'codex-subscription' && existing.protocol !== 'codex-subscription') {
-      throw createError({ statusCode: 400, message: 'Use Connect ChatGPT to add a Codex Subscription provider' })
+      : undefined
+    if (management?.creationError && nextProtocol !== existing.protocol) {
+      throw createError({ statusCode: 400, message: management.creationError })
     }
-    if (nextProtocol === 'claude-subscription' && existing.protocol !== 'claude-subscription') {
-      throw createError({ statusCode: 400, message: 'Use Connect Claude to add a Claude Subscription provider' })
-    }
-    if (nextProtocol === 'antigravity-subscription' && existing.protocol !== 'antigravity-subscription') {
-      throw createError({ statusCode: 400, message: 'Use Connect Google to add an Antigravity Subscription provider' })
-    }
+    const protectedFields = management?.protectedConnectionFields ?? []
 
     // Nested connection fields win during merging; validate that same effective URL.
     const newBaseUrl = body.connection?.base_url ?? body.base_url
@@ -58,39 +52,22 @@ export default defineEventHandler(async (event) => {
     // Build the connection patch from flat or nested body fields
     const connectionPatch: any = {}
     if (body.api_type !== undefined) connectionPatch.api_type = body.api_type
-    if (body.base_url !== undefined && !subscriptionProtocol) connectionPatch.base_url = body.base_url
+    if (body.base_url !== undefined && !protectedFields.includes('base_url')) connectionPatch.base_url = body.base_url
     // Sanitized provider responses intentionally omit the current secret, so
     // an empty password field in the edit form means "keep the existing key".
-    if (body.api_key !== undefined && body.api_key !== '' && !subscriptionProtocol) connectionPatch.api_key = body.api_key
+    if (body.api_key !== undefined && body.api_key !== '' && !protectedFields.includes('api_key')) connectionPatch.api_key = body.api_key
     if (body.timeout !== undefined) connectionPatch.timeout = body.timeout
     if (body.enable_timeout !== undefined) connectionPatch.enable_timeout = body.enable_timeout
     if (body.max_retries !== undefined) connectionPatch.max_retries = body.max_retries
     if (body.version !== undefined) connectionPatch.version = body.version
-    if (body.client_version !== undefined && nextProtocol === 'codex-subscription') {
-      connectionPatch.client_version = String(body.client_version).trim().slice(0, 64)
-    }
-    if (body.auto_reset_on_quota_exhausted !== undefined && nextProtocol === 'codex-subscription') {
-      connectionPatch.auto_reset_on_quota_exhausted = body.auto_reset_on_quota_exhausted === true
-    }
-    if (body.use_ai_credits_on_quota_exhausted !== undefined && nextProtocol === 'antigravity-subscription') {
-      connectionPatch.use_ai_credits_on_quota_exhausted = body.use_ai_credits_on_quota_exhausted === true
+    for (const [field, normalize] of Object.entries(management?.flatConnectionFields ?? {})) {
+      if (body[field] !== undefined) connectionPatch[field] = normalize(body[field])
     }
     // Also merge any nested connection object
     if (body.connection && typeof body.connection === 'object') {
       const nested = { ...body.connection }
-      delete nested.auto_reset_on_quota_exhausted
-      delete nested.use_ai_credits_on_quota_exhausted
-      if (subscriptionProtocol) {
-        delete nested.api_key
-        delete nested.refresh_token
-        delete nested.id_token
-        delete nested.device_id
-        delete nested.account_id
-        delete nested.project_id
-        delete nested.account_email
-        delete nested.base_url
-        delete nested.token_expires_at
-      }
+      for (const field of providerRegistry.ignoredNestedConnectionUpdates) delete nested[field]
+      for (const field of protectedFields) delete nested[field]
       Object.assign(connectionPatch, nested)
     }
 
@@ -98,6 +75,9 @@ export default defineEventHandler(async (event) => {
       connectionPatch.extra = pluginExtra
       if (connectionPatch.api_key === '') delete connectionPatch.api_key
     }
+
+    // Apply provider protection to both flat and nested representations.
+    for (const field of protectedFields) delete connectionPatch[field]
 
     const patch: Partial<ProviderConfig> = {
       ...(body.display_name !== undefined ? { display_name: body.display_name } : {}),

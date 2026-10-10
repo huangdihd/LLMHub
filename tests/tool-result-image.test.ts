@@ -7,9 +7,9 @@ const require = createRequire(import.meta.url)
 const buildDir = process.env.ADAPTER_BUILD
 if (!buildDir) throw new Error('ADAPTER_BUILD is required')
 
-const { OpenAIAdapter } = require(`${buildDir}/providers/openai.js`)
-const { ClaudeAdapter } = require(`${buildDir}/providers/claude.js`)
-const { GeminiAdapter } = require(`${buildDir}/providers/gemini.js`)
+const { OpenAIAdapter } = require(`${buildDir}/../builtin/provider-openai/openai.js`)
+const { ClaudeAdapter } = require(`${buildDir}/../builtin/provider-claude/claude.js`)
+const { GeminiAdapter } = require(`${buildDir}/../builtin/provider-gemini/gemini.js`)
 const { GeminiGenerateParser } = require(`${buildDir}/protocols/gemini-generate.js`)
 
 const dummyConfig = {

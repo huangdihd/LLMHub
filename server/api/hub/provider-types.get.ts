@@ -1,4 +1,4 @@
-import { providerRegistry } from '../../providers/builtins'
+import { providerRegistry } from '../../core/registry'
 
 export default defineEventHandler(() => providerRegistry.list().map(definition => ({
   id: definition.id,

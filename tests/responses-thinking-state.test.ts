@@ -2,10 +2,10 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { OpenAIResponsesSerializer } from '../server/protocols/openai-responses-serializer.ts'
 import { OpenAIResponsesParser } from '../server/protocols/openai-responses.ts'
-import { decodeThinkingState, encodeThinkingState } from '../server/utils/responses-thinking-state.ts'
+import { decodeThinkingState, encodeThinkingState } from '../builtin/provider-openai/responses-thinking-state.ts'
 
 const require = createRequire(import.meta.url)
-const { AntigravityAdapter } = require(`${process.env.ADAPTER_BUILD}/providers/antigravity.js`)
+const { AntigravityAdapter } = require(`${process.env.ADAPTER_BUILD}/../builtin/provider-antigravity/antigravity.js`)
 const signed = { type: 'thinking' as const, thinking: '原始思考', signature: 'opaque-signature' }
 assert.deepEqual(decodeThinkingState(encodeThinkingState([signed])), [signed])
 assert.equal(decodeThinkingState('native-openai-state'), undefined)

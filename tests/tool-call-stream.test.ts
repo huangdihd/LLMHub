@@ -10,7 +10,7 @@ if (!buildDir) {
   console.error('ADAPTER_BUILD not set — run via tests/run-all.sh')
   process.exit(1)
 }
-const { OpenAIAdapter } = require(`${buildDir}/providers/openai.js`)
+const { OpenAIAdapter } = require(`${buildDir}/../builtin/provider-openai/openai.js`)
 
 let passed = 0
 function test(name: string, fn: () => void | Promise<void>) {

@@ -1,6 +1,6 @@
 import type { ProviderConfig } from '../core/types'
 import type { SafeProviderConnection } from '../core/registry'
-import { BUILTIN_PROVIDER_IDS, providerRegistry } from '../providers/builtins'
+import { providerRegistry } from '../core/registry'
 
 const STORAGE_PREFIX = 'providers:'
 
@@ -10,8 +10,8 @@ export function validateProviderApiType(value: unknown): void {
   }
 }
 
-export function isBuiltinProvider(protocol: string): boolean {
-  return Object.values(BUILTIN_PROVIDER_IDS).some(id => id === protocol)
+export function acceptsProviderExtra(protocol: string): boolean {
+  return providerRegistry.get(protocol)?.management?.acceptsExtra !== false
 }
 
 export function validateRegisteredProvider(protocol: unknown): asserts protocol is string {
@@ -126,8 +126,11 @@ export class ProviderStore {
 
     // Normalise: ensure no duplicate root-level legacy fields leak through
     const clean = this.normalise(config)
-    if (clean.protocol === 'openai' && clean.connection.api_type === undefined) {
-      clean.connection.api_type = 'responses'
+    const defaults = providerRegistry.get(clean.protocol)?.management?.createConnectionDefaults
+    for (const [field, value] of Object.entries(defaults ?? {})) {
+      if ((clean.connection as Record<string, unknown>)[field] === undefined) {
+        (clean.connection as Record<string, unknown>)[field] = value
+      }
     }
     await storage.setItem(key, clean)
     return clean
@@ -157,7 +160,7 @@ export class ProviderStore {
       connection: {
         ...existing.connection,
         ...(patch.connection || {}),
-        ...(!isBuiltinProvider(nextProtocol) && patch.connection?.extra !== undefined
+        ...(acceptsProviderExtra(nextProtocol) && patch.connection?.extra !== undefined
           ? { extra: { ...previousExtra, ...patch.connection.extra } }
           : {})
       }
@@ -190,7 +193,7 @@ export class ProviderStore {
       account_id: _accountId, project_id: _projectId, account_email: _accountEmail,
       ...safeConnection
     } = connection
-    if (!isBuiltinProvider(config.protocol) && safeConnection.extra) {
+    if (acceptsProviderExtra(config.protocol) && safeConnection.extra) {
       // When a plugin is unavailable its schema cannot identify secrets: fail closed.
       safeConnection.extra = definition ? { ...safeConnection.extra } : {}
       for (const field of definition?.connectionSchema ?? []) {
@@ -236,7 +239,7 @@ export class ProviderStore {
     const clean: ProviderConfig = {
       name,
       display_name: display_name || name,
-      protocol: protocol || 'openai',
+      protocol: protocol || providerRegistry.defaultProviderId,
       enabled: enabled !== false,
       use_custom_models: use_custom_models ?? false,
       connection: {
@@ -263,7 +266,7 @@ export class ProviderStore {
         ...(connection?.rate_limit_tier ? { rate_limit_tier: connection.rate_limit_tier } : {}),
         ...(connection?.project_id ? { project_id: connection.project_id } : {}),
         ...(connection?.account_email ? { account_email: connection.account_email } : {}),
-        ...(!isBuiltinProvider(protocol) && connection?.extra !== undefined
+        ...(acceptsProviderExtra(protocol) && connection?.extra !== undefined
           ? { extra: { ...connection.extra } }
           : {})
       },

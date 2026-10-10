@@ -4,8 +4,8 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const build = process.env.ADAPTER_BUILD
 if (!build) throw new Error('Run via tests/run-all.sh')
-const { OpenAIResponsesAdapter } = require(`${build}/providers/openai-responses.js`)
-const { OpenAIAdapter } = require(`${build}/providers/openai.js`)
+const { OpenAIResponsesAdapter } = require(`${build}/../builtin/provider-openai/openai-responses.js`)
+const { OpenAIAdapter } = require(`${build}/../builtin/provider-openai/openai.js`)
 const { ProviderManager } = require(`${build}/providers/manager.js`)
 const config = {
   name: 'api', protocol: 'openai',

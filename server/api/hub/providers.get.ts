@@ -1,5 +1,5 @@
-import { getProviderStore, isBuiltinProvider } from '../../stores/provider.store'
-import { providerRegistry } from '../../providers/builtins'
+import { getProviderStore } from '../../stores/provider.store'
+import { providerRegistry } from '../../core/registry'
 
 export default defineEventHandler(async () => {
   try {
@@ -8,7 +8,7 @@ export default defineEventHandler(async () => {
     return {
       providers: providers.map(provider => ({
         ...store.sanitize(provider),
-        ...(!isBuiltinProvider(provider.protocol) && !providerRegistry.get(provider.protocol)
+        ...(!providerRegistry.get(provider.protocol)
           ? { available: false, unavailableReason: 'Provider plugin is not loaded' }
           : {})
       }))

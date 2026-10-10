@@ -65,7 +65,8 @@ export class BuiltinPluginHost {
         hooks.push(name)
       },
       registerProvider: definition => {
-        const name = registrationId(definition.id)
+        registrationId(definition.id)
+        const name = definition.id
         unregister.push(this.options.providerRegistry.register({ ...definition, id: name }))
         providers.push(name)
       },

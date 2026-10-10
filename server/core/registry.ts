@@ -10,18 +10,44 @@ export interface ModelDiscoveryContext {
   fetcher(url: string, options?: RequestInit): Promise<Response>
 }
 
+export interface ProviderManagement {
+  /** Schema-based plugin fields are accepted unless explicitly disabled. */
+  acceptsExtra?: boolean
+  /** Legacy creation forms read credentials only from the flat request body. */
+  flatCreateCredentials?: boolean
+  /** Direct creation and transitions into this type require a separate connection flow. */
+  creationError?: string
+  protectedConnectionFields?: readonly string[]
+  /** Top-level fields with provider-owned normalization rules. */
+  flatConnectionFields?: Readonly<Record<string, (value: unknown) => unknown>>
+  /** Fill fields still absent after common storage normalization; never override its defaults. */
+  createConnectionDefaults?: Partial<ProviderConfig['connection']>
+}
+
 export interface ProviderDefinition {
   id: string
   displayName?: string
   connectionSchema?: PluginField[]
+  management?: ProviderManagement
   createAdapter(config: ProviderConfig): ProviderAdapter
   fetchModels(config: ProviderConfig, context: ModelDiscoveryContext): Promise<ModelInfo[]>
   secretConnectionFields: readonly string[]
   requiresRefreshToken?: boolean
+  refreshAccessToken?(config: ProviderConfig): Promise<ProviderConfig>
+  subscriptionUsage?(config: ProviderConfig, fetcher: typeof fetch): Promise<import('../services/subscription-usage').SubscriptionUsage>
+  resetSubscriptionUsage?(config: ProviderConfig, creditId: string | undefined, idempotencyKey: string, fetcher: typeof fetch): Promise<import('../services/subscription-usage').SubscriptionResetResult>
+  login?: { path: string }
 }
 
 /** Explicit registration rejects accidental replacement of an existing provider. */
 export class ProviderRegistry {
+  /** Set by the composition root, never by protocol-specific core logic. */
+  defaultProviderId = ''
+  ignoredNestedConnectionUpdates: readonly string[] = []
+  subscriptionResetErrors = {
+    unsupportedProvider: 'Provider does not support subscription resets',
+    unsupportedOperation: 'Usage limit resets are only available for providers supporting subscription resets'
+  }
   private definitions = new Map<string, ProviderDefinition>()
 
   register(definition: ProviderDefinition): () => void {
@@ -39,4 +65,6 @@ export class ProviderRegistry {
     return Array.from(this.definitions.values())
   }
 }
+
+export const providerRegistry = new ProviderRegistry()
 

@@ -4,12 +4,12 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const buildDir = process.env.ADAPTER_BUILD
 if (!buildDir) throw new Error('ADAPTER_BUILD not set — run via tests/run-all.sh')
-const { OpenAIAdapter } = require(`${buildDir}/providers/openai.js`)
-const { CodexAdapter } = require(`${buildDir}/providers/codex.js`)
-const { ClaudeAdapter } = require(`${buildDir}/providers/claude.js`)
-const { ClaudeSubscriptionAdapter } = require(`${buildDir}/providers/claude-subscription.js`)
-const { GeminiAdapter } = require(`${buildDir}/providers/gemini.js`)
-const { AntigravityAdapter } = require(`${buildDir}/providers/antigravity.js`)
+const { OpenAIAdapter } = require(`${buildDir}/../builtin/provider-openai/openai.js`)
+const { CodexAdapter } = require(`${buildDir}/../builtin/provider-codex/codex.js`)
+const { ClaudeAdapter } = require(`${buildDir}/../builtin/provider-claude/claude.js`)
+const { ClaudeSubscriptionAdapter } = require(`${buildDir}/../builtin/provider-claude-subscription/claude-subscription.js`)
+const { GeminiAdapter } = require(`${buildDir}/../builtin/provider-gemini/gemini.js`)
+const { AntigravityAdapter } = require(`${buildDir}/../builtin/provider-antigravity/antigravity.js`)
 
 async function test(name: string, fn: () => void | Promise<void>) {
   try {

@@ -59,9 +59,9 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
     },
     'server/stores/provider.store.ts': { getProviderStore: forbidden },
     'server/utils/fetch.ts': { fetchWithRetry: forbidden },
-    'server/utils/codex-auth.ts': { extractChatGptAccountId: forbidden },
-    'server/services/codex-token-manager.ts': { ensureCodexAccessToken: forbidden },
-    'server/services/subscription-usage.ts': { consumeCodexResetCredit: forbidden }
+    'builtin/provider-codex/codex-auth.ts': { extractChatGptAccountId: forbidden },
+    'builtin/provider-codex/codex-token-manager.ts': { ensureCodexAccessToken: forbidden },
+    'server/services/subscription-usage.ts': { consumeSubscriptionResetCredit: forbidden }
   }
   const allowed = new Set([
     'server/api/openai/responses.post.ts',
@@ -70,10 +70,10 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
     'server/protocols/openai-responses.ts',
     'server/protocols/openai-responses-serializer.ts',
     'server/utils/structured-output.ts',
-    'server/utils/responses-thinking-state.ts',
-    'server/providers/responses-codec.ts',
-    'server/providers/openai.ts',
-    `server/providers/${provider}.ts`
+    'builtin/provider-openai/responses-thinking-state.ts',
+    'builtin/provider-openai/responses-codec.ts',
+    'builtin/provider-openai/openai.ts',
+    `builtin/provider-${provider === 'openai-responses' ? 'openai' : provider}/${provider}.ts`
   ].map(path => resolve(root, path)))
   const globals = {
     Buffer, TextDecoder, console, fetch: forbidden,
@@ -108,7 +108,7 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
     return module.exports
   }
   const className = { codex: 'CodexAdapter', claude: 'ClaudeAdapter', openai: 'OpenAIAdapter', 'openai-responses': 'OpenAIResponsesAdapter' }[provider]
-  const Adapter = load(resolve(root, `server/providers/${provider}.ts`))[className]
+  const Adapter = load(resolve(root, `builtin/provider-${provider === 'openai-responses' ? 'openai' : provider}/${provider}.ts`))[className]
   adapter = new Adapter({ name: 'offline', models: [{ id: 'test-model' }], connection: {} })
   parser = new (load(resolve(root, 'server/protocols/openai-responses.ts')).OpenAIResponsesParser)()
   const upstream = (provider === 'codex' || provider === 'openai-responses')

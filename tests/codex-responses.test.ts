@@ -8,7 +8,7 @@ if (!buildDir) {
   console.error('ADAPTER_BUILD not set — run via tests/run-all.sh')
   process.exit(1)
 }
-const { CodexAdapter } = require(`${buildDir}/providers/codex.js`)
+const { CodexAdapter } = require(`${buildDir}/../builtin/provider-codex/codex.js`)
 const { ProviderLoader } = require(`${buildDir}/providers/loader.js`)
 const { ProviderStore } = require(`${buildDir}/stores/provider.store.js`)
 const {
@@ -21,7 +21,7 @@ const {
   pollCodexDeviceCode,
   refreshCodexTokens,
   requestCodexDeviceCode
-} = require(`${buildDir}/utils/codex-auth.js`)
+} = require(`${buildDir}/../builtin/provider-codex/codex-auth.js`)
 
 let passed = 0
 function test(name: string, fn: () => void | Promise<void>) {
@@ -130,7 +130,8 @@ await test('model discovery sends the required Codex client version and catalog 
   }) as any
 
   try {
-    const models = await new ProviderLoader().fetchCodexModels(config)
+    const { fetchCodexModels } = require(`${buildDir}/../builtin/provider-codex/model-discovery.js`)
+    const models = await fetchCodexModels(config)
     assert.equal(captured.url, 'https://chatgpt.com/backend-api/codex/models?client_version=0.150.0')
     assert.equal(captured.headers.Accept, 'application/json')
     assert.equal(captured.headers.originator, 'llmhub')

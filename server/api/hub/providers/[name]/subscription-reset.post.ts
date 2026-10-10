@@ -1,4 +1,5 @@
-import { consumeCodexResetCredit } from '../../../../services/subscription-usage'
+import { providerRegistry } from '../../../../core/registry'
+import { consumeSubscriptionResetCredit, supportsSubscriptionReset } from '../../../../services/subscription-usage'
 import { getProviderStore } from '../../../../stores/provider.store'
 
 export default defineEventHandler(async (event) => {
@@ -8,15 +9,15 @@ export default defineEventHandler(async (event) => {
 
     const provider = await getProviderStore().get(name)
     if (!provider) throw createError({ statusCode: 404, message: 'Provider not found' })
-    if (provider.protocol !== 'codex-subscription') {
-      throw createError({ statusCode: 400, message: 'Provider does not use a Codex subscription' })
+    if (!supportsSubscriptionReset(provider.protocol)) {
+      throw createError({ statusCode: 400, message: providerRegistry.subscriptionResetErrors.unsupportedProvider })
     }
 
     const body = await readBody(event)
     const creditId = typeof body?.credit_id === 'string' && body.credit_id.trim()
       ? body.credit_id.trim()
       : undefined
-    return await consumeCodexResetCredit(provider, creditId)
+    return await consumeSubscriptionResetCredit(provider, creditId)
   } catch (error: any) {
     if (error.statusCode) throw error
     throwFormattedError(error)

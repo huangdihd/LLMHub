@@ -1,6 +1,6 @@
 import { parseGeminiOutputConfig } from '../utils/structured-output.ts'
 import type { ProtocolParser, LLMRequest, LLMStreamChunk, ContentBlock } from '../core/types'
-import { sanitizeGeminiSchema } from '../utils/sanitize-gemini-schema'
+import { sanitizeGeminiSchema } from '../../builtin/provider-gemini/sanitize-gemini-schema'
 
 export class GeminiGenerateParser implements ProtocolParser {
   name = 'gemini-generate'

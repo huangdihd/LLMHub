@@ -1,7 +1,6 @@
 import type { ProviderConfig, ModelInfo } from '../core/types'
 import { getProviderStore } from '../stores/provider.store'
-import { providerRegistry } from './builtins'
-import { fetchCodexModels } from './model-discovery'
+import { providerRegistry } from '../core/registry'
 import { fetchWithRetry } from '../utils/fetch'
 import type { ModelDiscoveryContext } from '../core/registry'
 
@@ -79,11 +78,6 @@ export class ProviderLoader {
       display_name: m.display_name,
       capabilities: m.capabilities
     }))
-  }
-
-  // Retain the existing discovery entry point used by adapter regression tests.
-  private fetchCodexModels(config: ProviderConfig): Promise<ModelInfo[]> {
-    return fetchCodexModels(config)
   }
 
   /** Fetch models from all providers, returning stale cache while it refreshes. */

@@ -1,5 +1,5 @@
 import { PluginManager } from './manager'
-import { providerRegistry } from '../providers/builtins'
+import { providerRegistry } from '../core/registry'
 import { requestHooks } from '../core/hooks'
 import type { PluginManagerOptions } from './manager'
 import { ProviderLoader } from '../providers/loader'

@@ -1,4 +1,4 @@
-import { encodeThinkingState } from '../utils/responses-thinking-state.ts'
+import { encodeThinkingState } from '../../builtin/provider-openai/responses-thinking-state.ts'
 import { toResponsesFormat } from '../utils/structured-output.ts'
 import type { ContentBlock, OutputFormat } from '../core/types'
 import type { ProtocolSerializer, LLMResponse, LLMStreamChunk, Usage } from '../core/types'

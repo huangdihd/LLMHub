@@ -8,7 +8,7 @@ if (!buildDir) {
   process.exit(1)
 }
 
-const { ClaudeSubscriptionAdapter } = require(`${buildDir}/providers/claude-subscription.js`)
+const { ClaudeSubscriptionAdapter } = require(`${buildDir}/../builtin/provider-claude-subscription/claude-subscription.js`)
 const { ProviderStore } = require(`${buildDir}/stores/provider.store.js`)
 const {
   CLAUDE_CLIENT_ID,
@@ -20,7 +20,7 @@ const {
   exchangeClaudeAuthorizationCode,
   parseClaudeAuthorizationCode,
   refreshClaudeTokens
-} = require(`${buildDir}/utils/claude-auth.js`)
+} = require(`${buildDir}/../builtin/provider-claude-subscription/claude-auth.js`)
 
 let passed = 0
 function test(name: string, fn: () => void | Promise<void>) {

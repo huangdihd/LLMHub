@@ -1,4 +1,4 @@
-import { decodeThinkingState } from '../utils/responses-thinking-state.ts'
+import { decodeThinkingState } from '../../builtin/provider-openai/responses-thinking-state.ts'
 import { parseResponsesFormat } from '../utils/structured-output.ts'
 import type { ProtocolParser, LLMRequest, LLMStreamChunk, ContentBlock } from '../core/types'
 

@@ -11,7 +11,7 @@ if (!buildDir) {
 process.env.ANTIGRAVITY_OAUTH_CLIENT_ID = 'test-antigravity-client-id'
 process.env.ANTIGRAVITY_OAUTH_CLIENT_SECRET = 'test-antigravity-client-secret'
 
-const { AntigravityAdapter } = require(`${buildDir}/providers/antigravity.js`)
+const { AntigravityAdapter } = require(`${buildDir}/../builtin/provider-antigravity/antigravity.js`)
 const { ProviderStore } = require(`${buildDir}/stores/provider.store.js`)
 const {
   ANTIGRAVITY_CLIENT_ID,
@@ -21,7 +21,7 @@ const {
   exchangeAntigravityAuthorizationCode,
   parseAntigravityAuthorizationCode,
   refreshAntigravityTokens
-} = require(`${buildDir}/utils/antigravity-auth.js`)
+} = require(`${buildDir}/../builtin/provider-antigravity/antigravity-auth.js`)
 
 let passed = 0
 function test(name: string, fn: () => void | Promise<void>) {
@@ -282,7 +282,7 @@ await test('language model requests share agent envelopes without model behavior
         type: 'object', properties: { scene: { type: 'string' } }
       })
     }
-    const { DEFAULT_ANTIGRAVITY_MODELS } = require(`${buildDir}/providers/antigravity.js`)
+    const { DEFAULT_ANTIGRAVITY_MODELS } = require(`${buildDir}/../builtin/provider-antigravity/antigravity.js`)
     assert.deepEqual(DEFAULT_ANTIGRAVITY_MODELS.map((model: any) => model.id), [
       'gemini-3-flash', 'gemini-pro-agent', 'claude-sonnet-4-6', 'claude-opus-4-6-thinking'
     ])

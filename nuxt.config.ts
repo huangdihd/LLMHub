@@ -1,7 +1,12 @@
-import { builtinCatalog } from './builtin/catalog'
+import { existsSync, readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+const builtinLayers = readdirSync(new URL('./builtin/', import.meta.url), { withFileTypes: true })
+  .filter(entry => entry.isDirectory() && existsSync(new URL(`./builtin/${entry.name}/nuxt.config.ts`, import.meta.url)))
+  .map(entry => fileURLToPath(new URL(`./builtin/${entry.name}`, import.meta.url)))
 
 export default defineNuxtConfig({
-  extends: builtinCatalog.map(plugin => plugin.layer),
+  extends: builtinLayers,
   compatibilityDate: '2025-05-15',
   devtools: { enabled: true },
   typescript: {

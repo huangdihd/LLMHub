@@ -28,6 +28,7 @@ function handler(path: string) {
   }).outputText
   const exports: any = {}
   const mockedRequire = (id: string) => {
+    if (id.endsWith('/registry')) return require(`${buildDir}/core/registry.js`)
     if (id.endsWith('/provider.store')) return require(`${buildDir}/stores/provider.store.js`)
     if (id.endsWith('/auth.store')) return { getAuthStore: () => ({ getSSRFConfig: async () => ({}) }) }
     if (id.endsWith('/loader')) return { ProviderLoader: { invalidateCache() {} } }

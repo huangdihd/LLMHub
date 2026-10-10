@@ -7,9 +7,9 @@ const buildDir = process.env.ADAPTER_BUILD
 if (!buildDir) throw new Error('ADAPTER_BUILD not set — run via tests/run-all.sh')
 
 const adapters = [
-  ['OpenAI', require(`${buildDir}/providers/openai.js`).OpenAIAdapter, {}],
-  ['Claude', require(`${buildDir}/providers/claude.js`).ClaudeAdapter, {}],
-  ['Gemini', require(`${buildDir}/providers/gemini.js`).GeminiAdapter, { modelId: 'test', payload: {} }]
+  ['OpenAI', require(`${buildDir}/../builtin/provider-openai/openai.js`).OpenAIAdapter, {}],
+  ['Claude', require(`${buildDir}/../builtin/provider-claude/claude.js`).ClaudeAdapter, {}],
+  ['Gemini', require(`${buildDir}/../builtin/provider-gemini/gemini.js`).GeminiAdapter, { modelId: 'test', payload: {} }]
 ] as const
 
 // Let the adapter's async fetch/read/enqueue chain settle after advancing time.

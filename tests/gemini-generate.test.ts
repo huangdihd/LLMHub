@@ -9,7 +9,7 @@ if (!buildDir) {
   console.error('ADAPTER_BUILD not set — run via tests/run-all.sh')
   process.exit(1)
 }
-const { GeminiAdapter } = require(`${buildDir}/providers/gemini.js`)
+const { GeminiAdapter } = require(`${buildDir}/../builtin/provider-gemini/gemini.js`)
 const { GeminiGenerateParser } = require(`${buildDir}/protocols/gemini-generate.js`)
 const { GeminiGenerateSerializer } = require(`${buildDir}/protocols/gemini-generate-serializer.js`)
 

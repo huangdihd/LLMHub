@@ -49,6 +49,22 @@ existing settings URLs and `.data` records are unchanged. See
 [Writing plugins](docs/plugins.md) for admission and accounting stages and the
 Nuxt-layer registration convention.
 
+Upstream providers also ship as built-ins: `builtin/provider-openai/`,
+`provider-claude/`, `provider-gemini/`, `provider-codex/`,
+`provider-claude-subscription/`, and `provider-antigravity/`. They own adapters,
+model discovery and applicable login/token flows; `server/providers/` retains
+registry-based loading/routing. Existing protocol IDs and login URLs are
+preserved. The shared provider contract includes management, subscription usage,
+reset, refresh and login declarations for runtime plugins too; refresh/login
+metadata does not itself dispatch a flow (see the plugin guide).
+
+`builtin/catalog.ts` registers plugins at runtime. Nuxt discovers layers by
+scanning `builtin/*/nuxt.config.ts` without importing that catalog. Non-Nitro
+callers must await `initializeBuiltinPlugins()` from `builtin/assembly.ts` before
+using shared registries and provide storage when exercising persisted policy
+operations. Built-ins share codecs/adapters and helpers rather than forming
+independently deployable packages.
+
 ### Thinking Policy
 
 The **Thinking** dashboard page configures the global effort-to-token-budget mapping used when requests cross Claude, OpenAI/Codex, and Gemini protocols. Explicit client settings are respected by default. Claude signatures/redacted thinking and Codex encrypted reasoning remain opaque and are only replayed to compatible upstreams.
@@ -301,15 +317,9 @@ LLMHub/
 │   │   ├── claude-messages-serializer.ts
 │   │   ├── gemini-generate.ts#     Gemini GenerateContent parser
 │   │   └── gemini-generate-serializer.ts
-│   ├── providers/            #   Provider adapters
+│   ├── providers/            #   Registry-based provider loading/routing
 │   │   ├── loader.ts         #     Config & model loader
-│   │   ├── manager.ts        #     Adapter manager & cross-protocol router
-│   │   ├── openai.ts         #     OpenAI adapter
-│   │   ├── codex.ts          #     ChatGPT subscription Codex adapter
-│   │   ├── claude.ts         #     Claude API-key adapter
-│   │   ├── claude-subscription.ts # Claude Code subscription adapter
-│   │   ├── antigravity.ts    #     Google Antigravity subscription adapter
-│   │   └── gemini.ts         #     Gemini adapter
+│   │   └── manager.ts        #     Adapter manager & cross-protocol router
 │   ├── stores/               #   Data persistence
 │   │   ├── auth.store.ts     #     Keys, sessions, brute-force
 │   │   └── provider.store.ts #     Provider configs
@@ -319,6 +329,11 @@ LLMHub/
 │       ├── gemini-auth.ts    #     Validate Gemini API keys
 │       └── hub-auth.ts       #     Validate admin session
 │
+├── builtin/                  # Always-on provider and policy plugins
+│   ├── provider-*/           #   Adapters, discovery, management, login/token flows
+│   ├── shared/               #   Shared subscription helpers
+│   ├── catalog.ts            #   Runtime plugin registration list
+│   └── assembly.ts           #   Explicit composition entry (also for non-Nitro)
 └── .data/                    # Runtime storage (gitignored)
     ├── auth/                 #   Sessions, API keys, brute-force
     ├── providers/            #   Provider configs

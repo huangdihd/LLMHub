@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { sanitizeGeminiSchema } from '../server/utils/sanitize-gemini-schema.ts'
+import { sanitizeGeminiSchema } from '../builtin/provider-gemini/sanitize-gemini-schema.ts'
 
 const input = {
   type: 'object',

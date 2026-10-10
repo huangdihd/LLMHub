@@ -1,7 +1,18 @@
 import { requestHooks } from '../server/core/hooks'
-import { providerRegistry } from '../server/providers/builtins'
+import { providerRegistry } from '../server/core/registry'
 import { builtinCatalog } from './catalog'
 import { BuiltinPluginHost } from './host'
+import { BUILTIN_PROVIDER_IDS } from './provider-ids'
+
+// Persisted defaults and legacy API wording belong to the composition, not core dispatch.
+providerRegistry.defaultProviderId = BUILTIN_PROVIDER_IDS.openai
+providerRegistry.ignoredNestedConnectionUpdates = [
+  'auto_reset_on_quota_exhausted', 'use_ai_credits_on_quota_exhausted'
+]
+providerRegistry.subscriptionResetErrors = {
+  unsupportedProvider: 'Provider does not use a Codex subscription',
+  unsupportedOperation: 'Usage limit resets are only available for Codex subscription providers'
+}
 
 /** Storage is resolved at operation time, so importing outside Nitro is safe. */
 export const builtinHost = new BuiltinPluginHost({

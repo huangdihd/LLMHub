@@ -56,6 +56,31 @@ try {
   await mkdir(new URL('../../.data/auth/sessions/', import.meta.url), { recursive: true })
   await writeFile(sessionFile, JSON.stringify({ expires_at: Date.now() + 300_000 }))
   const before = await management('plugins')
+  for (const [id, protocol] of [
+    ['provider-openai', 'openai'], ['provider-claude', 'claude'], ['provider-gemini', 'gemini'],
+    ['provider-codex', 'codex-subscription'], ['provider-claude-subscription', 'claude-subscription'],
+    ['provider-antigravity', 'antigravity-subscription']
+  ]) {
+    const builtin = before.find(plugin => plugin.id === id)
+    assert.equal(builtin?.builtin, true)
+    assert.equal(builtin.enabled, true)
+    assert.deepEqual(builtin.providers, [protocol])
+    for (const [method, suffix] of [['POST', '/disable'], ['DELETE', '']]) {
+      const response = await fetch(`${gateway}/api/hub/plugins/${id}${suffix}`, {
+        method, headers: { cookie: `llmhub_session=${session}` }
+      })
+      assert.equal(response.ok, false, `${id} must remain read-only`)
+    }
+  }
+  // Missing session probes exercise built layer routes without contacting OAuth upstreams.
+  for (const [flow, action, label] of [['codex', 'poll', 'ChatGPT'], ['claude', 'complete', 'Claude'], ['antigravity', 'complete', 'Antigravity']]) {
+    const response = await fetch(`${gateway}/api/hub/providers/${flow}-login/${session}/${action}`, {
+      ...json('POST', {}), headers: { cookie: `llmhub_session=${session}`, 'content-type': 'application/json' }
+    })
+    assert.equal(response.status, 404)
+    assert.equal((await response.json()).message, `${label} login session not found`)
+  }
+  console.log('  ok - six builtin providers are listed read-only and migrated login routes are mounted')
   for (const [filename, id] of [['echo.mjs', 'example-echo'], ['system-prompt.mjs', 'example-system-prompt']]) {
     assert.ok(!before.some(plugin => plugin.id === id), `Refusing to replace existing ${id}`)
     const form = new FormData()

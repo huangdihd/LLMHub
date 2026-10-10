@@ -160,12 +160,27 @@ interface ProviderDefinition {
   id: string
   displayName?: string
   connectionSchema?: PluginField[]
+  management?: ProviderManagement
   createAdapter(configuration: ProviderConfig): ProviderAdapter
   fetchModels(configuration: ProviderConfig,
     context: { fetcher(url: string, options?: RequestInit): Promise<Response> }
   ): Promise<ModelInfo[]>
   secretConnectionFields: readonly string[]
   requiresRefreshToken?: boolean
+  refreshAccessToken?(configuration: ProviderConfig): Promise<ProviderConfig>
+  subscriptionUsage?(configuration: ProviderConfig, fetcher: typeof fetch): Promise<SubscriptionUsage>
+  resetSubscriptionUsage?(configuration: ProviderConfig, creditId: string | undefined,
+    idempotencyKey: string, fetcher: typeof fetch): Promise<SubscriptionResetResult>
+  login?: { path: string }
+}
+
+interface ProviderManagement {
+  acceptsExtra?: boolean
+  flatCreateCredentials?: boolean
+  creationError?: string
+  protectedConnectionFields?: readonly string[]
+  flatConnectionFields?: Readonly<Record<string, (value: unknown) => unknown>>
+  createConnectionDefaults?: Partial<ProviderConfig['connection']>
 }
 
 interface ProviderAdapter {
@@ -187,7 +202,23 @@ responses must not contain those credentials, including when the plugin is
 unloaded. Create/update operations require a currently registered protocol and
 validate the plugin connection schema. Disabling/uninstalling a plugin does not
 delete provider configurations: they become unavailable and are safely skipped.
-Built-in provider configuration and login flows remain unchanged.
+Built-in provider configuration and login URLs retain their existing contracts.
+
+These optional capabilities belong to the shared `ProviderDefinition` in
+`server/core/registry.ts`, not a built-in-only API: runtime registration preserves
+these fields too. `management` controls schema acceptance, legacy flat credential
+creation, creation restrictions, protected update fields, field normalization,
+and creation defaults. `protectedConnectionFields` applies to both flat and nested
+updates. `createConnectionDefaults` fills only fields still absent after common
+storage normalization; it does not override common timeout/credential defaults.
+Subscription usage/reset dispatch through registry
+callbacks; their result types live in `server/services/subscription-usage.ts`.
+`requiresRefreshToken` affects sanitized authentication status. Currently
+`refreshAccessToken` and `login.path` are declarations, not generic host-dispatched
+flows: built-in adapters/discovery call their token managers directly, and login
+uses provider-owned routes and existing dashboard flows. A runtime plugin must
+implement its own refresh invocation and login routes/UI; declaring these fields
+alone does not wire them up.
 
 `fetchModels` returns namespaced IDs such as `<providerName>/echo`; its helper
 fetcher has a ten-second timeout and one retry. Custom model catalogs still work.
@@ -278,10 +309,30 @@ propagate to the refresh caller.
 
 Eight always-on policy plugins ship under `builtin/<plugin-id>/`: rate-limit,
 fallback, access-control, quota, token-billing, thinking-policy,
-cch-normalization and stats. Each directory is a Nuxt layer with its own
-`nuxt.config.ts`, definition, and optional server routes/components/pages.
-`builtin/catalog.ts` is the single registration list, also used by the root
-Nuxt `extends`. Add a directory and a catalog entry to add a built-in.
+cch-normalization and stats. Upstream implementations ship in six additional
+built-ins: `provider-openai`, `provider-claude`, `provider-gemini`,
+`provider-codex`, `provider-claude-subscription`, and `provider-antigravity`.
+Their adapters, discovery, management declarations, and applicable login/token
+and subscription-usage implementations live in those directories, not in
+`server/providers/`. That directory retains generic loading and routing.
+
+`builtin/catalog.ts` is the runtime registration list. Root `nuxt.config.ts`
+separately scans `builtin/*/nuxt.config.ts` for Nuxt layers; it does not import
+the catalog or execute server plugin imports during configuration loading.
+Add a catalog entry for runtime registration and a layer configuration when a
+built-in needs Nuxt integration, such as file-based login routes.
+
+Built-in host registration preserves the persisted protocol IDs `openai`,
+`claude`, `gemini`, `codex-subscription`, `claude-subscription`, and
+`antigravity-subscription` (see `builtin/provider-ids.ts`); they are not prefixed
+with the plugin ID. Runtime provider IDs still use `<pluginId>:<localId>`.
+
+Built-ins are not independent packages: Codex shares OpenAI's Responses codec,
+Claude subscription extends the Claude adapter, and Antigravity uses Gemini
+conversion. Common subscription helpers live in `builtin/shared/`; ingress
+Responses/Gemini code also imports the provider-owned thinking-state/schema
+helpers. These explicit internal dependencies do not grant runtime plugins
+permission to import gateway build internals.
 
 Built-ins use the same `setup(api)` contract, including async setup and cleanup,
 but may import internal gateway modules and retain legacy storage keys. Their

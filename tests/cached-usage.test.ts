@@ -11,10 +11,10 @@ if (!buildDir) {
   console.error('ADAPTER_BUILD not set — run via tests/run-all.sh')
   process.exit(1)
 }
-const { OpenAIAdapter } = require(`${buildDir}/providers/openai.js`)
-const { ClaudeAdapter } = require(`${buildDir}/providers/claude.js`)
-const { GeminiAdapter } = require(`${buildDir}/providers/gemini.js`)
-const { CodexAdapter } = require(`${buildDir}/providers/codex.js`)
+const { OpenAIAdapter } = require(`${buildDir}/../builtin/provider-openai/openai.js`)
+const { ClaudeAdapter } = require(`${buildDir}/../builtin/provider-claude/claude.js`)
+const { GeminiAdapter } = require(`${buildDir}/../builtin/provider-gemini/gemini.js`)
+const { CodexAdapter } = require(`${buildDir}/../builtin/provider-codex/codex.js`)
 const { GeminiGenerateSerializer } = require(`${buildDir}/protocols/gemini-generate-serializer.js`)
 
 let passed = 0

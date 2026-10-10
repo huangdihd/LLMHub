@@ -7,9 +7,9 @@ import type { LLMStreamChunk } from '../server/core/types.ts'
 const require = createRequire(import.meta.url)
 const build = process.env.ADAPTER_BUILD
 if (!build) throw new Error('ADAPTER_BUILD not set — run via tests/run-all.sh')
-const { ResponsesCodec } = require(`${build}/providers/responses-codec.js`)
-const { OpenAIResponsesAdapter } = require(`${build}/providers/openai-responses.js`)
-const { OpenAIAdapter } = require(`${build}/providers/openai.js`)
+const { ResponsesCodec } = require(`${build}/../builtin/provider-openai/responses-codec.js`)
+const { OpenAIResponsesAdapter } = require(`${build}/../builtin/provider-openai/openai-responses.js`)
+const { OpenAIAdapter } = require(`${build}/../builtin/provider-openai/openai.js`)
 const configuration = { name: 'reasoning-test', connection: {}, models: [{ id: 'test-model' }] }
 let passed = 0
 async function test(name: string, run: () => unknown | Promise<unknown>) {

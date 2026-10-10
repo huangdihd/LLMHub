@@ -7,7 +7,7 @@ import { formatErrorResponse } from '../server/utils/error.ts'
 const require = createRequire(import.meta.url)
 const build = process.env.ADAPTER_BUILD
 if (!build) throw new Error('Run via tests/run-all.sh')
-const { OpenAIResponsesAdapter } = require(`${build}/providers/openai-responses.js`)
+const { OpenAIResponsesAdapter } = require(`${build}/../builtin/provider-openai/openai-responses.js`)
 
 // Capture actual HTTP bodies so a nonempty developer input cannot silently
 // migrate into instructions and leave an invalid empty input behind.

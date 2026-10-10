@@ -7,6 +7,7 @@ Everything a runtime plugin can declare and call. For a guided introduction see
 - [Fields](#fields)
 - [The plugin API](#the-plugin-api)
 - [Hooks](#hooks)
+- [Events](#events)
 - [Providers](#providers)
 - [Client protocols and ingress](#client-protocols-and-ingress)
 - [Management routes](#management-routes)
@@ -63,10 +64,11 @@ A plugin is an npm package whose `package.json` has an `llmhub` block.
 
 | Field | Meaning |
 | --- | --- |
-| `id` | The plugin's ID: `^[a-z0-9][a-z0-9-]{1,40}$`, unique among installed and built-in plugins. Defaults to the package name without its scope and without a leading `llmhub-plugin-`. For a plugin in a local folder it must equal the folder name. |
+| `id` | The plugin's ID: `^[a-z0-9][a-z0-9-]{1,40}$` (`llmhub` is reserved), unique among installed and built-in plugins. Defaults to the package name without its scope and without a leading `llmhub-plugin-`. For a plugin in a local folder it must equal the folder name. |
 | `name` | Display name. Defaults to the package name. |
 | `configSchema` | [Fields](#fields) for the plugin's own settings. |
 | `dependencies`, `optionalDependencies` | Other plugins this one needs, by plugin ID. See [Depending on other plugins](#depending-on-other-plugins). |
+| `events` | Published event declarations: `{ name, description }[]`, with local names. See [Events](#events). |
 | `contributes` | [Dashboard contributions](#dashboard-contributions). |
 | `ui.page` | An HTML file shown on the plugin's detail page. Prefer a `detail` [panel](#panels), which can also talk to your routes. |
 
@@ -75,9 +77,9 @@ encoded path components, backslashes and symlinks are rejected.
 
 ### `plugin.json`
 
-The older manifest format, `plugin.json`, is still read. It puts `id`, `name`,
+The alternative manifest format, `plugin.json`, is supported. It puts `id`, `name`,
 `version`, `entry`, `configSchema`, `dependencies`, `optionalDependencies`,
-`contributes` and `ui` at the top level, and its `dependencies` name plugin
+`contributes`, `events` and `ui` at the top level, and its `dependencies` name plugin
 IDs. When a folder has both files, `package.json` is used. Write new plugins
 with `package.json`.
 
@@ -141,6 +143,11 @@ interface PluginAPI {
   getAllRecordValues(location: PluginRecordLocation): Promise<Record<string, PluginRecordValues>>
   onRecordValuesChange(listener: (change: PluginRecordValuesChange) => Awaitable<void>): void
 
+  // Notifications (subscribe during setup; emit while active)
+  onEvent<Name extends keyof SystemEventMap>(name: Name, listener: EventListener<SystemEventMap[Name]>, priority?: number): void
+  onEvent<Name extends string>(name: Name, listener: EventListener<EventPayload<Name>>, priority?: number): void
+  emitEvent(localName: string, payload: Record<string, unknown>): Promise<void>
+
   // Other plugins
   provide(value: object): void
   require<T extends object = Record<string, unknown>>(pluginId: string): T | undefined
@@ -198,15 +205,12 @@ interface RequestHook {
 
   // Model list
   onModels?(models: ModelInfo[], context: HookContext): Awaitable<ModelInfo[] | void>
-  onModelsRefreshed?(validModelIds: ReadonlySet<string>): Awaitable<void>
 
   // Generation
   onRequest?(request: LLMRequest, context: HookContext): Awaitable<LLMRequest | void>
   onResponse?(response: LLMResponse, context: HookContext): Awaitable<LLMResponse | void>
   onStreamChunk?(chunk: LLMStreamChunk, context: HookContext):
     Awaitable<LLMStreamChunk | LLMStreamChunk[] | null | void>
-  onError?(error: unknown, context: HookContext): Awaitable<void>
-  onComplete?(completion: CompletionInfo, context: HookContext): Awaitable<void>
 }
 ```
 
@@ -244,9 +248,9 @@ A dashboard session that is not impersonating an API key skips
 ### Model list
 
 `onModels` runs when a client lists models and may filter or add entries.
-`onModelsRefreshed` runs after models are refreshed from providers, with the
-set of model IDs that now exist; use it to prune stored references. An error
-here fails the refresh.
+Subscribe to `llmhub:models-refreshed` to prune stored model references after
+a refresh. Its `validModelIds` is an array, not a Set; listener failures are
+logged and do not fail the refresh.
 
 ### Generation
 
@@ -255,8 +259,6 @@ here fails the refresh.
 | `onRequest` | The unified request, before it is sent upstream | A new request |
 | `onResponse` | A non-streaming response | A new response |
 | `onStreamChunk` | Each streamed chunk | A chunk, an array of chunks to expand it, or `null` / `[]` to drop it |
-| `onError` | An upstream or pipeline error | — |
-| `onComplete` | Final usage or error, once per request | — |
 
 ```ts
 interface HookContext {
@@ -284,7 +286,7 @@ interface CompletionInfo {
 }
 ```
 
-`onComplete` runs exactly once for each admitted generation or embedding
+`llmhub:request-complete` is emitted exactly once for each admitted generation or embedding
 request, including route parsing failures and upstream failures. Admission
 rejections do not reach the route and do not emit completion. Model-list and
 unsupported endpoints are not generation or embedding requests.
@@ -301,7 +303,7 @@ so it includes the final available usage.
 
 Completion work is retained by a process-owned promise set and runs without
 waiting for persistence before returning the HTTP response. Exceptions are
-logged independently for each hook. A process crash can lose pending work;
+logged independently for each subscriber. A process crash can lose pending work;
 completion is not a durable job queue. Core callers and tests can await
 `drainCompletions()` to wait for pending work.
 
@@ -316,10 +318,83 @@ model token ratios.
 | Stage | An exception... |
 | --- | --- |
 | Admission, `onModels`, `onRequest` | fails the request |
-| `onResponse`, `onStreamChunk`, `onError`, `onComplete` | is logged; the request continues |
+| `onResponse`, `onStreamChunk` | is logged; the request continues |
 
 Return a replacement rather than mutating the value you were given, so that a
 failure partway through leaves it intact.
+
+## Events
+
+Events notify observers; hooks transform or reject requests. Declare custom
+publications in the manifest's `llmhub` block (or at the top of `plugin.json`):
+
+```json
+"events": [
+  { "name": "message", "description": "A text message was announced." }
+]
+```
+
+Names are local (`[a-z0-9][a-z0-9-]{0,63}`); LLMHub publishes them as
+`<pluginId>:<name>`. Emit only declared local names, not full names or system
+names. Subscribe to full names during `setup`:
+
+```js
+api.onEvent('example-text-service:message', payload => {
+  api.logger.info(payload.message)
+}, 10)
+api.onEvent('llmhub:request-complete', ({ completion }) => {
+  api.logger.info(completion.model, completion.usage)
+})
+// In a publisher's route or other active work:
+await api.emitEvent('message', { message: 'Hello' })
+```
+
+`emitEvent(localName, payload: Record<string, unknown>): Promise<void>` accepts
+object payloads. Ordinary data is snapshotted at emission and cloned per
+subscriber, isolating each subscriber's mutations. `Error` objects are the
+exception: their original identity and custom fields are preserved, and they
+are recursively frozen and shared, including with the publisher. Treat errors
+and their attached data as read-only; publishing freezes the original objects.
+This uses JavaScript object freezing, not a deep-immutability sandbox: collection
+contents such as `Map`/`Set` remain mutable, and accessor-backed data is not
+recursively frozen. Do not mutate such attached state.
+Delivery is sequential in ascending priority (default 0), with registration
+order preserved for ties. Listener failures and timeouts are logged and delivery
+continues; the default timeout is 5000 ms per listener. The returned promise
+waits until every subscriber has finished, failed or timed out. A timeout does
+not cancel the listener's underlying work or stop synchronous JavaScript.
+
+Subscriptions do not require a dependency on the publisher, and may be registered
+before it exists. Events are not buffered or replayed. Keep dependencies when
+using `api.require` or needing the publisher to be available. Subscriptions are
+removed automatically on disable, reload, uninstall, shutdown and setup failure;
+a stopped plugin cannot start a new emission with its inactive API. Unsubscribing
+does not cancel a listener already running or an emission already in progress.
+
+System events are reserved for the gateway and need no manifest declaration:
+
+| Name | Payload | When |
+| --- | --- | --- |
+| `llmhub:request-complete` | `{ completion: CompletionInfo, context: HookContext }` | Once per admitted generation or embedding request; see [Completion](#completion) |
+| `llmhub:request-error` | `{ error: unknown, context: HookContext }` | An upstream or pipeline error (deduplicated by error identity) |
+| `llmhub:models-refreshed` | `{ validModelIds: readonly string[] }` | After provider models have refreshed |
+
+The declarations export `SystemEventMap`, `EventPayload<Name>` and
+`EventListener<Payload>`. Known system names infer their payload types; custom
+names receive `Record<string, unknown>` and should validate the expected fields.
+Contexts can contain credentials: do not expose whole payloads through routes,
+logs or panels. Isolation is not credential redaction or a security sandbox.
+
+A model-refresh event listener failure is logged without failing model refresh.
+
+The text examples combine required/optional service dependencies with
+observable events. After enabling both, call
+`POST /api/hub/plugins/example-text-service/api/announce`, then
+`GET /api/hub/plugins/example-text-consumer/api/events`: `messages` and
+`lastMessage` reflect delivery. A completed generation or embedding updates
+`completions` and `lastModel` asynchronously. Both routes require a dashboard
+session; the consumer returns summaries only, never request contexts. Reloading
+the consumer resets these in-memory counters.
 
 ## Providers
 
@@ -722,7 +797,11 @@ and are not present in a deployed build.
 ## Versioning
 
 The plugin API has its own version, separate from LLMHub's, currently
-**1.2.0**. See the [changelog](changelog.md).
+**1.4.0**. See the [changelog](changelog.md).
+
+Request notifications use `api.onEvent`; request transformations and admission
+use `api.registerHook`. Declare `"llmhub": "^1.4.0"` in `engines` when using
+events.
 
 | Change | Version bump |
 | --- | --- |
@@ -871,6 +950,8 @@ interface PluginRecord {
   hooks: string[]
   protocols?: string[]
   ingresses?: string[]
+  publishedEvents?: { name: string; description: string }[] // full names
+  subscribedEvents?: string[]       // full names of active subscriptions
   source?: { type: 'builtin' | 'npm' | 'github' | 'directory'; packageName?: string;
              range?: string; owner?: string; repo?: string; ref?: string; commit?: string; direct?: boolean }
   capabilities?: { update: boolean; uninstall: boolean }

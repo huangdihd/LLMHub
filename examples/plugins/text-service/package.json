@@ -4,9 +4,9 @@
   "type": "module",
   "main": "index.mjs",
   "engines": {
-    "llmhub": "^1.0.0"
+    "llmhub": "^1.4.0"
   },
-  "description": "Publish a small synchronous service for dependent plugins.",
+  "description": "Publish a synchronous service and a declared message event.",
   "llmhub": {
     "id": "example-text-service",
     "name": "Text Service",
@@ -16,6 +16,12 @@
         "label": "Text prefix",
         "type": "text",
         "default": "[shared] "
+      }
+    ],
+    "events": [
+      {
+        "name": "message",
+        "description": "A text message announced through the management route."
       }
     ]
   }

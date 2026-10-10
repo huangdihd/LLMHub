@@ -109,7 +109,7 @@ try {
   })
   assert.equal(retired.status, 404)
   assert.equal((await retired.json()).message, 'Plugin endpoint not found')
-  for (const [directory, id] of [['echo', 'example-echo'], ['system-prompt', 'example-system-prompt']]) {
+  for (const [directory, id] of [['echo', 'example-echo'], ['system-prompt', 'example-system-prompt'], ['text-service', 'example-text-service'], ['text-consumer', 'example-text-consumer']]) {
     assert.ok(!before.some(plugin => plugin.id === id), `Refusing to replace existing ${id}`)
     const destination = new URL(`../../.data/plugins/${id}/`, import.meta.url)
     await assert.rejects(access(destination), { code: 'ENOENT' })
@@ -135,7 +135,32 @@ try {
     use_custom_models: true, models: [{ id: 'echo', display_name: 'Echo' }]
   }))
   providerCreated = true
+  const eventsPath = 'plugins/example-text-consumer/api/events'
+  const announcePath = 'plugins/example-text-service/api/announce'
+  const initialEvents = await management(eventsPath)
+  const announcement = await management(announcePath, { method: 'POST' })
+  assert.deepEqual(await management(eventsPath), { ...initialEvents, messages: 1, lastMessage: announcement.message })
   await exercise(true)
+  // Completion accounting is background work: poll the public observer, not storage internals.
+  let observed
+  for (let attempt = 0; attempt < 100; attempt++) {
+    observed = await management(eventsPath)
+    if (observed.completions === initialEvents.completions + 6) break
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
+  assert.equal(observed.completions, initialEvents.completions + 6)
+  assert.equal(observed.lastModel, model)
+  assert.equal(observed.messages, 1)
+  await management('plugins/example-text-consumer/reload', { method: 'POST' })
+  const afterReload = await management(announcePath, { method: 'POST' })
+  assert.deepEqual(await management(eventsPath), { messages: 1, completions: 0, lastMessage: afterReload.message, lastModel: '' })
+  await management('plugins/example-text-consumer/disable', { method: 'POST' })
+  await management(announcePath, { method: 'POST' })
+  await management('plugins/example-text-consumer/enable', { method: 'POST' })
+  assert.deepEqual(await management(eventsPath), { messages: 0, completions: 0, lastMessage: '', lastModel: '' })
+  await management(announcePath, { method: 'POST' })
+  assert.equal((await management(eventsPath)).messages, 1)
+  console.log('  ok - namespaced plugin events, real request completions and clean reload/disable/re-enable subscriptions')
   console.log('  ok - runtime echo + request hook across three protocols, stream and non-stream')
   await management('plugins/example-system-prompt/disable', { method: 'POST' })
   await exercise(false)
@@ -151,7 +176,9 @@ try {
   try {
     const cleanupResults = await Promise.allSettled([
       ...(providerCreated ? [management(`providers/${providerName}`, { method: 'DELETE' })] : []),
-      ...installed.reverse().map(id => management(`plugins/${id}`, { method: 'DELETE' }))
+      (async () => {
+        for (const id of installed.reverse()) await management(`plugins/${id}`, { method: 'DELETE' })
+      })()
     ])
     const failures = cleanupResults.filter(result => result.status === 'rejected')
     assert.equal(failures.length, 0, `Plugin fixture cleanup failed: ${failures.map(result => result.reason).join('; ')}`)

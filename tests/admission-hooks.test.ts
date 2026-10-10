@@ -7,6 +7,7 @@ const require = createRequire(import.meta.url)
 const build = process.env.ADAPTER_BUILD
 if (!build) throw new Error('Run via tests/run-all.sh')
 const { HookRegistry } = require(`${build}/core/hooks.js`) as typeof import('../server/core/hooks.ts')
+const { EventRegistry } = require(`${build}/core/events.js`) as typeof import('../server/core/events.ts')
 const context = { incomingProtocol: 'openai' }
 const admissionContext = { ...context, event: { context: {} }, model: 'provider/model' } as AdmissionContext
 
@@ -59,39 +60,40 @@ test('models chains empty replacements rather than restoring the original list',
   assert.equal(await hooks.models([], context), replacement)
 })
 
-test('completion awaits ordered hooks once with final usage and model', async () => {
-  const hooks = new HookRegistry()
+test('completion event awaits ordered listeners once with final usage and model', async () => {
+  const events = new EventRegistry()
   const calls: string[] = []
   const completion = { usage: { promptTokens: 7, completionTokens: 3 }, model: 'provider/model' }
-  hooks.register({ id: 'last', priority: 10, onComplete: value => {
-    assert.equal(value, completion)
+  events.subscribe('last', 'llmhub:request-complete', ({ completion: value }) => {
+    assert.deepEqual(value, completion)
     calls.push('last')
-  } })
-  hooks.register({ id: 'first', priority: -10, onComplete: async (value, metadata) => {
+  }, 10)
+  events.subscribe('first', 'llmhub:request-complete', async ({ completion: value, context: metadata }) => {
     await Promise.resolve()
-    assert.equal(metadata, context)
-    assert.equal(value, completion)
+    assert.deepEqual(metadata, context)
+    assert.deepEqual(value, completion)
     calls.push('first')
-  } })
-  await hooks.complete(completion, context)
+  }, -10)
+  await events.emit('llmhub:request-complete', { completion, context })
   assert.deepEqual(calls, ['first', 'last'])
 })
 
-test('completion failures are logged and do not stop subsequent hooks', async (testContext) => {
-  const hooks = new HookRegistry()
+test('completion event failures are logged and do not stop subsequent listeners', async (testContext) => {
+  const events = new EventRegistry()
   const failure = new Error('completion failed')
   const completion = { model: 'provider/model', usage: { promptTokens: 7, completionTokens: 3 } }
   const log = testContext.mock.method(console, 'error', () => {})
   const received: unknown[] = []
-  hooks.register({ id: 'failure', onComplete: async () => { throw failure } })
-  hooks.register({ id: 'later', onComplete: (value, metadata) => {
-    assert.equal(metadata, context)
+  events.subscribe('failure', 'llmhub:request-complete', async () => { throw failure })
+  events.subscribe('later', 'llmhub:request-complete', ({ completion: value, context: metadata }) => {
+    assert.deepEqual(metadata, context)
     received.push(value)
-  } })
-  await assert.doesNotReject(hooks.complete(completion, context))
+  })
+  await assert.doesNotReject(events.emit('llmhub:request-complete', { completion, context }))
   assert.deepEqual(received, [completion])
   assert.equal(log.mock.callCount(), 1)
-  assert.deepEqual(log.mock.calls[0].arguments, ['[LLMHub] hook failure onComplete failed:', failure])
+  assert.match(String(log.mock.calls[0].arguments[0]), /failure.*llmhub:request-complete|llmhub:request-complete.*failure/)
+  assert.equal(log.mock.calls[0].arguments[1], failure)
 })
 
 test('request and models failures reject and stop subsequent hooks', async () => {

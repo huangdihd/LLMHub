@@ -134,7 +134,8 @@ test('builtin ordering rejects cycles and preserves parser and equal-priority ho
         registerHook: (hook: { id: string; priority?: number }) => hooks.push(hook),
         provide: (service: object) => services.set(entry.manifest.id, service),
         require: (id: string) => services.get(id),
-        registerProvider() {}, registerProtocol() {}, registerIngress() {}
+        registerProvider() {}, registerProtocol() {}, registerIngress() {},
+        onEvent: () => () => {}
       } as unknown as PluginAPI
       await entry.setup!(api)
     }

@@ -54,6 +54,7 @@ function harness(protocol: Protocol, options: HarnessOptions = {}) {
   }
   const forbidden = () => { throw new Error('Unexpected external I/O') }
   const globals = {
+    structuredClone, setTimeout, clearTimeout,
     Buffer, TextDecoder, TextEncoder, ReadableStream, Error,
     console: { log() {}, error() {} }, fetch: forbidden,
     defineEventHandler: (handler: unknown) => handler,
@@ -134,14 +135,13 @@ function harness(protocol: Protocol, options: HarnessOptions = {}) {
     }, { filename })
     return module.exports
   }
-  load('server/core/hooks.ts').requestHooks.register({
-    id: 'characterization',
-    onError: (error: unknown) => { errors.push(error) },
-    onComplete: (completion: unknown, context: { incomingProtocol: string }) => {
+  const events = load('server/core/events.ts').systemEvents
+  events.subscribe('characterization', 'llmhub:request-error', ({ error }: { error: unknown }) => { errors.push(error) })
+  events.subscribe('characterization', 'llmhub:request-complete',
+    ({ completion, context }: { completion: unknown; context: { incomingProtocol: string } }) => {
       completions.push(completion)
       completionProtocols.push(context.incomingProtocol)
-    }
-  })
+    })
   const handler = load(options.embedding === 'openai' ? 'builtin/ingress-openai/server/api/openai/embeddings.post.ts' : definitions[protocol][0]).default
   const event = {
     method: 'POST', node: { res: response },

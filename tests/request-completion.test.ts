@@ -9,7 +9,7 @@ import ts from 'typescript'
 import type { CompletionInfo, HookContext } from '../server/core/hooks.ts'
 
 // Keep the real route, pipeline and wire codecs; replace only provider I/O,
-// Nitro globals and the clock. Only a third-party onComplete observer is installed.
+// Nitro globals and the clock. Only a third-party request-complete event observer is installed.
 const root = fileURLToPath(new URL('../', import.meta.url))
 const definitions = {
   'openai-completion': ['builtin/ingress-openai/server/api/openai/completions.post.ts', 'OpenAICompletion'],
@@ -28,7 +28,7 @@ type HarnessOptions = {
   noUsage?: boolean
   multipleUsage?: boolean
   disconnect?: boolean
-  completionHook?: () => void | Promise<void>
+  completionListener?: () => void | Promise<void>
   embeddingModel?: string
   stream?: boolean
   failure?: Failure
@@ -53,6 +53,7 @@ function harness(protocol: Protocol, options: HarnessOptions = {}) {
   })
   const forbidden = () => { throw new Error('Unexpected external I/O') }
   const globals = {
+    structuredClone, setTimeout, clearTimeout,
     Buffer, TextDecoder, TextEncoder, ReadableStream, Error,
     console: { log() {}, error() {} }, fetch: forbidden,
     defineEventHandler: (handler: unknown) => handler,
@@ -133,14 +134,12 @@ function harness(protocol: Protocol, options: HarnessOptions = {}) {
     }, { filename })
     return module.exports
   }
-  load('server/core/hooks.ts').requestHooks.register({
-    id: 'characterization',
-    onComplete: async (completion: CompletionInfo, context: HookContext) => {
+  load('server/core/events.ts').systemEvents.subscribe('characterization', 'llmhub:request-complete',
+    async ({ completion, context }: { completion: CompletionInfo; context: HookContext }) => {
       completions.push(completion)
       contexts.push(context)
-      await options.completionHook?.()
-    }
-  })
+      await options.completionListener?.()
+    })
   const handler = load(options.embedding === 'openai' ? 'builtin/ingress-openai/server/api/openai/embeddings.post.ts' : definitions[protocol][0]).default
   const event = {
     method: 'POST', node: { res: response },
@@ -184,7 +183,7 @@ for (const protocol of Object.keys(definitions) as Protocol[]) {
     })
 
     test(`${protocol} completion: throwing plugin cannot change ${stream ? 'stream' : 'nonstream'} response`, async () => {
-      const h = harness(protocol, { stream, completionHook: () => { throw new Error('plugin failed') } })
+      const h = harness(protocol, { stream, completionListener: () => { throw new Error('plugin failed') } })
       const result = await h.invoke()
       await h.drain()
       assert.ok(JSON.stringify(result ?? h.writes).includes('Hello'))
@@ -196,7 +195,7 @@ for (const protocol of Object.keys(definitions) as Protocol[]) {
       let release!: () => void
       let finished = false
       const barrier = new Promise<void>(resolve => { release = resolve })
-      const h = harness(protocol, { stream, completionHook: async () => { await barrier; finished = true } })
+      const h = harness(protocol, { stream, completionListener: async () => { await barrier; finished = true } })
       try {
         const result = await h.invoke()
         assert.ok(JSON.stringify(result ?? h.writes).includes('Hello'))
@@ -285,7 +284,7 @@ for (const embedding of ['openai', 'embedContent', 'batchEmbedContents'] as cons
       const h = harness('gemini-generate', {
         embedding,
         body: { model: 'offline/model', input: 'hello', content: 'hello', requests: [{ content: 'hello' }] },
-        completionHook: async () => {
+        completionListener: async () => {
           if (behavior === 'throw') throw new Error('plugin failed')
           await barrier
           finished = true

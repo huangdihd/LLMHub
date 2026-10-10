@@ -23,9 +23,8 @@ request, response and stream hooks.
   parses `data: ` JSON through the adapter. It observes each converted chunk's
   usage before stream hooks, so filtering or replacing chunks does not remove
   the observed upstream usage. `consumer.onChunks(chunks)` owns protocol framing;
-  `onDoneMarker()` handles `[DONE]`. Conversion or consumer errors notify error
-  hooks and `onChunkError(error)`; reader failures propagate to the route.
-- `error(error)` records and notifies error hooks once per error identity.
+  `onDoneMarker()` handles `[DONE]`. Conversion or consumer errors emit `llmhub:request-error` and `onChunkError(error)`; reader failures propagate to the route.
+- `error(error)` records and emits `llmhub:request-error` once per error identity.
   Protocol wrappers are distinct errors.
 
 The pipeline processes a nonempty trailing line at EOF. Protocol framing, SSE
@@ -44,19 +43,20 @@ snapshot, not the sum of successive usage chunks.
 An early client close records `Client disconnected` without completing or
 cancelling upstream consumption. Later upstream usage can still be observed;
 a subsequent reported error replaces that failure. `complete()` removes the
-close listener and starts completion hooks, but awaiting it does **not** await
-those hooks or their storage writes. Pending completion work is tracked at
-process scope; `drainCompletions()` waits until that set is empty.
+close listener and emits `llmhub:request-complete`, but awaiting it does **not** await
+its listeners or their storage writes. Pending completion work is tracked at
+process scope; `drainCompletions()` waits until that set is empty. Listeners that
+time out can continue running after the tracked emission and drain finish.
 
-Accounting belongs to built-in completion hooks, not pipeline methods:
+Accounting belongs to built-in completion event subscribers, not pipeline methods:
 
 - `stats` increments the global call count on completion.
 - `quota` updates API-key usage when a key record is present. Without usage it
   records a zero-token call; with usage it obtains billable tokens from the
   `token-billing` service and attributes them to the completion model/provider.
-  If conversion fails, it records a zero-token call and rethrows for hook logging.
+  If conversion fails, it records a zero-token call and rethrows for event-listener logging.
 - `token-billing` provides token conversion; it does not register an accounting
-  hook itself.
+  listener itself.
 
 ## Hook registration
 
@@ -68,21 +68,18 @@ onBeforeIdentity(context: AdmissionContext): Awaitable<AdmissionRejection | void
 onAfterIdentity(context: AdmissionContext): Awaitable<AdmissionRejection | void>
 onModelResolved(context: AdmissionContext): Awaitable<AdmissionRejection | void>
 onModels(models: ModelInfo[], context: HookContext): Awaitable<ModelInfo[] | void>
-onModelsRefreshed(validModelIds: ReadonlySet<string>): Awaitable<void>
 onRequest(request: LLMRequest, context: HookContext): Awaitable<LLMRequest | void>
 onResponse(response: LLMResponse, context: HookContext): Awaitable<LLMResponse | void>
 onStreamChunk(chunk: LLMStreamChunk, context: HookContext):
   Awaitable<LLMStreamChunk | LLMStreamChunk[] | null | void>
-onError(error: unknown, context: HookContext): Awaitable<void>
-onComplete(completion: CompletionInfo, context: HookContext): Awaitable<void>
 ```
 
 Lower priorities run first; ties preserve registration order. `undefined` retains
 an input; stream `null` or `[]` drops it. Expanded chunks each pass through the
 remaining hooks. Request failures abort forwarding as gateway errors, formatted
 by the ingress error boundary. Admission stops at the first rejection; exceptions
-from admission, model-list and model-refresh hooks propagate to their callers.
-Response, stream, error and completion hook failures log and continue. Hooks
+from admission and model-list hooks propagate to their callers.
+Response and stream hook failures log and continue. Hooks
 should return replacements rather than mutating input before throwing; mutations
 are not rolled back.
 
@@ -91,6 +88,27 @@ are not rolled back.
 can contain secrets, not response metadata. `AdmissionContext` instead contains
 the HTTP event, protocol, optional key record and model. Admission and model-list
 hooks are invoked outside the generation pipeline.
+
+## Event notifications
+
+Subscribe to notifications during setup with
+`api.onEvent(name, listener, priority?)` (plugin API 1.4.0):
+
+- `llmhub:request-complete`: `{ completion: CompletionInfo, context: HookContext }`.
+- `llmhub:request-error`: `{ error: unknown, context: HookContext }`.
+- `llmhub:models-refreshed`: `{ validModelIds: readonly string[] }`.
+
+Ordinary payload data is snapshotted at emission and cloned per subscriber.
+`Error` objects retain their original identity and custom fields; they are
+recursively frozen and shared, including with the publisher. Treat errors and
+their attached data as read-only. Listeners run in ascending priority with stable
+registration order for ties; failures and timeouts log and continue (default
+5000 ms each). Emission waits for listeners to finish, fail or time out, while
+pipeline completion remains tracked background work. Timeouts do not cancel
+underlying listener work or interrupt synchronous JavaScript. A model-refresh
+observer failure does not fail the refresh.
+Subscriptions are automatically removed on stop or failed setup. See
+[Events](plugins/reference.md#events) for custom declarations and publication.
 
 ## Built-in request policies
 

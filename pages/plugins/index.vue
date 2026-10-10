@@ -216,7 +216,9 @@ function registrations(plugin: DashboardPlugin) {
     ...plugin.providers.map(id => `Provider · ${short(id)}`),
     ...(plugin.ingresses ?? []).map(id => `Ingress · ${short(id)}`),
     ...(plugin.protocols ?? []).map(id => `Protocol · ${short(id)}`),
-    ...plugin.hooks.map(id => `Hook · ${short(id)}`)
+    ...plugin.hooks.map(id => `Hook · ${short(id)}`),
+    ...(plugin.publishedEvents ?? []).map(event => `Publishes · ${event.name}`),
+    ...(plugin.subscribedEvents ?? []).map(name => `Subscribes · ${name}`)
   ]
 }
 

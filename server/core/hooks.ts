@@ -40,13 +40,10 @@ export interface RequestHook {
   onAfterIdentity?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
   onModelResolved?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
   onModels?: (models: ModelInfo[], context: HookContext) => Awaitable<ModelInfo[] | void>
-  onModelsRefreshed?: (validModelIds: ReadonlySet<string>) => Awaitable<void>
   onRequest?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
   onResponse?: (response: LLMResponse, context: HookContext) => Awaitable<LLMResponse | void>
   /** undefined preserves the chunk, null or [] drops it. */
   onStreamChunk?: (chunk: LLMStreamChunk, context: HookContext) => Awaitable<LLMStreamChunk | LLMStreamChunk[] | null | void>
-  onError?: (error: unknown, context: HookContext) => Awaitable<void>
-  onComplete?: (completion: CompletionInfo, context: HookContext) => Awaitable<void>
 }
 
 export class HookRegistry {
@@ -76,12 +73,6 @@ export class HookRegistry {
       if (result) models = result
     }
     return models
-  }
-
-  async modelsRefreshed(validModelIds: ReadonlySet<string>): Promise<void> {
-    for (const hook of this.ordered()) {
-      await hook.onModelsRefreshed?.(validModelIds)
-    }
   }
 
   async request(request: LLMRequest, context: HookContext): Promise<LLMRequest> {
@@ -122,20 +113,6 @@ export class HookRegistry {
       chunks = next
     }
     return chunks
-  }
-
-  async error(error: unknown, context: HookContext): Promise<void> {
-    for (const hook of this.ordered()) {
-      try { await hook.onError?.(error, context) }
-      catch (hookError) { this.log(hook, 'onError', hookError) }
-    }
-  }
-
-  async complete(completion: CompletionInfo, context: HookContext): Promise<void> {
-    for (const hook of this.ordered()) {
-      try { await hook.onComplete?.(completion, context) }
-      catch (error) { this.log(hook, 'onComplete', error) }
-    }
   }
 
   private log(hook: RequestHook, point: string, error: unknown) {

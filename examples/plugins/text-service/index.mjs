@@ -6,5 +6,12 @@ export default {
       /** @param {string} value */
       format(value) { return `${String(api.config.prefix ?? '')}${value}` }
     })
+
+    // Await delivery so callers can inspect the consumer immediately afterwards.
+    api.registerRoute('POST', 'announce', async () => {
+      const message = `${String(api.config.prefix ?? '')}Hello from an event`
+      await api.emitEvent('message', { message })
+      return { message }
+    })
   }
 }

@@ -3,11 +3,6 @@ import { incrementCalls } from './service'
 
 export default {
   setup(api: PluginAPI) {
-    api.registerHook({
-      id: 'calls',
-      onComplete() {
-        return incrementCalls()
-      }
-    })
+    api.onEvent('llmhub:request-complete', () => incrementCalls())
   }
 }

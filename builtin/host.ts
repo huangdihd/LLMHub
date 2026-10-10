@@ -1,15 +1,17 @@
 import type { H3Event } from 'h3'
+import { systemEvents, type EventListener, type EventPayload, type EventRegistry } from '../server/core/events'
 import type { HookRegistry } from '../server/core/hooks'
 import type { ProviderRegistry } from '../server/core/registry'
 import { ProtocolRegistry } from '../server/core/protocol-registry'
 import { IngressRegistry } from '../server/core/ingress-registry'
 import type { PluginAPI, PluginStorage } from '../server/plugins-runtime/manager'
-import { PluginError, validateId, validatePath, validateManifest } from '../server/plugins-runtime/manifest'
+import { PluginError, validateId, validatePath, validateManifest, validateEventName } from '../server/plugins-runtime/manifest'
 import type { PluginRecord } from '../shared/types/plugin'
 import { assertCompatibility, decorateRecords, dependencyIssues } from '../server/plugins-runtime/dependencies'
 import type { BuiltinPlugin } from './catalog'
 
 export interface BuiltinHostOptions {
+  eventRegistry?: EventRegistry
   pluginOrder?: readonly string[]
   hookRegistry: HookRegistry
   providerRegistry: ProviderRegistry
@@ -60,6 +62,7 @@ export class BuiltinPluginHost {
     const protocols: string[] = []
     const ingresses: string[] = []
     const hooks: string[] = []
+    const subscribedEvents: string[] = []
     const unregister: Array<() => void> = []
     let accepting = true
     let active = true
@@ -81,7 +84,22 @@ export class BuiltinPluginHost {
       if (!/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*$/.test(key)) throw new PluginError('Invalid plugin storage key')
       return `builtin-plugins:${id}:storage:${key}`
     }
+    const eventRegistry = this.options.eventRegistry ?? systemEvents
     const api: PluginAPI = {
+      onEvent: <Name extends string>(name: Name, listener: EventListener<EventPayload<Name>>, priority?: number) => {
+        assertRegistration()
+        unregister.push(eventRegistry.subscribe(id, name, payload => {
+          if (active) return listener(payload)
+        }, priority))
+        if (!subscribedEvents.includes(name)) subscribedEvents.push(name)
+      },
+      emitEvent: async (localName, payload) => {
+        assertActive()
+        validateEventName(localName)
+        if (!plugin.manifest.events?.some(event => event.name === localName)) throw new PluginError('Plugin event must be declared')
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new PluginError('Invalid event payload')
+        await eventRegistry.emit(`${id}:${localName}`, payload)
+      },
       // Dashboard contributions belong to installable runtime plugins, not policy built-ins.
       getRecordValues: async () => { assertActive(); throw new PluginError('Builtin dashboard contributions are not supported') },
       getAllRecordValues: async () => { assertActive(); throw new PluginError('Builtin dashboard contributions are not supported') },
@@ -166,7 +184,8 @@ export class BuiltinPluginHost {
       })
       this.records.set(id, {
         id, manifest: structuredClone(plugin.manifest), builtin: true,
-        enabled: true, status: 'enabled', providers, hooks, protocols, ingresses
+        enabled: true, status: 'enabled', providers, hooks, protocols, ingresses, subscribedEvents,
+        publishedEvents: (plugin.manifest.events ?? []).map(event => ({ ...event, name: `${id}:${event.name}` }))
       })
     } catch (error) {
       active = false

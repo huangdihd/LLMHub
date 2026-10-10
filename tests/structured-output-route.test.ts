@@ -62,6 +62,7 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
     'builtin/ingress-openai/server/api/openai/responses.post.ts',
     'server/core/pipeline.ts',
     'server/core/hooks.ts',
+    'server/core/events.ts',
     'builtin/ingress-openai/openai-responses.ts',
     'builtin/ingress-openai/openai-responses-serializer.ts',
     'builtin/shared/structured-output.ts',
@@ -71,6 +72,7 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
     `builtin/provider-${provider === 'openai-responses' ? 'openai' : provider}/${provider}.ts`
   ].map(path => resolve(root, path)))
   const globals = {
+    structuredClone, setTimeout, clearTimeout,
     Buffer, TextDecoder, console, fetch: forbidden,
     defineEventHandler: (handler: any) => handler,
     readBody: async (event: any) => event.body,
@@ -102,12 +104,10 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
     }, { filename })
     return module.exports
   }
-  load(resolve(root, 'server/core/hooks.ts')).requestHooks.register({
-    id: 'usage-observer',
-    onComplete: (completion: any) => {
+  load(resolve(root, 'server/core/events.ts')).systemEvents.subscribe('usage-observer', 'llmhub:request-complete',
+    ({ completion }: { completion: any }) => {
       if (completion.usage) usage.push(plain(completion.usage))
-    }
-  })
+    })
   const className = { codex: 'CodexAdapter', claude: 'ClaudeAdapter', openai: 'OpenAIAdapter', 'openai-responses': 'OpenAIResponsesAdapter' }[provider]
   const Adapter = load(resolve(root, `builtin/provider-${provider === 'openai-responses' ? 'openai' : provider}/${provider}.ts`))[className]
   adapter = new Adapter({ name: 'offline', models: [{ id: 'test-model' }], connection: {} })

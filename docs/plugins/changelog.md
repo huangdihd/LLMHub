@@ -4,6 +4,35 @@ Changes to the API that plugins are written against. This version is separate
 from LLMHub's own: a plugin declares the range it supports in
 `engines.llmhub`. See [Versioning](reference.md#versioning).
 
+## 1.4.0
+
+**Added**
+
+- Setup-only `api.onEvent(name, listener, priority?)` and asynchronous
+  `api.emitEvent(localName, payload)` for declared custom notifications.
+- Manifest `events: { name, description }[]` with local names; management
+  records expose full-name `publishedEvents` and active `subscribedEvents`,
+  displayed as event badges on plugin pages.
+- Per-subscriber clones of ordinary payload data; `Error` objects retain original
+  identity and custom fields and are recursively frozen and shared with the
+  publisher and subscribers. Stable ascending-priority delivery, logged listener
+  failures/timeouts (5000 ms by default), and automatic subscription cleanup.
+  Timeouts do not cancel underlying listener work.
+- System events `llmhub:request-complete`, `llmhub:request-error` and
+  `llmhub:models-refreshed`.
+
+**Removed — migration required**
+
+- `RequestHook.onComplete`, `onError` and `onModelsRefreshed`, without aliases.
+  Use `api.onEvent` instead; see [Events](reference.md#events). Model-refresh
+  payloads now contain a readonly array, not a Set, and observer failures no
+  longer fail model refresh.
+
+Despite the 1.4.0 version, this removal breaks plugins using those hooks.
+Update their code; semver compatibility checks cannot perform the migration.
+Declare `"llmhub": "^1.4.0"` when using events. Earlier entries below describe
+historical APIs, not methods available on the current `RequestHook`.
+
 ## 1.3.0
 
 **Added**

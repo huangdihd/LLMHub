@@ -6,11 +6,12 @@ const require = createRequire(import.meta.url)
 const build = process.env.ADAPTER_BUILD
 if (!build) throw new Error('Run via tests/run-all.sh')
 const { HookRegistry } = require(`${build}/core/hooks.js`)
+const { EventRegistry } = require(`${build}/core/events.js`)
 const { RequestPipeline } = require(`${build}/core/pipeline.js`)
 const context = { incomingProtocol: 'test' }
 const request = () => ({ model: 'first/model', messages: [], config: {} })
 
-function harness(hooks = new HookRegistry()) {
+function harness(hooks = new HookRegistry(), events = new EventRegistry()) {
   const calls: any[] = []
   const configuration = { name: 'first', connection: {} }
   const adapter = {
@@ -28,7 +29,7 @@ function harness(hooks = new HookRegistry()) {
     buildGatewayError: (message: string, status: number) => Object.assign(new Error(message), { _statusCode: status }),
     callLLM: async (value: any) => { calls.push(value); return { content: 'answer', usage: { promptTokens: 2, completionTokens: 3 } } }
   }
-  const pipeline = new RequestPipeline(manager, { context: { _apiKeyRecord: { name: 'test-key' } } }, 'test', hooks)
+  const pipeline = new RequestPipeline(manager, { context: { _apiKeyRecord: { name: 'test-key' } } }, 'test', hooks, events)
   return { pipeline, adapter, calls, configuration }
 }
 
@@ -85,8 +86,11 @@ test('request hook failure aborts as gateway error; other hook failures log and 
   const hooks = new HookRegistry()
   const failure = new Error('hook failed')
   const fail = () => { throw failure }
-  hooks.register({ id: 'broken', onRequest: fail, onResponse: fail, onStreamChunk: fail, onError: fail, onComplete: fail })
-  const { pipeline, calls } = harness(hooks)
+  hooks.register({ id: 'broken', onRequest: fail, onResponse: fail, onStreamChunk: fail })
+  const events = new EventRegistry()
+  events.subscribe('broken', 'llmhub:request-error', fail)
+  events.subscribe('broken', 'llmhub:request-complete', fail)
+  const { pipeline, calls } = harness(hooks, events)
   await assert.rejects(pipeline.prepare(request()), { message: 'hook failed', _statusCode: 500 })
   assert.equal(calls.length, 0)
   const logs: any[] = []
@@ -97,8 +101,8 @@ test('request hook failure aborts as gateway error; other hook failures log and 
     const chunk = { type: 'content', delta: 'hello' }
     assert.equal(await hooks.response(response, context), response)
     assert.deepEqual(await hooks.streamChunk(chunk, context), [chunk])
-    await hooks.error(failure, context)
-    await hooks.complete({}, context)
+    await events.emit('llmhub:request-error', { error: failure, context })
+    await events.emit('llmhub:request-complete', { completion: {}, context })
     assert.equal(logs.length, 4)
   } finally { console.error = original }
 })
@@ -107,8 +111,10 @@ test('pipeline preserves split UTF-8, malformed-line recovery, state, marker and
   const hooks = new HookRegistry()
   const completions: any[] = []
   const errors: any[] = []
-  hooks.register({ id: 'observe', onError: (error: any) => { errors.push(error) }, onComplete: (value: any) => { completions.push(value) } })
-  const { pipeline, adapter, calls } = harness(hooks)
+  const events = new EventRegistry()
+  events.subscribe('observe', 'llmhub:request-error', ({ error }: any) => { errors.push(error) })
+  events.subscribe('observe', 'llmhub:request-complete', ({ completion }: any) => { completions.push(completion) })
+  const { pipeline, adapter, calls } = harness(hooks, events)
   const chunks: any[] = []
   let markers = 0
   const dropped: any[] = []
@@ -135,8 +141,10 @@ test('pipeline preserves split UTF-8, malformed-line recovery, state, marker and
 test('response hooks run before serialization and completion sees final usage', async () => {
   const hooks = new HookRegistry()
   let completion: any
-  hooks.register({ id: 'response', onResponse: (value: any) => ({ ...value, content: 'changed' }), onComplete: (value: any) => { completion = value } })
-  const { pipeline } = harness(hooks)
+  hooks.register({ id: 'response', onResponse: (value: any) => ({ ...value, content: 'changed' }) })
+  const events = new EventRegistry()
+  events.subscribe('observe', 'llmhub:request-complete', ({ completion: value }: any) => { completion = value })
+  const { pipeline } = harness(hooks, events)
   assert.equal((await pipeline.call(request())).content, 'changed')
   await pipeline.complete()
   assert.deepEqual(completion.usage, { promptTokens: 2, completionTokens: 3 })

@@ -51,6 +51,14 @@
               <dt class="text-xs text-gray-500 dark:text-gray-400">Provides</dt>
               <dd class="mt-2 flex flex-wrap gap-1.5"><UBadge v-for="item in registrations" :key="item" color="gray" variant="soft" size="xs">{{ item }}</UBadge></dd>
             </div>
+            <div v-if="plugin.publishedEvents?.length">
+              <dt class="text-xs text-gray-500 dark:text-gray-400">Publishes events</dt>
+              <dd class="mt-2 flex flex-wrap gap-1.5"><UBadge v-for="event in plugin.publishedEvents" :key="event.name" :title="event.description" color="gray" variant="soft" size="xs">{{ event.name }}</UBadge></dd>
+            </div>
+            <div v-if="plugin.subscribedEvents?.length">
+              <dt class="text-xs text-gray-500 dark:text-gray-400">Subscribes to events</dt>
+              <dd class="mt-2 flex flex-wrap gap-1.5"><UBadge v-for="name in plugin.subscribedEvents" :key="name" color="gray" variant="soft" size="xs">{{ name }}</UBadge></dd>
+            </div>
             <div>
               <dt class="text-xs text-gray-500 dark:text-gray-400">Plugin API</dt>
               <dd class="mt-1 text-gray-900 dark:text-white">

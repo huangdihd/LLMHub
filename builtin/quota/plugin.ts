@@ -10,7 +10,6 @@ export default {
     }
     api.registerHook({
       id: 'quota', priority: -100,
-      onModelsRefreshed: cleanupStaleModels,
       onAfterIdentity(context) {
         const record = context.apiKeyRecord!
         if (record.monthly_limit > 0 && record.tokens_used >= record.monthly_limit) {
@@ -30,23 +29,24 @@ export default {
         if (providerQuota > 0 && (record.provider_usage?.[provider] || 0) >= providerQuota) {
           return { status: 429, message: `Provider "${provider}" quota (${providerQuota}) exceeded.`, code: 'provider_quota_exceeded' }
         }
-      },
-      async onComplete(completion, context) {
-        const record = context.apiKeyRecord
-        if (!record) return
-        if (!completion.usage) return addUsage(record, 0)
-
-        let tokens: number
-        try {
-          tokens = await billing.getBillableTokens(completion.usage, completion.model)
-        } catch (error) {
-          // A failed conversion must not erase the completed call or invent token usage.
-          await addUsage(record, 0)
-          throw error
-        }
-        const provider = completion.model?.includes('/') ? completion.model.split('/')[0] : undefined
-        await addUsage(record, tokens, completion.model, provider)
       }
     })
+    api.onEvent('llmhub:models-refreshed', ({ validModelIds }) => cleanupStaleModels(new Set(validModelIds)), -100)
+    api.onEvent('llmhub:request-complete', async ({ completion, context }) => {
+      const record = context.apiKeyRecord
+      if (!record) return
+      if (!completion.usage) return addUsage(record, 0)
+
+      let tokens: number
+      try {
+        tokens = await billing.getBillableTokens(completion.usage, completion.model)
+      } catch (error) {
+        // A failed conversion must not erase the completed call or invent token usage.
+        await addUsage(record, 0)
+        throw error
+      }
+      const provider = completion.model?.includes('/') ? completion.model.split('/')[0] : undefined
+      await addUsage(record, tokens, completion.model, provider)
+    }, -100)
   }
 }

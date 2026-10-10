@@ -5,6 +5,7 @@ Plugins extend LLMHub without forking it. A plugin can:
 - add an upstream provider type;
 - change requests and responses as they pass through the gateway, or reject them;
 - store per-model, per-key and per-provider settings and act on them;
+- publish custom events and observe request completion, errors and model refreshes;
 - add management endpoints, dashboard fields, metric cards and its own pages.
 
 Plugins install from the market, from a GitHub repository, or from a folder on
@@ -29,7 +30,7 @@ Working examples live in [`examples/plugins/`](../../examples/plugins):
 | --- | --- |
 | `system-prompt/` | A request hook with configuration and a management route |
 | `echo/` | An upstream provider that needs no network, with streaming |
-| `text-service/`, `text-consumer/` | One plugin exposing an interface that another depends on |
+| `text-service/`, `text-consumer/` | Required/optional services, declared custom events, completion subscriptions and observable management routes |
 | `package-service/` | A plugin that imports an npm library |
 | `dashboard-contributions/` | Dashboard fields, a metric, a panel and a navigation entry |
 

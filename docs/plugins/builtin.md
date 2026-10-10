@@ -11,7 +11,7 @@ itself.
 `server/` holds only what every plugin relies on:
 
 - the unified request and response types (`server/core/types.ts`);
-- the provider, protocol, ingress and hook registries (`server/core/`);
+- the provider, protocol, ingress, hook and event registries (`server/core/`);
 - the request pipeline that runs hooks and calls upstreams
   (`server/core/pipeline.ts`);
 - the plugin manager (`server/plugins-runtime/`);
@@ -160,7 +160,8 @@ Pages use `<UContainer class="py-8 max-w-5xl">`.
 
 ## Request completion
 
-`stats` and `quota` register the public `onComplete` hook. Each admitted
+`stats` and `quota` subscribe to `llmhub:request-complete` through
+`api.onEvent`. Each admitted
 generation or embedding request produces one completion, with the final model,
 last reported usage and any error. Completion persistence runs in the background;
 errors are logged without changing the response. Missing usage still counts one

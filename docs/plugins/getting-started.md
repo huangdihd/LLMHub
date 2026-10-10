@@ -153,8 +153,8 @@ setup(api) {
 }
 ```
 
-Hooks, routes and everything else registered through `api` are removed for
-you.
+Hooks, routes, event subscriptions and everything else registered through `api`
+are removed for you, including when setup fails.
 
 ## Where to go next
 
@@ -168,6 +168,10 @@ you.
   [Dashboard contributions](reference.md#dashboard-contributions).
 - **Use an npm library.** Add it to `dependencies` in `package.json`. See
   [Libraries](reference.md#libraries).
+- **Observe requests or publish notifications.** Subscribe during setup with
+  `api.onEvent` and publish while active with `api.emitEvent`; see
+  [Events](reference.md#events) and the text-service /
+  text-consumer examples. Events require plugin API 1.4.0.
 - **Build on another plugin.** See
   [Depending on other plugins](reference.md#depending-on-other-plugins).
 

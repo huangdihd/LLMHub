@@ -42,7 +42,13 @@ export interface PluginMetricResult {
   error?: string
 }
 
+export interface PluginEventDeclaration {
+  name: string
+  description: string
+}
+
 export interface PluginManifest {
+  events?: PluginEventDeclaration[]
   id: string
   name?: string
   version: string
@@ -58,6 +64,7 @@ export interface PluginManifest {
 
 /** Gateway metadata inside package.json; npm dependencies remain separate. */
 export interface PluginPackageMetadata {
+  events?: PluginEventDeclaration[]
   id?: string
   name?: string
   contributes?: PluginContributions
@@ -109,6 +116,8 @@ export type PluginSource = {
 }['builtin' | 'npm' | 'github' | 'directory']
 
 export interface PluginRecord {
+  publishedEvents?: PluginEventDeclaration[]
+  subscribedEvents?: string[]
   capabilities?: { update: boolean; uninstall: boolean }
   source?: PluginSource
   warnings?: string[]

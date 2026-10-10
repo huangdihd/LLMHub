@@ -1,6 +1,6 @@
 import { ProviderLoader } from '../../../providers/loader'
 import { ProviderManager } from '../../../providers/manager'
-import { requestHooks } from '../../../core/hooks'
+import { systemEvents } from '../../../core/events'
 
 export default defineEventHandler(async () => {
   ProviderLoader.invalidateCache()
@@ -14,7 +14,7 @@ export default defineEventHandler(async () => {
   const validModelIds = new Set<string>(models.map(m => m.id))
 
   // Clean up stale model references from all API keys
-  await requestHooks.modelsRefreshed(validModelIds)
+  await systemEvents.emit('llmhub:models-refreshed', { validModelIds: [...validModelIds] })
 
   return { success: true, message: 'Model cache cleared and stale references cleaned up.' }
 })

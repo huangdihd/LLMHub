@@ -11,12 +11,13 @@ import { createModuleGeneration, GENERATIONS_DIRECTORY, type ModuleGeneration } 
 import { assertCompatibility, decorateRecords, dependencyIssues, dependencyOrder, manifestWarnings } from './dependencies'
 import type { H3Event } from 'h3'
 import type { ProviderDefinition, ProviderRegistry } from '../core/registry'
+import { systemEvents, type EventRegistry, type EventListener, type EventPayload, type SystemEventMap } from '../core/events'
 import type { RequestHook, HookRegistry } from '../core/hooks'
 import { ProtocolRegistry, type ProtocolDefinition } from '../core/protocol-registry'
 import { IngressRegistry, type IngressDefinition } from '../core/ingress-registry'
 import { recordValuesKey, withRecordValuesLock, type StoredRecordValues } from './record-values'
 import type { PluginRecordLocation, PluginRecordValues, PluginRecordValuesChange, PluginMetricGetter, PluginMetricResult, PluginContributionRecord, PluginManifest, PluginRecord, PluginSource } from '../../shared/types/plugin'
-import { PluginError, safePath, validatePath, validateId, validateManifest, validatePackageManifest, normalizeManifest, validateFields, validateConfiguration } from './manifest'
+import { PluginError, safePath, validatePath, validateId, validateManifest, validateEventName, validatePackageManifest, normalizeManifest, validateFields, validateConfiguration } from './manifest'
 
 export interface PluginStorage {
   getItem<T>(key: string): Promise<T | null>
@@ -27,6 +28,9 @@ export interface PluginStorage {
 type Cleanup = () => void | Promise<void>
 type RouteHandler = (event: H3Event) => unknown | Promise<unknown>
 export interface PluginAPI {
+  onEvent<Name extends keyof SystemEventMap>(name: Name, listener: EventListener<SystemEventMap[Name]>, priority?: number): void
+  onEvent<Name extends string>(name: Name, listener: EventListener<EventPayload<Name>>, priority?: number): void
+  emitEvent(localName: string, payload: Record<string, unknown>): Promise<void>
   getRecordValues(location: PluginRecordLocation, recordId: string): Promise<PluginRecordValues>
   getAllRecordValues(location: PluginRecordLocation): Promise<Record<string, PluginRecordValues>>
   onRecordValuesChange(listener: (change: PluginRecordValuesChange) => void | Promise<void>): void
@@ -61,6 +65,7 @@ interface InstalledPlugin {
   isolateModules?: boolean
 }
 interface Runtime {
+  subscribedEvents: string[]
   recordListeners: Array<(change: PluginRecordValuesChange) => void | Promise<void>>
   metrics: Map<string, PluginMetricGetter>
   moduleGeneration?: ModuleGeneration
@@ -77,6 +82,7 @@ interface Runtime {
   listeners: Array<(configuration: Readonly<Record<string, unknown>>) => void | Promise<void>>
 }
 export interface PluginManagerOptions {
+  eventRegistry?: EventRegistry
   listRecordIds?: (location: PluginRecordLocation) => Promise<string[]>
   requireBuiltin?: (id: string) => object | undefined
   builtinPlugins?: () => PluginRecord[]
@@ -148,6 +154,8 @@ export class PluginManager {
   list(): PluginRecord[] {
     const runtimePlugins: PluginRecord[] = [...this.plugins.values()].map(plugin => ({ id: plugin.manifest.id, manifest: structuredClone(plugin.manifest),
       source: plugin.source ?? { type: 'directory' }, capabilities: { update: !!plugin.source?.direct, uninstall: !plugin.source || !['npm', 'github'].includes(plugin.source.type) || !!plugin.source.direct }, warnings: manifestWarnings(plugin.manifest), enabled: plugin.enabled, status: plugin.error ? 'error' : plugin.enabled ? 'enabled' : plugin.installed ? 'installed' : 'disabled', error: plugin.error,
+      publishedEvents: (plugin.manifest.events ?? []).map(event => ({ ...event, name: `${plugin.manifest.id}:${event.name}` })),
+      subscribedEvents: [...(plugin.runtime?.subscribedEvents ?? [])],
       providers: [...(plugin.runtime?.providers ?? [])], hooks: [...(plugin.runtime?.hooks ?? [])],
       protocols: [...(plugin.runtime?.protocols ?? [])], ingresses: [...(plugin.runtime?.ingresses ?? [])] }))
     return decorateRecords([...(this.options.builtinPlugins?.() ?? []).map(plugin => ({ ...plugin, source: { type: 'builtin' as const } })), ...runtimePlugins])
@@ -601,7 +609,7 @@ export class PluginManager {
     if (cycles.has(plugin.manifest.id)) throw new PluginError(cycles.get(plugin.manifest.id)!)
     const issues = dependencyIssues(plugin.manifest, this.list())
     if (issues.length) throw new PluginError(issues.join('; '))
-    const runtime: Runtime = { recordListeners: [], metrics: new Map(), accepting: true, active: true, unregister: [], providers: [], protocols: [], ingresses: [], hooks: [], routes: new Map(), listeners: [] }
+    const runtime: Runtime = { subscribedEvents: [], recordListeners: [], metrics: new Map(), accepting: true, active: true, unregister: [], providers: [], protocols: [], ingresses: [], hooks: [], routes: new Map(), listeners: [] }
     plugin.runtime = runtime
     const assertRegistration = () => { if (!runtime.accepting || !runtime.active) throw new PluginError('Plugin registration is closed') }
     const prefix = (id: string) => {
@@ -624,7 +632,22 @@ export class PluginManager {
       if (!runtime.active) throw new PluginError('Plugin is inactive')
       return mutation()
     }
+    const eventRegistry = this.options.eventRegistry ?? systemEvents
     const api: PluginAPI = {
+      onEvent: <Name extends string>(name: Name, listener: EventListener<EventPayload<Name>>, priority?: number) => {
+        assertRegistration()
+        runtime.unregister.push(eventRegistry.subscribe(plugin.manifest.id, name, payload => {
+          if (runtime.active) return listener(payload)
+        }, priority))
+        if (!runtime.subscribedEvents.includes(name)) runtime.subscribedEvents.push(name)
+      },
+      emitEvent: async (localName, payload) => {
+        if (!runtime.active) throw new PluginError('Plugin is inactive')
+        validateEventName(localName)
+        if (!plugin.manifest.events?.some(event => event.name === localName)) throw new PluginError('Plugin event must be declared')
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new PluginError('Invalid event payload')
+        await eventRegistry.emit(`${plugin.manifest.id}:${localName}`, payload)
+      },
       getRecordValues: async (location, recordId) => {
         if (!runtime.active) throw new PluginError('Plugin is inactive')
         const values = await this.readRecordValues(plugin, location, recordId)

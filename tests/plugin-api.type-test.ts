@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import type * as Author from '../examples/plugins/llmhub-plugin'
 import type * as Core from '../server/core/types'
 import type * as Hooks from '../server/core/hooks'
+import type * as Events from '../server/core/events'
 import type * as Providers from '../server/core/registry'
 import type * as Protocols from '../server/core/protocol-registry'
 import type * as Ingresses from '../server/core/ingress-registry'
@@ -38,6 +39,9 @@ type NormalizeContract<Value> = Value extends (...arguments_: any[]) => unknown
   ? NormalizeCallback<Value>
   : Value extends object ? {
     [Key in keyof Value]: Key extends 'event' ? NormalizeEvent<Value[Key]>
+      // Conditional generic aliases from separate declaration modules are not
+      // identity-equal; validate the whole overload surface in both directions.
+      : Key extends 'onEvent' ? Bidirectional<Value[Key], Author.PluginAPI['onEvent']> extends true ? Author.PluginAPI['onEvent'] : never
       : Key extends EventMember ? NormalizeCallback<Value[Key]>
       : Key extends 'default' ? NormalizeContract<Value[Key]>
       : Value[Key]
@@ -84,6 +88,11 @@ export type ProviderContract = Assert<ContractMatches<Author.ProviderDefinition,
 export type ProviderManagementContract = Assert<ContractMatches<Author.ProviderManagement, Providers.ProviderManagement>>
 export type DiscoveryContract = Assert<ContractMatches<Author.ModelDiscoveryContext, Providers.ModelDiscoveryContext>>
 export type SafeConnectionContract = Assert<ContractMatches<Author.SafeProviderConnection, Providers.SafeProviderConnection>>
+export type SystemEventContract = Assert<Equal<Author.SystemEventMap, Events.SystemEventMap>>
+export type SystemEventPayloadContract = Assert<Equal<Author.EventPayload<keyof Events.SystemEventMap>, Events.EventPayload<keyof Events.SystemEventMap>>>
+export type CustomEventPayloadContract = Assert<Equal<Author.EventPayload<'example:message'>, Events.EventPayload<'example:message'>>>
+export type EventListenerContract = Assert<Equal<Author.EventListener, Events.EventListener>>
+export type CompletionListenerContract = Assert<Equal<Author.EventListener<Author.EventPayload<'llmhub:request-complete'>>, Events.EventListener<Events.EventPayload<'llmhub:request-complete'>>>>
 export type HookContract = Assert<ContractMatches<Author.RequestHook, Hooks.RequestHook>>
 export type HookContextContract = Assert<ContractMatches<Author.HookContext, Hooks.HookContext>>
 export type AdmissionContract = Assert<ContractMatches<Author.AdmissionContext, Hooks.AdmissionContext>>
@@ -189,3 +198,5 @@ function authorUsage(api: Author.PluginAPI) {
   return { formatted, stored } as { formatted: typeof formatted; stored: typeof stored; checked?: DefaultService }
 }
 void authorUsage
+
+export type EventMethodContract = Assert<Bidirectional<Author.PluginAPI['onEvent'], Runtime.PluginAPI['onEvent']>>

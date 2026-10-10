@@ -8,7 +8,24 @@ import type { PluginContributions, PluginField, PluginManifest } from '../../sha
 export class PluginError extends Error {}
 
 export function validateId(value: unknown): asserts value is string {
-  if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9-]{1,40}$/.test(value)) throw new PluginError('Invalid plugin identifier')
+  if (typeof value !== 'string' || value === 'llmhub' || !/^[a-z0-9][a-z0-9-]{1,40}$/.test(value)) throw new PluginError('Invalid plugin identifier')
+}
+
+export function validateEventName(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(value)) throw new PluginError('Invalid local event name')
+}
+
+function validateEvents(input: unknown): PluginManifest['events'] {
+  if (input === undefined) return undefined
+  if (!Array.isArray(input) || input.length > 100) throw new PluginError('Invalid plugin events')
+  const names = new Set<string>()
+  return input.map(event => {
+    if (!event || typeof event !== 'object' || Array.isArray(event)) throw new PluginError('Invalid plugin event')
+    validateEventName(event.name)
+    if (names.has(event.name) || typeof event.description !== 'string' || !event.description.trim() || event.description.length > 2000) throw new PluginError('Invalid or duplicate plugin event')
+    names.add(event.name)
+    return { name: event.name, description: event.description }
+  })
 }
 
 export function validatePath(value: string): string {
@@ -127,7 +144,7 @@ export function validateManifest(input: unknown, strictVersion = false): PluginM
     engines: value.engines ? { llmhub: value.engines.llmhub } : undefined,
     dependencies: value.dependencies ? { ...value.dependencies } : undefined,
     optionalDependencies: value.optionalDependencies ? { ...value.optionalDependencies } : undefined,
-    contributes, entry: value.entry, configSchema: validateFields(value.configSchema), ui: value.ui ? { page: value.ui.page } : undefined }
+    events: validateEvents(value.events), contributes, entry: value.entry, configSchema: validateFields(value.configSchema), ui: value.ui ? { page: value.ui.page } : undefined }
 }
 
 /** Resolve the package root for the ESM runtime, never browser/require branches. */
@@ -175,7 +192,7 @@ export function validatePackageManifest(input: unknown): PluginManifest {
   return validateManifest({
     id, name: metadata.name === undefined ? value.name : metadata.name,
     version: value.version, description: value.description, engines: value.engines,
-    entry, configSchema: metadata.configSchema, ui: metadata.ui, contributes: metadata.contributes,
+    events: metadata.events, entry, configSchema: metadata.configSchema, ui: metadata.ui, contributes: metadata.contributes,
     dependencies: metadata.dependencies, optionalDependencies: metadata.optionalDependencies
   }, true)
 }

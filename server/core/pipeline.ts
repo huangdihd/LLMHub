@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import type { ProviderManager } from '../providers/manager'
 import type { EmbeddingRequest, EmbeddingResponse, LLMRequest, LLMResponse, LLMStreamChunk, ProviderAdapter, Usage } from './types'
 import { HookRegistry, requestHooks, type HookContext } from './hooks'
+import { EventRegistry, systemEvents } from './events'
 
 // Keep completion work owned by the process rather than the HTTP response lifetime.
 const pendingCompletions = new Set<Promise<void>>()
@@ -28,7 +29,8 @@ export class RequestPipeline {
     private manager: ProviderManager,
     private event: H3Event,
     incomingProtocol: string,
-    private hooks: HookRegistry = requestHooks
+    private hooks: HookRegistry = requestHooks,
+    private events: EventRegistry = systemEvents
   ) {
     this.context = { incomingProtocol, apiKeyRecord: event.context?._apiKeyRecord }
     event.node?.res.once?.('close', this.onClose)
@@ -130,7 +132,7 @@ export class RequestPipeline {
     if (this.reportedErrors.has(error)) return
     this.reportedErrors.add(error)
     this.failure = error
-    await this.hooks.error(error, this.context)
+    await this.events.emit('llmhub:request-error', { error, context: this.context })
   }
 
   async complete(): Promise<void> {
@@ -138,7 +140,7 @@ export class RequestPipeline {
     this.completed = true
     this.event.node?.res.removeListener?.('close', this.onClose)
     const completion = { model: this.model, usage: this.usage, error: this.failure }
-    const pending = this.hooks.complete(completion, this.context).catch(error => {
+    const pending = this.events.emit('llmhub:request-complete', { completion, context: this.context }).catch(error => {
       console.error('[LLMHub] Completion failed:', error)
     })
     pendingCompletions.add(pending)

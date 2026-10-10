@@ -111,7 +111,9 @@ async function invoke(protocol: Protocol, options: Options = {}) {
   for (const [name, imports] of plugins) {
     execute(`builtin/${name}/plugin.ts`, imports).default.setup({
       require: () => ({ getBillableTokens() { throw new Error('Admission must not bill usage') } }),
-      registerHook: (hook: any) => hooks.requestHooks.register({ ...hook, id: `${name}:${hook.id}` })
+      registerHook: (hook: any) => hooks.requestHooks.register({ ...hook, id: `${name}:${hook.id}` }),
+      // Admission never emits lifecycle notifications; accept their setup registrations.
+      onEvent: () => () => {}
     })
   }
   const admission = execute('builtin/shared/ingress.ts', { h3: transport })

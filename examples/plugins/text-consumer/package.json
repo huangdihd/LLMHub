@@ -4,9 +4,9 @@
   "type": "module",
   "main": "index.mjs",
   "engines": {
-    "llmhub": "^1.0.0"
+    "llmhub": "^1.4.0"
   },
-  "description": "Use a required text service and an optional audit service.",
+  "description": "Use required and optional services; observe custom and request-completion events.",
   "llmhub": {
     "id": "example-text-consumer",
     "name": "Text Consumer",

@@ -71,6 +71,11 @@ export interface PluginMetricResult {
   error?: string
 }
 
+export interface PluginEventDeclaration {
+  name: string
+  description: string
+}
+
 export interface PluginManifest {
   id: string
   name?: string
@@ -81,6 +86,7 @@ export interface PluginManifest {
   optionalDependencies?: Record<string, string>
   entry?: string
   contributes?: PluginContributions
+  events?: PluginEventDeclaration[]
   configSchema?: PluginField[]
   ui?: { page: string }
 }
@@ -90,6 +96,7 @@ export interface PluginPackageMetadata {
   id?: string
   name?: string
   contributes?: PluginContributions
+  events?: PluginEventDeclaration[]
   configSchema?: PluginField[]
   ui?: { page: string }
   dependencies?: Record<string, string>
@@ -129,6 +136,14 @@ export interface PluginStorage {
   removeItem(key: string): Promise<unknown>
   getKeys?(prefix: string): Promise<string[]>
 }
+export interface SystemEventMap {
+  'llmhub:request-complete': { completion: CompletionInfo; context: HookContext }
+  'llmhub:request-error': { error: unknown; context: HookContext }
+  'llmhub:models-refreshed': { validModelIds: readonly string[] }
+}
+export type EventPayload<Name extends string> = Name extends keyof SystemEventMap ? SystemEventMap[Name] : Record<string, unknown>
+export type EventListener<Payload = Record<string, unknown>> = (payload: Payload) => void | Promise<void>
+
 type Cleanup = () => void | Promise<void>
 type RouteHandler = (event: H3Event) => unknown | Promise<unknown>
 export interface PluginAPI {
@@ -143,6 +158,9 @@ export interface PluginAPI {
   registerProtocol(definition: ProtocolDefinition): void
   registerIngress(definition: IngressDefinition): void
   registerHook(hook: RequestHook): void
+  onEvent<Name extends keyof SystemEventMap>(name: Name, listener: EventListener<SystemEventMap[Name]>, priority?: number): void
+  onEvent<Name extends string>(name: Name, listener: EventListener<EventPayload<Name>>, priority?: number): void
+  emitEvent(localName: string, payload: Record<string, unknown>): Promise<void>
   registerRoute(method: string, path: string, handler: RouteHandler): void
   onConfigChange(listener: (configuration: Readonly<Record<string, unknown>>) => void | Promise<void>): void
   storage: PluginStorage
@@ -591,13 +609,10 @@ export interface RequestHook {
   onAfterIdentity?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
   onModelResolved?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
   onModels?: (models: ModelInfo[], context: HookContext) => Awaitable<ModelInfo[] | void>
-  onModelsRefreshed?: (validModelIds: ReadonlySet<string>) => Awaitable<void>
   onRequest?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
   onResponse?: (response: LLMResponse, context: HookContext) => Awaitable<LLMResponse | void>
   /** undefined preserves the chunk, null or [] drops it. */
   onStreamChunk?: (chunk: LLMStreamChunk, context: HookContext) => Awaitable<LLMStreamChunk | LLMStreamChunk[] | null | void>
-  onError?: (error: unknown, context: HookContext) => Awaitable<void>
-  onComplete?: (completion: CompletionInfo, context: HookContext) => Awaitable<void>
 }
 
 export interface ProtocolDefinition {

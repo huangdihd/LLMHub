@@ -26,60 +26,29 @@ Open http://localhost:3000 and set up your admin password.
 
 ## Configuration
 
-### Runtime Plugins
+### Plugins
 
-Install trusted plugins through the npm/market or GitHub management APIs, or
-place a directory containing `package.json` with `llmhub` metadata (legacy
-`plugin.json` is also supported) in `.data/plugins/<id>/` and choose **Scan plugins**.
-The **Plugins** dashboard manages configuration, enable/disable, reload, and
-uninstall without rebuilding or restarting the gateway. Single-file upload is
-not supported; the dashboard's old upload control is awaiting a separate UI
-update. Previously installed plugins continue to work as local directories.
-Plugin provider types appear alongside built-in types in **Providers**.
+LLMHub is extended with plugins. A plugin can add an upstream provider type,
+change or reject requests as they pass through, attach its own settings to
+models, API keys and providers, and add pages and metrics to the dashboard.
 
-Plugins run with the gateway's full Node.js permissions: review their source
-before installing. There is no server-side sandbox. See [Writing plugins](docs/plugins.md)
-for the API, lifecycle, security boundaries, and the local echo/request-hook
-examples in `examples/plugins/`.
+Open **Plugins** in the dashboard to browse the market, install from a GitHub
+repository, and enable, configure, update or remove plugins, all without
+restarting the gateway. To try a plugin you are writing, put its folder in
+`.data/plugins/<id>/` and rescan.
 
-### Built-in Plugins
+**A plugin runs inside the gateway with its full privileges; there is no
+sandbox.** Install only plugins you trust.
 
-Rate limiting, fallback, access control, quota/accounting, token billing,
-thinking policy, CCH normalization and statistics ship as always-on plugins in
-`builtin/`. They use the same `setup(api)` hook contract as runtime plugins and
-appear read-only in **Plugins**; they cannot be disabled or uninstalled. Their
-existing settings URLs and `.data` records are unchanged. See
-[Writing plugins](docs/plugins.md) for admission and accounting stages and the
-Nuxt-layer registration convention.
+Most of LLMHub's own features are plugins too: the OpenAI, Claude and Gemini
+endpoints, each upstream provider, and policies such as quotas, rate limiting
+and fallback live in `builtin/` and are listed, read-only, on the same page.
 
-Upstream providers also ship as built-ins: `builtin/provider-openai/`,
-`provider-claude/`, `provider-gemini/`, `provider-codex/`,
-`provider-claude-subscription/`, and `provider-antigravity/`. They own adapters,
-model discovery and applicable login/token flows; `server/providers/` retains
-registry-based loading/routing. Existing protocol IDs and login URLs are
-preserved. The shared provider contract includes management, subscription usage,
-reset, refresh and login declarations for runtime plugins too; refresh/login
-metadata does not itself dispatch a flow (see the plugin guide).
-
-Client endpoints ship in `builtin/ingress-openai/`, `ingress-claude/`, and
-`ingress-gemini/` Nuxt layers. Each owns its routes, parsers, serializers, stream
-framing and admission definition; all public URLs and protocol IDs are unchanged.
-Core authentication dispatches through the ingress registry rather than protocol
-names. Runtime plugins can also register ingress definitions and codecs, but
-cannot add Nitro file routes or a new public generation endpoint at runtime.
-
-`builtin/catalog.ts` registers plugins at runtime. Nuxt discovers layers by
-scanning `builtin/*/nuxt.config.ts` without importing that catalog. Non-Nitro
-callers must await `initializeBuiltinPlugins()` from `builtin/assembly.ts` before
-using shared registries and provide storage when exercising persisted policy
-operations. Built-ins share codecs/adapters and helpers rather than forming
-independently deployable packages.
-
-Built-in layers also own their dashboard forms, login/usage panels, policy
-sections and whole pages. Generic dashboard shells discover typed contributions
-from `builtin/*/dashboard-*.ts`; adding plugin UI does not require editing those
-shells. Existing page URLs, navigation order and settings APIs are preserved.
-Runtime provider connection schemas continue to use the generic schema form.
+- [Plugin documentation](docs/plugins/README.md)
+- [Write your first plugin](docs/plugins/getting-started.md)
+- [API reference](docs/plugins/reference.md)
+- [Working on built-in plugins](docs/plugins/builtin.md)
+- Examples: [`examples/plugins/`](examples/plugins)
 
 ### Thinking Policy
 

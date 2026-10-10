@@ -22,9 +22,12 @@ export default defineEventHandler(async event => {
       return ingress.sendError(event, { status: 401, message: ingress.missingKeyMessage, code: 'invalid_api_key' })
     }
     const impersonateId = getHeader(event, 'X-LLMHub-Key-ID')
-    if (impersonateId) record = await store.getKeyById(impersonateId)
+    if (impersonateId) {
+      record = await store.getKeyById(impersonateId)
+      // An unknown target must not silently widen to administrator access.
+      if (!record) return ingress.sendError(event, { status: 401, message: 'Invalid API Key', code: 'invalid_api_key' })
+    }
     if (!record) {
-      // An absent or unknown impersonation target retains full administrator access.
       event.context._apiKeyRecord = {
         name: 'Gateway Session', tokens_used: 0, monthly_limit: 0,
         allowed_providers: [], allowed_models: [], model_quotas: {}, model_usage: {},

@@ -338,7 +338,8 @@ quota), then, for a nonempty model, model resolution (fallback at -300, access
 control at -200, model/provider quotas at -100). Change `context.model` to route
 before parsing the unified request. GET model lists skip POST checks and run
 `onModels` for filtering and fallback catalog insertion. Administrator sessions
-without a valid impersonation target bypass post-identity admission, as before.
+that do not impersonate a key bypass post-identity admission; an unknown
+`X-LLMHub-Key-ID` is rejected with 401 `invalid_api_key`.
 These boundaries also cover embeddings; unified generation hooks do not.
 
 `onNormalize` is a formal main-registry stage, currently called at the Claude

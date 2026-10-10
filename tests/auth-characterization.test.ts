@@ -236,14 +236,18 @@ for (const protocol of ['openai', 'claude', 'gemini'] as const) {
         403, 'Model "auto" is not allowed for this API key.', 'access_denied')
     }
   })
-  test(`${protocol}: admin and unknown impersonation IDs retain full access and bypass model parsing`, async () => {
-    for (const id of ['', 'missing']) {
-      const outcome = await invoke(protocol, { session: true, headers: { cookie: 'admin', 'x-llmhub-key-id': id }, record: exhausted })
-      assert.equal(outcome.responseBody, undefined)
-      assert.deepEqual(JSON.parse(JSON.stringify(outcome.event.context._apiKeyRecord)), adminRecord)
-      assert.equal(outcome.event.context._resolvedModel, undefined)
-      assert.deepEqual(outcome.calls, [...prefix, 'cookie', 'session:admin', ...(id ? ['impersonate:missing'] : [])])
-    }
+  test(`${protocol}: admin session without impersonation retains full access and bypasses model parsing`, async () => {
+    const outcome = await invoke(protocol, { session: true, headers: { cookie: 'admin', 'x-llmhub-key-id': '' }, record: exhausted })
+    assert.equal(outcome.responseBody, undefined)
+    assert.deepEqual(JSON.parse(JSON.stringify(outcome.event.context._apiKeyRecord)), adminRecord)
+    assert.equal(outcome.event.context._resolvedModel, undefined)
+    assert.deepEqual(outcome.calls, [...prefix, 'cookie', 'session:admin'])
+  })
+  test(`${protocol}: unknown impersonation ID is rejected instead of widening to admin access`, async () => {
+    const outcome = await invoke(protocol, { session: true, headers: { cookie: 'admin', 'x-llmhub-key-id': 'missing' }, record: exhausted })
+    rejected(outcome, 401, 'Invalid API Key')
+    assert.equal(outcome.event.context._apiKeyRecord, undefined)
+    assert.deepEqual(outcome.calls, [...prefix, 'cookie', 'session:admin', 'impersonate:missing'])
   })
   test(`${protocol}: admin impersonation applies key quota and access restrictions`, async () => {
     const options = { session: true, impersonated: true, headers: { cookie: 'admin', 'x-llmhub-key-id': 'selected' } }

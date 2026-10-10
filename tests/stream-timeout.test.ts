@@ -81,3 +81,31 @@ for (const [name, Adapter, request] of adapters) {
     while (!(await reader.read()).done) {}
   })
 }
+
+test('OpenAI: a 5xx before response headers is retried, then the stream proceeds', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let calls = 0
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++
+    if (calls === 1) return new Response('upstream down', { status: 503 })
+    return new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {"ok":true}\n\ndata: [DONE]\n\n'))
+        controller.close()
+      }
+    }))
+  })
+  const adapter = new adapters[0][1]({
+    name: 'test', models: [],
+    connection: { base_url: 'https://example.invalid', api_key: 'test', enable_timeout: true, timeout: 30000, max_retries: 3 }
+  })
+  const reader = adapter.callStream({}).getReader()
+  const first = reader.read()
+  first.catch(() => {})
+  await settle()
+  assert.equal(calls, 1, 'the failed attempt must not surface before the backoff elapses')
+  t.mock.timers.tick(1000)
+  const chunk = await first
+  assert.equal(calls, 2)
+  assert.match(new TextDecoder().decode(chunk.value), /"ok":true/)
+})

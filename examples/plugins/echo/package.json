@@ -1,0 +1,14 @@
+{
+  "name": "@llmhub/example-echo",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.mjs",
+  "engines": {
+    "llmhub": "^1.0.0"
+  },
+  "description": "A network-free upstream for exercising every gateway protocol.",
+  "llmhub": {
+    "id": "example-echo",
+    "name": "Local Echo"
+  }
+}

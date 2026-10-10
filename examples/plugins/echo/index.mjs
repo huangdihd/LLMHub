@@ -1,9 +1,3 @@
-export const manifest = {
-  id: 'example-echo', name: 'Local Echo', version: '1.0.0',
-  engines: { llmhub: '^1.0.0' },
-  description: 'A network-free upstream for exercising every gateway protocol.'
-}
-
 export default {
   setup(api) {
     const models = configuration => [{

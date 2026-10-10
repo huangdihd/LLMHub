@@ -29,10 +29,8 @@ function manifest(id: string, fields: Manifest = {}) {
   return { id, name: id, version: '1.0.0', engines: { llmhub: '*' }, ...fields }
 }
 
-function source(id: string, setup = '', fields: Manifest = {}, topLevel = '') {
-  // Upload parsing intentionally requires a leading, literal manifest declaration.
-  return Buffer.from(`export const manifest = ${JSON.stringify(manifest(id, fields))};
-${topLevel}
+function source(setup = '', topLevel = '') {
+  return Buffer.from(`${topLevel}
 export default { async setup(context) { ${setup} } };`)
 }
 
@@ -40,7 +38,7 @@ async function writePlugin(root: string, id: string, setup = '', fields: Manifes
   const directory = path.join(root, id)
   await mkdir(directory, { recursive: true })
   await writeFile(path.join(directory, 'plugin.json'), JSON.stringify(manifest(id, { entry: 'index.mjs', ...fields })))
-  await writeFile(path.join(directory, 'index.mjs'), source(id, setup, fields, topLevel))
+  await writeFile(path.join(directory, 'index.mjs'), source(setup, topLevel))
   return directory
 }
 
@@ -50,9 +48,27 @@ async function fixture() {
   const storage = memoryStorage()
   const providerRegistry = new ProviderRegistry()
   const hookRegistry = new HookRegistry()
-  const manager = new PluginManager({ directory: root, storage, providerRegistry, hookRegistry, timeoutMs: 1000 })
+  const packages = new Map<string, { setup: string; fields: Manifest }>()
+  const npmRunner = async (_arguments: string[], target: string) => {
+    const project = JSON.parse(await readFile(path.join(target, 'package.json'), 'utf8'))
+    for (const id of Object.keys(project.dependencies)) {
+      const candidate = packages.get(id)
+      assert.ok(candidate, `Missing package fixture ${id}`)
+      const directory = path.join(target, 'node_modules', id)
+      await mkdir(directory, { recursive: true })
+      const { version = '1.0.0', ...metadata } = candidate.fields
+      await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: id, version, type: 'module', main: 'index.mjs', llmhub: { id, engines: { llmhub: '*' }, ...metadata } }))
+      await writeFile(path.join(directory, 'index.mjs'), source(candidate.setup))
+    }
+  }
+  const manager = new PluginManager({ directory: root, storage, providerRegistry, hookRegistry, timeoutMs: 1000, npmRunner })
   return {
     root, storage, providerRegistry, manager,
+    async installPackage(id: string, setup = '', fields: Manifest = {}) {
+      packages.set(id, { setup, fields })
+      if (manager.list().some((plugin: { id: string }) => plugin.id === id)) return manager.update(id)
+      return manager.installNpm({ name: id })
+    },
     async close() { await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
   }
 }
@@ -192,19 +208,21 @@ test('reload failure disables transitive required consumers but leaves unrelated
 })
 
 for (const enabled of [true, false]) {
-  test(`upload upgrade preserves configuration, storage and ${enabled ? 'enabled' : 'disabled'} state`, async () => {
+  test(`npm upgrade preserves configuration, storage and ${enabled ? 'enabled' : 'disabled'} state`, async () => {
     const fixtureState = await fixture()
     const { manager, storage } = fixtureState
     try {
-      await manager.install(source('upgrade-plugin', stateSetup, { configSchema: schema }))
+      await fixtureState.installPackage('upgrade-plugin', stateSetup, { configSchema: schema })
       await manager.updateConfig('upgrade-plugin', { label: 'kept', token: 'private-token' })
       await storage.setItem('runtime-plugins:upgrade-plugin:storage:saved', { count: 7 })
       if (enabled) await manager.enable('upgrade-plugin')
-      await manager.install(source('upgrade-plugin', stateSetup, { version: '1.1.0', configSchema: schema }))
+      await fixtureState.installPackage('upgrade-plugin', stateSetup, { version: '1.1.0', configSchema: schema })
       assert.equal(record(manager, 'upgrade-plugin').manifest.version, '1.1.0')
       assert.equal(record(manager, 'upgrade-plugin').enabled, enabled)
       assert.deepEqual(manager.getConfig('upgrade-plugin'), { label: 'kept' })
-      assert.deepEqual(await storage.getItem('runtime-plugins:upgrade-plugin:state'), { enabled, configuration: { label: 'kept', token: 'private-token' } })
+      const persisted = await storage.getItem('runtime-plugins:upgrade-plugin:state') as { enabled: boolean; configuration: unknown }
+      assert.equal(persisted.enabled, enabled)
+      assert.deepEqual(persisted.configuration, { label: 'kept', token: 'private-token' })
       assert.deepEqual(await storage.getItem('runtime-plugins:upgrade-plugin:storage:saved'), { count: 7 })
       if (!enabled) await manager.enable('upgrade-plugin')
       assert.deepEqual(await manager.dispatchRoute('upgrade-plugin', 'GET', 'state', {}), { config: { label: 'kept', token: 'private-token' }, stored: { count: 7 } })
@@ -215,13 +233,13 @@ for (const enabled of [true, false]) {
     const fixtureState = await fixture()
     const { root, manager, storage } = fixtureState
     try {
-      const original = source('rollback-plugin', stateSetup, { configSchema: schema })
-      await manager.install(original)
+      const original = source(stateSetup)
+      await fixtureState.installPackage('rollback-plugin', stateSetup, { configSchema: schema })
       await manager.updateConfig('rollback-plugin', { label: 'original', token: 'secret' })
       await storage.setItem('runtime-plugins:rollback-plugin:storage:saved', 'retained')
       if (enabled) await manager.enable('rollback-plugin')
       const previousState = await storage.getItem('runtime-plugins:rollback-plugin:state')
-      // Also exercise persistence failure after validating a disabled replacement's setup.
+      // Disabled updates must roll back persistence without executing replacement setup.
       const setItem = storage.setItem.bind(storage)
       let rejectNextStateWrite = !enabled
       storage.setItem = async (key: string, value: unknown) => {
@@ -231,14 +249,14 @@ for (const enabled of [true, false]) {
         }
         await setItem(key, value)
       }
-      await assert.rejects(manager.install(source('rollback-plugin', enabled ? `throw new Error('intentional upgrade failure');` : stateSetup, { version: '2.0.0', configSchema: schema })), /failed/i)
+      await assert.rejects(fixtureState.installPackage('rollback-plugin', enabled ? `throw new Error('intentional upgrade failure');` : stateSetup, { version: '2.0.0', configSchema: schema }), /failed/i)
       assert.equal(record(manager, 'rollback-plugin').manifest.version, '1.0.0')
       assert.equal(record(manager, 'rollback-plugin').enabled, enabled)
-      assert.equal(await readFile(path.join(root, 'rollback-plugin/index.mjs'), 'utf8'), original.toString())
+      assert.equal(await readFile(path.join(root, 'node_modules/rollback-plugin/index.mjs'), 'utf8'), original.toString())
       assert.deepEqual(await storage.getItem('runtime-plugins:rollback-plugin:state'), previousState)
       assert.equal(await storage.getItem('runtime-plugins:rollback-plugin:storage:saved'), 'retained')
       assert.deepEqual(manager.getConfig('rollback-plugin'), { label: 'original' })
-      assert.deepEqual(await readdir(root), ['rollback-plugin'])
+      assert.deepEqual((await readdir(path.join(root, 'node_modules'))).sort(), ['rollback-plugin'])
       if (!enabled) await manager.enable('rollback-plugin')
       assert.deepEqual(await manager.dispatchRoute('rollback-plugin', 'GET', 'state', {}), { config: { label: 'original', token: 'secret' }, stored: 'retained' })
     } finally { await fixtureState.close() }
@@ -249,37 +267,16 @@ test('incompatible dependency upgrade rolls back provider and consumer runtimes'
   const fixtureState = await fixture()
   const { root, manager } = fixtureState
   try {
-    await manager.install(source('base-plugin', exportSetup('original')))
+    await fixtureState.installPackage('base-plugin', exportSetup('original'))
     await manager.enable('base-plugin')
-    await manager.install(source('consumer-plugin', consumerSetup, { dependencies: { 'base-plugin': '^1.0.0' } }))
+    await fixtureState.installPackage('consumer-plugin', consumerSetup, { dependencies: { 'base-plugin': '^1.0.0' } })
     await manager.enable('consumer-plugin')
-    await assert.rejects(manager.install(source('base-plugin', exportSetup('incompatible'), { version: '2.0.0' })), /requires/)
+    await assert.rejects(fixtureState.installPackage('base-plugin', exportSetup('incompatible'), { version: '2.0.0' }), /requires/)
     assert.equal(record(manager, 'base-plugin').manifest.version, '1.0.0')
     assert.equal(record(manager, 'base-plugin').enabled, true)
     assert.equal(record(manager, 'consumer-plugin').enabled, true)
     assert.equal(await manager.dispatchRoute('consumer-plugin', 'GET', 'value', {}), 'original')
-    assert.deepEqual((await readdir(root)).sort(), ['base-plugin', 'consumer-plugin'])
-  } finally { await fixtureState.close() }
-})
-
-test('downgrades require force and forced replacement refreshes a live runtime', async () => {
-  const fixtureState = await fixture()
-  const { root, manager } = fixtureState
-  try {
-    const latest = source('base-plugin', exportSetup('latest'), { version: '2.0.0' })
-    await manager.install(latest)
-    await manager.enable('base-plugin')
-    const older = source('base-plugin', exportSetup('older'))
-    await assert.rejects(manager.install(older), /downgrade/i)
-    assert.equal(await readFile(path.join(root, 'base-plugin/index.mjs'), 'utf8'), latest.toString())
-    await manager.install(older, true)
-    assert.equal(record(manager, 'base-plugin').manifest.version, '1.0.0')
-    assert.equal(record(manager, 'base-plugin').enabled, true)
-    assert.equal(await manager.dispatchRoute('base-plugin', 'GET', 'value', {}), 'older')
-    await assert.rejects(manager.install(older), /already installed/)
-    await manager.install(source('base-plugin', exportSetup('replacement')), true)
-    assert.equal(await manager.dispatchRoute('base-plugin', 'GET', 'value', {}), 'replacement')
-    assert.equal(record(manager, 'base-plugin').enabled, true)
+    assert.deepEqual((await readdir(path.join(root, 'node_modules'))).sort(), ['base-plugin', 'consumer-plugin'])
   } finally { await fixtureState.close() }
 })
 
@@ -305,18 +302,12 @@ test('scan discovers additions and reloads version changes with live consumers',
   } finally { await fixtureState.close() }
 })
 
-test('incompatible API and invalid upload versions are rejected before top-level marker execution; legacy directories warn', async () => {
+test('incompatible directory API is rejected before top-level marker execution; legacy directories warn', async () => {
   const fixtureState = await fixture()
   const { root, manager } = fixtureState
   try {
     const marker = path.join(root, 'executed-marker')
     const topLevel = `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'executed');`
-    await assert.rejects(manager.install(source('api-plugin', '', { engines: { llmhub: '>=999.0.0' } }, topLevel)), /plugin API/)
-    for (const version of ['legacy', '1', '1.0', '1.0.0.0']) {
-      await assert.rejects(manager.install(source('invalid-plugin', '', { version }, topLevel)), /semver/)
-    }
-    await assert.rejects(readFile(marker), { code: 'ENOENT' })
-    assert.deepEqual(manager.list(), [])
     await writePlugin(root, 'api-plugin', '', { engines: { llmhub: '>=999.0.0' } }, topLevel)
     await writePlugin(root, 'legacy-plugin', '', { version: 'historical-build', engines: undefined })
     await writePlugin(root, 'legacy-consumer', '', { dependencies: { 'legacy-plugin': '*' } })
@@ -357,17 +348,6 @@ test('disabled incompatible discoveries are marked failed without executing thei
   } finally { await fixtureState.close() }
 })
 
-test('build metadata does not turn equal precedence into an upload upgrade', async () => {
-  const fixtureState = await fixture()
-  const { manager } = fixtureState
-  try {
-    await manager.install(source('metadata-plugin', '', { version: '1.0.0+first' }))
-    await assert.rejects(manager.install(source('metadata-plugin', '', { version: '1.0.0+second' })), /already installed/)
-    await manager.install(source('metadata-plugin', '', { version: '1.0.0+second' }), true)
-    assert.equal(record(manager, 'metadata-plugin').manifest.version, '1.0.0+second')
-  } finally { await fixtureState.close() }
-})
-
 test('failed configuration callbacks revoke transitive required consumers and refresh optional consumers', async () => {
   const fixtureState = await fixture()
   const { root, manager } = fixtureState
@@ -393,11 +373,11 @@ test('failed upgrade restores storage mutations made by candidate setup', async 
   const fixtureState = await fixture()
   const { manager, storage } = fixtureState
   try {
-    await manager.install(source('storage-plugin', stateSetup))
+    await fixtureState.installPackage('storage-plugin', stateSetup)
     await storage.setItem('runtime-plugins:storage-plugin:storage:saved', 'original')
     await storage.setItem('runtime-plugins:storage-plugin:storage:deleted', 'retained')
     await manager.enable('storage-plugin')
-    await assert.rejects(manager.install(source('storage-plugin', `await context.storage.setItem('saved', 'corrupted'); await context.storage.removeItem('deleted'); await context.storage.setItem('created', true); throw new Error('upgrade failure');`, { version: '2.0.0' })), /failed/)
+    await assert.rejects(fixtureState.installPackage('storage-plugin', `await context.storage.setItem('saved', 'corrupted'); await context.storage.removeItem('deleted'); await context.storage.setItem('created', true); throw new Error('upgrade failure');`, { version: '2.0.0' }), /failed/)
     assert.equal(await storage.getItem('runtime-plugins:storage-plugin:storage:saved'), 'original')
     assert.equal(await storage.getItem('runtime-plugins:storage-plugin:storage:deleted'), 'retained')
     assert.equal(await storage.getItem('runtime-plugins:storage-plugin:storage:created'), null)
@@ -418,18 +398,29 @@ test('directory reload observes changes in relative imported modules', async () 
   } finally { await fixtureState.close() }
 })
 
-test('disabled replacement setup failure rolls back without enabling the old plugin', async () => {
-  const fixtureState = await fixture()
-  const { manager, root } = fixtureState
-  try {
-    const original = source('disabled-plugin', '')
-    await manager.install(original)
-    await assert.rejects(manager.install(source('disabled-plugin', `throw new Error('invalid replacement')`, { version: '1.1.0' })), /failed/)
-    assert.equal(record(manager, 'disabled-plugin').enabled, false)
-    assert.equal(record(manager, 'disabled-plugin').manifest.version, '1.0.0')
-    assert.equal(await readFile(path.join(root, 'disabled-plugin/index.mjs'), 'utf8'), original.toString())
-  } finally { await fixtureState.close() }
-})
+for (const operation of ['reload', 'scan'] as const) {
+  test(`disabled local ${operation} refreshes metadata without executing top-level code or setup`, async () => {
+    const fixtureState = await fixture()
+    const { root, manager, storage } = fixtureState
+    try {
+      const marker = path.join(root, 'execution-marker')
+      const topLevel = `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'executed');`
+      await writePlugin(root, 'disabled-plugin', `throw new Error('setup must not execute')`, {}, topLevel)
+      await manager.scan()
+      await assert.rejects(readFile(marker), { code: 'ENOENT' })
+      await manager.updateConfig('disabled-plugin', {})
+      await storage.setItem('runtime-plugins:disabled-plugin:storage:saved', 'retained')
+      await writePlugin(root, 'disabled-plugin', `throw new Error('setup must not execute')`, { version: '1.1.0', configSchema: [{ key: 'token', type: 'secret', required: true }] }, topLevel)
+      if (operation === 'reload') await manager.reload('disabled-plugin')
+      else await manager.scan()
+      assert.equal(record(manager, 'disabled-plugin').enabled, false)
+      assert.equal(record(manager, 'disabled-plugin').manifest.version, '1.1.0')
+      assert.equal(record(manager, 'disabled-plugin').status, 'disabled')
+      await assert.rejects(readFile(marker), { code: 'ENOENT' })
+      assert.equal(await storage.getItem('runtime-plugins:disabled-plugin:storage:saved'), 'retained')
+    } finally { await fixtureState.close() }
+  })
+}
 
 test('reload snapshots keep nested lazy imports and assets until stop; initial paths stay unchanged', async () => {
   const fixtureState = await fixture()

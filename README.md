@@ -28,11 +28,14 @@ Open http://localhost:3000 and set up your admin password.
 
 ### Runtime Plugins
 
-The **Plugins** dashboard installs trusted single-file `.mjs` plugins and manages
-configuration, enable/disable, reload, and uninstall without rebuilding or
-restarting the gateway. For multi-file plugins, place a directory containing
-`plugin.json` in `.data/plugins/<id>/` and choose **Scan plugins**. Plugin provider
-types appear alongside built-in types in **Providers**.
+Install trusted plugins through the npm/market or GitHub management APIs, or
+place a directory containing `package.json` with `llmhub` metadata (legacy
+`plugin.json` is also supported) in `.data/plugins/<id>/` and choose **Scan plugins**.
+The **Plugins** dashboard manages configuration, enable/disable, reload, and
+uninstall without rebuilding or restarting the gateway. Single-file upload is
+not supported; the dashboard's old upload control is awaiting a separate UI
+update. Previously installed plugins continue to work as local directories.
+Plugin provider types appear alongside built-in types in **Providers**.
 
 Plugins run with the gateway's full Node.js permissions: review their source
 before installing. There is no server-side sandbox. See [Writing plugins](docs/plugins.md)

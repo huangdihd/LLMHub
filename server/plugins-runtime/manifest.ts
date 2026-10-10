@@ -7,8 +7,6 @@ import type { PluginField, PluginManifest } from '../../shared/types/plugin'
 /** Gateway-authored failure whose message is safe to show to dashboard administrators. */
 export class PluginError extends Error {}
 
-export { parseUploadedManifest } from './upload-manifest'
-
 export function validateId(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9-]{1,40}$/.test(value)) throw new PluginError('Invalid plugin identifier')
 }

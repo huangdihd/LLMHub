@@ -148,18 +148,18 @@ test('invalid discovered manifests cannot be activated by their placeholder reco
   } finally { await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
 })
 
-test('install rejects missing setup, duplicate ids and invalid uploads; valid uploads activate', async () => {
+test('directory activation rejects missing setup and valid entries activate', async () => {
   const { root, manager } = await fixture()
   try {
-    const manifest = `export const manifest = { id: 'upload-plugin', name: 'Upload', version: '1.0.0' };`
-    await assert.rejects(manager.install(Buffer.from(manifest)))
-    assert.equal(manager.list().length, 0)
-    await assert.rejects(manager.install(Buffer.alloc(0)))
-    const source = Buffer.from(`${manifest} export default { setup(context) { context.registerRoute('GET', 'status', () => 'ready') } };`)
-    assert.equal((await manager.install(source)).status, 'installed')
-    await assert.rejects(manager.install(source))
-    await manager.enable('upload-plugin')
-    assert.equal(await manager.dispatchRoute('upload-plugin', 'GET', 'status', {}), 'ready')
+    const directory = await writePlugin(root, 'local-plugin', '')
+    await writeFile(path.join(directory, 'index.mjs'), 'export default {}')
+    await manager.scan()
+    await assert.rejects(manager.enable('local-plugin'))
+    assert.equal(manager.list()[0].enabled, false)
+    await writeFile(path.join(directory, 'index.mjs'), `export default { setup(context) { context.registerRoute('GET', 'status', () => 'ready') } }`)
+    await manager.reload('local-plugin')
+    await manager.enable('local-plugin')
+    assert.equal(await manager.dispatchRoute('local-plugin', 'GET', 'status', {}), 'ready')
   } finally { await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
 })
 
@@ -238,28 +238,64 @@ test('invalid storage keys and foreign registration namespaces roll back setup',
   } finally { await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
 })
 
-test('install evaluation timeouts remove staging directories and do not poison the install queue', async () => {
+test('directory evaluation timeouts do not poison the activation queue', async () => {
   const { root, manager } = await fixture({ timeoutMs: 30 })
   try {
-    await assert.rejects(manager.install(Buffer.from('await new Promise(() => {});')))
-    const { readdir } = await import('node:fs/promises')
-    assert.deepEqual(await readdir(root), [])
-    await manager.install(Buffer.from(`export const manifest = { id: 'after-timeout', name: 'After', version: '1.0.0' }; export default { setup() {} };`))
-    assert.equal(manager.list()[0].id, 'after-timeout')
+    const directory = await writePlugin(root, 'timeout-plugin', '')
+    await writeFile(path.join(directory, 'index.mjs'), 'await new Promise(() => {}); export default { setup() {} }')
+    await writePlugin(root, 'after-timeout', '')
+    await manager.scan()
+    await assert.rejects(manager.enable('timeout-plugin'))
+    assert.equal(manager.list().find((record: { id: string }) => record.id === 'timeout-plugin').enabled, false)
+    await manager.enable('after-timeout')
+    assert.equal(manager.list().find((record: { id: string }) => record.id === 'after-timeout').enabled, true)
   } finally { await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
 })
 
-test('failed install persistence rolls back the directory and allows retry', async () => {
-  const { root, manager, storage } = await fixture()
-  const save = storage.setItem
-  try {
-    const source = Buffer.from(`export const manifest = { id: 'retry-plugin', name: 'Retry', version: '1.0.0' }; export default { setup() {} };`)
-    storage.setItem = async () => { throw new Error('storage unavailable') }
-    await assert.rejects(manager.install(source))
-    assert.deepEqual(manager.list(), [])
-    const { readdir } = await import('node:fs/promises')
-    assert.deepEqual(await readdir(root), [])
-    storage.setItem = save
-    assert.equal((await manager.install(source)).id, 'retry-plugin')
-  } finally { storage.setItem = save; await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
-})
+for (const sourceLocation of ['absent', 'dedicated', 'embedded'] as const) {
+  for (const enabled of [true, false]) {
+    test(`legacy uploaded directory state remains compatible with ${sourceLocation} source when ${enabled ? 'enabled' : 'disabled'}`, async () => {
+      const { root, manager, storage } = await fixture()
+      try {
+        const directory = await writePlugin(root, 'legacy-plugin', `context.registerRoute('GET', 'state', async () => ({ configuration: context.config, saved: await context.storage.getItem('saved') }));`, {
+          configSchema: [{ key: 'token', type: 'secret' }]
+        })
+        // Historical uploads may retain entry metadata and either persisted source location.
+        const entry = await readFile(path.join(directory, 'index.mjs'), 'utf8')
+        await writeFile(path.join(directory, 'index.mjs'), `export const manifest = { id: 'legacy-plugin', name: 'Legacy', version: '1.0.0' };\n${entry}`)
+        const stateKey = 'runtime-plugins:legacy-plugin:state'
+        const sourceKey = 'runtime-plugins:legacy-plugin:source'
+        await storage.setItem(stateKey, {
+          enabled, configuration: { token: 'retained-secret' },
+          ...(sourceLocation === 'embedded' ? { source: { type: 'upload' } } : {})
+        })
+        if (sourceLocation === 'dedicated') await storage.setItem(sourceKey, { type: 'upload' })
+        await storage.setItem('runtime-plugins:legacy-plugin:storage:saved', { retained: true })
+        const storedBeforeScan = structuredClone(storage.values)
+        await manager.scan()
+        assert.equal(manager.list()[0].enabled, enabled)
+        assert.equal(manager.list()[0].source.type, 'directory')
+        assert.deepEqual(storage.values, storedBeforeScan, 'scan must not eagerly migrate persisted state or source')
+        assert.deepEqual(manager.getConfig('legacy-plugin'), {})
+        if (!enabled) await manager.enable('legacy-plugin')
+        assert.deepEqual(await manager.dispatchRoute('legacy-plugin', 'GET', 'state', {}), {
+          configuration: { token: 'retained-secret' }, saved: { retained: true }
+        })
+        assert.deepEqual(await manager.updateConfig('legacy-plugin', { token: 'updated-secret' }), {})
+        await manager.disable('legacy-plugin')
+        assert.equal(manager.list()[0].enabled, false)
+        await assert.rejects(manager.dispatchRoute('legacy-plugin', 'GET', 'state', {}))
+        await manager.enable('legacy-plugin')
+        assert.equal(manager.list()[0].enabled, true)
+        assert.equal(manager.list()[0].source.type, 'directory')
+        assert.deepEqual(await manager.dispatchRoute('legacy-plugin', 'GET', 'state', {}), {
+          configuration: { token: 'updated-secret' }, saved: { retained: true }
+        })
+        await manager.uninstall('legacy-plugin')
+        assert.deepEqual(manager.list(), [])
+        assert.deepEqual(await storage.getKeys('runtime-plugins:legacy-plugin:'), [])
+        await assert.rejects(readFile(path.join(directory, 'plugin.json')), { code: 'ENOENT' })
+      } finally { await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
+    })
+  }
+}

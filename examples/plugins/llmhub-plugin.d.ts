@@ -108,7 +108,6 @@ export interface PluginAPI {
   logger: Pick<Console, 'info' | 'warn' | 'error'>
 }
 export interface PluginModule {
-  manifest?: PluginManifest | PluginPackageManifest
   default?: { setup(api: PluginAPI): void | Cleanup | Promise<void | Cleanup> }
   setup?: (api: PluginAPI) => void | Cleanup | Promise<void | Cleanup>
 }

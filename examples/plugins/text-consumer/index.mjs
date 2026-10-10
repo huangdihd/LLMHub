@@ -1,17 +1,8 @@
 /** @typedef {{ format(value: string): string }} TextService */
 /** @typedef {{ record(message: string): void }} AuditService */
 
-/** @type {import('./llmhub-plugin.js').PluginManifest} */
-export const manifest = {
-  id: 'example-text-consumer', name: 'Text Consumer', version: '1.0.0',
-  engines: { llmhub: '^1.0.0' },
-  dependencies: { 'example-text-service': '^1.0.0' },
-  optionalDependencies: { 'example-audit-service': '^1.0.0' },
-  description: 'Use a required text service and an optional audit service.'
-}
-
 export default {
-  /** @param {import('./llmhub-plugin.js').PluginAPI} api */
+  /** @param {import('../llmhub-plugin.js').PluginAPI} api */
   setup(api) {
     const text = /** @type {TextService | undefined} */ (api.require('example-text-service'))
     // A dependency can activate without publishing a service. Fail at setup,

@@ -1,0 +1,33 @@
+{
+  "name": "@llmhub/example-system-prompt",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.mjs",
+  "engines": {
+    "llmhub": "^1.0.0"
+  },
+  "description": "Append a configured instruction to each generation request.",
+  "llmhub": {
+    "id": "example-system-prompt",
+    "name": "System Prompt",
+    "configSchema": [
+      {
+        "key": "suffix",
+        "label": "System instruction",
+        "type": "text",
+        "default": "PLUGIN_INSTRUCTION"
+      },
+      {
+        "key": "enabled",
+        "label": "Append instruction",
+        "type": "boolean",
+        "default": true
+      },
+      {
+        "key": "token",
+        "label": "Example secret",
+        "type": "secret"
+      }
+    ]
+  }
+}

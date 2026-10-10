@@ -10,14 +10,11 @@ const require = createRequire(import.meta.url)
 const buildDirectory = process.env.ADAPTER_BUILD
 if (!buildDirectory) throw new Error('Run through tests/run-all.sh')
 const { validateManifest, validatePackageManifest, normalizeManifest, PluginError } = require(`${buildDirectory}/plugins-runtime/manifest.js`)
-const { parseUploadedManifest } = require(`${buildDirectory}/plugins-runtime/upload-manifest.js`)
 const { assertCompatibility, manifestWarnings, dependencyOrder, dependencyIssues, decorateRecords } = require(`${buildDirectory}/plugins-runtime/dependencies.js`)
 const { discoverPackages } = require(`${buildDirectory}/plugins-runtime/npm-project.js`)
 const { PLUGIN_API_VERSION } = require(`${buildDirectory}/core/plugin-version.js`)
 
 const manifest = (id = 'test-plugin', extra: Partial<PluginManifest> = {}): PluginManifest => ({ id, name: id, version: '1.0.0', ...extra })
-const literal = "{ id: 'test-plugin', name: 'Test', version: '1.0.0' }"
-const declaration = `export const manifest = ${literal};`
 const record = (value: PluginManifest, extra: Partial<PluginRecord> = {}): PluginRecord => ({ id: value.id, manifest: value, enabled: true, status: 'enabled', providers: [], hooks: [], ...extra })
 
 test('package manifests map llmhub metadata without importing npm dependencies into the plugin graph', () => {
@@ -110,29 +107,23 @@ test('package manifests reject invalid metadata and unsafe or unresolvable entry
   }
 })
 
-test('normalization and literal upload support both package and unchanged legacy manifest shapes', () => {
+test('normalization supports package and unchanged legacy manifest shapes', () => {
   const legacy = manifest('legacy-plugin', { version: 'legacy' })
   assert.deepEqual(normalizeManifest(legacy), validateManifest(legacy))
   assert.throws(() => normalizeManifest(legacy, true), PluginError)
-  const packaged = { name: '@scope/package-plugin', version: '1.0.0', llmhub: { id: 'uploaded-plugin' } }
+  const packaged = { name: '@scope/package-plugin', version: '1.0.0', llmhub: { id: 'normalized-plugin' } }
   assert.deepEqual(normalizeManifest(packaged), validatePackageManifest(packaged))
-  assert.deepEqual(parseUploadedManifest(`export const manifest = ${JSON.stringify(packaged)};`), validatePackageManifest(packaged))
-  assert.deepEqual(parseUploadedManifest(declaration), validateManifest({ id: 'test-plugin', name: 'Test', version: '1.0.0' }, true))
   assert.throws(() => normalizeManifest({ ...packaged, llmhub: null }), PluginError)
-  assert.throws(() => parseUploadedManifest(`export const manifest = { name: 'package-plugin', version: '1.0.0', llmhub: { ...metadata } };`), PluginError)
 })
 
-test('shipped package and legacy examples have valid manifests', async () => {
+test('shipped package examples have valid manifests and entries', async () => {
   const directory = new URL('../examples/plugins/', import.meta.url)
-  const packaged = validatePackageManifest(JSON.parse(await readFile(new URL('package-service/package.json', directory), 'utf8')))
-  assert.equal(packaged.id, 'example-package-service')
-  assert.equal(packaged.entry, 'index.js')
-  assert.match(await readFile(new URL(`package-service/${packaged.entry}`, directory), 'utf8'), /export default/)
-  for (const [filename, id] of [
-    ['echo.mjs', 'example-echo'], ['system-prompt.mjs', 'example-system-prompt'],
-    ['text-service.mjs', 'example-text-service'], ['text-consumer.mjs', 'example-text-consumer'],
-    ['package-upload.mjs', 'example-package-upload']
-  ]) assert.equal(parseUploadedManifest(await readFile(new URL(filename!, directory), 'utf8')).id, id)
+  for (const name of ['echo', 'system-prompt', 'text-service', 'text-consumer', 'package-service']) {
+    const packaged = validatePackageManifest(JSON.parse(await readFile(new URL(`${name}/package.json`, directory), 'utf8')))
+    assert.equal(packaged.id, `example-${name}`)
+    assert.equal(packaged.entry, name === 'package-service' ? 'index.js' : 'index.mjs')
+    assert.match(await readFile(new URL(`${name}/${packaged.entry}`, directory), 'utf8'), /export default/)
+  }
 })
 
 test('manifest validates semver ranges, preserves metadata and tolerates legacy disk versions', () => {
@@ -150,61 +141,6 @@ test('manifest validates semver ranges, preserves metadata and tolerates legacy 
     { entry: '../outside.mjs' }, { ui: { page: '/outside.html' } },
     { ui: null }, { ui: [] }, { ui: 'settings.html' }
   ]) assert.throws(() => validateManifest({ ...manifest(), ...extra }, true), PluginError)
-})
-
-test('static extraction accepts literal data and static import forms without resolving imports', () => {
-  for (const prefix of [
-    '', '// comment\n/* comment */\n', '// comment\r', '// comment\u2028', '// comment\u2029',
-    "import 'module-that-does-not-exist';\n",
-    "import value from './missing.mjs'\n",
-    "import * as namespace from './missing.mjs';",
-    "import { named, other as renamed, } from './missing.mjs';",
-    "import value, { named } from './missing.mjs';",
-    "import value, * as namespace from './missing.mjs';",
-    "import { 'non-identifier' as alias } from './missing.mjs';",
-    "import 'first'; import { /* export const manifest = fake */ named } from 'second';"
-  ]) assert.equal(parseUploadedManifest(prefix + declaration).id, 'test-plugin', prefix)
-  const parsed = parseUploadedManifest(`export /* c */ const manifest = {
-    id: 'test-plugin', name: 'Test\\x20\\u0041', version: '1.0.0',
-    configSchema: [{ key: 'count', type: 'number', default: -1.5e2 },
-      { key: 'flag', type: 'boolean', default: true },],
-    dependencies: { 'text-service': '^1.0.0' },
-  }\nexport default { setup() { throw new Error('must not execute') } }`)
-  assert.equal(parsed.name, 'Test A')
-  assert.equal(parsed.configSchema[0].default, -150)
-  assert.equal(parsed.configSchema[1].default, true)
-  assert.equal(parseUploadedManifest(`${declaration}\nglobalThis.uploadManifestExecuted = true;`).id, 'test-plugin')
-  assert.equal(Reflect.get(globalThis, 'uploadManifestExecuted'), undefined)
-})
-
-test('static extraction rejects executable expressions and fake declarations rather than scanning JavaScript', () => {
-  for (const source of [
-    `const text = \`${declaration}\`;`,
-    `const expression = /${declaration}/;`,
-    `function nested() { ${declaration} }`,
-    `/* ${declaration} */`, `// ${declaration}`,
-    `import(\`${declaration}\`);`,
-    `import.meta; ${declaration}`,
-    `import { name = \`${declaration}\` } from 'module';`,
-    `import 'module' ${declaration}`,
-    `globalThis.uploadManifestExecuted = true; ${declaration}`,
-    'export const manifest = globalThis.uploadManifestExecuted = true;',
-    `export const manifest = { ...${literal} };`,
-    `export const manifest = { get id() { throw new Error() } };`,
-    `export const manifest = { [globalThis.uploadManifestExecuted = true]: 'test-plugin' };`,
-    `export const manifest = ${literal} || (globalThis.uploadManifestExecuted = true);`,
-    `export const manifest = ${literal}\nexportedFake`,
-    `export const manifest = { id: 'test-plugin', id: 'other-plugin' };`,
-    `export const manifest = { __proto__: {} };`,
-    `export const manifest = { constructor: {} };`,
-    `export const manifest = { name: '\\01' };`,
-    `export const manifest = { name: '\\8' };`,
-    `export const manifest = { name: '\\uZZZZ' };`,
-    `export const manifest = { number: 1e999 };`,
-    '/* unterminated', 'export const manifest = {',
-    `export const manifest = ${'['.repeat(102)}${']'.repeat(102)};`
-  ]) assert.throws(() => parseUploadedManifest(source), PluginError, source)
-  assert.equal(Reflect.get(globalThis, 'uploadManifestExecuted'), undefined)
 })
 
 test('API compatibility is enforced independently from legacy manifest warnings', () => {

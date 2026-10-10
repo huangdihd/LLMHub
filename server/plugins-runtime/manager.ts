@@ -14,8 +14,8 @@ import type { ProviderDefinition, ProviderRegistry } from '../core/registry'
 import type { RequestHook, HookRegistry } from '../core/hooks'
 import { ProtocolRegistry, type ProtocolDefinition } from '../core/protocol-registry'
 import { IngressRegistry, type IngressDefinition } from '../core/ingress-registry'
-import type { PluginManifest, PluginPackageManifest, PluginRecord, PluginSource } from '../../shared/types/plugin'
-import { PluginError, safePath, validatePath, validateId, validateManifest, validatePackageManifest, normalizeManifest, parseUploadedManifest, validateFields, validateConfiguration } from './manifest'
+import type { PluginManifest, PluginRecord, PluginSource } from '../../shared/types/plugin'
+import { PluginError, safePath, validatePath, validateId, validateManifest, validatePackageManifest, normalizeManifest, validateFields, validateConfiguration } from './manifest'
 
 export interface PluginStorage {
   getItem<T>(key: string): Promise<T | null>
@@ -39,7 +39,6 @@ export interface PluginAPI {
   logger: Pick<Console, 'info' | 'warn' | 'error'>
 }
 export interface PluginModule {
-  manifest?: PluginManifest | PluginPackageManifest
   default?: { setup(api: PluginAPI): void | Cleanup | Promise<void | Cleanup> }
   setup?: (api: PluginAPI) => void | Cleanup | Promise<void | Cleanup>
 }
@@ -464,9 +463,14 @@ export class PluginManager {
     }
   }
 
-  private async loadModule(directory: string, entry: string, runtime?: Runtime): Promise<PluginModule> {
+  private async validateEntry(directory: string, entry: string): Promise<string> {
     const filename = await safePath(directory, entry)
     if (!/\.(?:mjs|cjs|js)$/.test(filename) || !(await lstat(filename)).isFile()) throw new PluginError('Invalid plugin entry')
+    return filename
+  }
+
+  private async loadModule(directory: string, entry: string, runtime?: Runtime): Promise<PluginModule> {
+    const filename = await this.validateEntry(directory, entry)
     if (!runtime) return this.bounded(importModule(`${pathToFileURL(filename).href}?generation=${randomUUID()}`))
     const generation = await createModuleGeneration(directory, this.directory)
     runtime.moduleGeneration = generation
@@ -533,9 +537,11 @@ export class PluginManager {
             continue
           }
           const entry = manifest.entry ?? 'index.mjs'
-          await safePath(directory, entry)
-          const stored = await this.options.storage.getItem<{ enabled?: boolean; configuration?: Record<string, unknown>; source?: InstalledPlugin['source'] }>(`runtime-plugins:${manifest.id}:state`)
-          const plugin: InstalledPlugin = { manifest, directory, entry, enabled: false, source: await this.options.storage.getItem<PluginSource>(`runtime-plugins:${manifest.id}:source`) ?? stored?.source ?? { type: 'directory' },
+          await this.validateEntry(directory, entry)
+          const stored = await this.options.storage.getItem<{ enabled?: boolean; configuration?: Record<string, unknown>; source?: PluginSource | { type: 'upload' } }>(`runtime-plugins:${manifest.id}:state`)
+          const source = await this.options.storage.getItem<PluginSource | { type: 'upload' }>(`runtime-plugins:${manifest.id}:source`) ?? stored?.source
+          // Older uploads already have directory manifests; normalize in memory, without migrating files or state.
+          const plugin: InstalledPlugin = { manifest, directory, entry, enabled: false, source: !source || source.type === 'upload' ? { type: 'directory' } : source,
             configuration: validateConfiguration(manifest.configSchema ?? [], stored?.configuration ?? {}, {}, false) }
           this.plugins.set(manifest.id, plugin)
           try { assertCompatibility(manifest) }
@@ -570,115 +576,6 @@ export class PluginManager {
         catch (error) { plugin.error = error instanceof PluginError ? error.message : 'Plugin activation failed' }
       }
       return this.list()
-    })
-  }
-
-  async install(source: Buffer, force = false): Promise<PluginRecord> {
-    return this.serial('$install', async () => {
-      if (!Buffer.isBuffer(source) || !source.length || source.length > 1024 * 1024) throw new PluginError('Invalid plugin upload')
-      const manifest = validateManifest(parseUploadedManifest(source.toString('utf8')), true)
-      this.assertRuntimePlugin(manifest.id)
-      assertCompatibility(manifest)
-      manifest.entry = 'index.mjs'
-      if (manifest.ui) throw new PluginError('Plugin assets require directory installation')
-      const previous = this.plugins.get(manifest.id)
-      if (previous?.source && ['npm', 'github'].includes(previous.source.type)) throw new PluginError('Package plugins must be updated through their package source')
-      if (previous) {
-        const sameVersion = previous.manifest.version === manifest.version || (valid(previous.manifest.version) && !gt(previous.manifest.version, manifest.version) && !gt(manifest.version, previous.manifest.version))
-        if (sameVersion && !force) throw new PluginError('Plugin already installed')
-        this.assertVersion(previous.manifest, manifest, force)
-      }
-      const configuration = validateConfiguration(manifest.configSchema ?? [], previous?.configuration ?? {}, {}, false)
-      const records = this.list().filter(record => record.id !== manifest.id)
-      const issues = dependencyIssues(manifest, records)
-      if (issues.length) throw new PluginError(issues.join('; '))
-      const { cycles } = dependencyOrder([...records.map(record => record.manifest), manifest])
-      if (cycles.has(manifest.id)) throw new PluginError(cycles.get(manifest.id)!)
-      await this.prepareDirectory()
-      const directory = resolve(this.directory, `.install-${randomUUID()}`)
-      const target = resolve(this.directory, manifest.id)
-      const backup = resolve(this.directory, `.backup-${randomUUID()}`)
-      const affected = this.affected(manifest.id)
-      const enabled = new Set(affected.filter(plugin => plugin.enabled).map(plugin => plugin.manifest.id))
-      const stateKey = `runtime-plugins:${manifest.id}:state`
-      const previousState = await this.options.storage.getItem(stateKey)
-      let backedUp = false
-      let moved = false
-      let stopped = false
-      await mkdir(directory)
-      try {
-        await writeFile(resolve(directory, 'index.mjs'), source, { flag: 'wx', mode: 0o600 })
-        await writeFile(resolve(directory, 'plugin.json'), JSON.stringify(manifest), { flag: 'wx', mode: 0o600 })
-        const module = await this.loadModule(directory, 'index.mjs')
-        if (typeof module.default?.setup !== 'function') throw new PluginError('Plugin setup missing')
-        for (const plugin of [...affected].reverse()) await this.stop(plugin)
-        stopped = affected.length > 0
-        if (previous) {
-          await safePath(this.directory, manifest.id)
-          await rename(target, backup)
-          backedUp = true
-        } else {
-          try { await lstat(target); throw new PluginError('Plugin already installed') }
-          catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
-        }
-        await rename(directory, target)
-        moved = true
-        const plugin: InstalledPlugin = { manifest, directory: target, entry: 'index.mjs', configuration, enabled: false, installed: !previous, source: { type: 'upload' } }
-        this.plugins.set(manifest.id, plugin)
-        this.storageRollback = new Map()
-        if (previous && !enabled.has(manifest.id)) {
-          // Validate replacement setup transactionally without changing the persisted disabled state.
-          await this.start(plugin)
-          await this.stop(plugin)
-        }
-        for (const candidate of this.ordered(enabled)) await this.start(candidate)
-        await this.persist(plugin)
-      } catch (error) {
-        if (moved) {
-          for (const plugin of [...this.ordered(enabled)].reverse()) await this.stop(plugin)
-          await rm(target, { recursive: true, force: true })
-        }
-        if (backedUp) await rename(backup, target)
-        if (previous) this.plugins.set(manifest.id, previous)
-        else this.plugins.delete(manifest.id)
-        if (moved || stopped) {
-          let rollbackFailed = false
-          const storageRollback = this.storageRollback
-          this.storageRollback = undefined
-          for (const [key, value] of storageRollback ?? []) {
-            try {
-              if (value === null) await this.options.storage.removeItem(key)
-              else await this.options.storage.setItem(key, value)
-            } catch (rollbackError) {
-              rollbackFailed = true
-              console.error('[LLMHub] Plugin upgrade storage rollback failed:', rollbackError)
-            }
-          }
-          try {
-            if (previousState === null) await this.options.storage.removeItem(stateKey)
-            else await this.options.storage.setItem(stateKey, previousState)
-          } catch (rollbackError) {
-            rollbackFailed = true
-            console.error('[LLMHub] Plugin upgrade state rollback failed:', rollbackError)
-          }
-          // A storage failure must not prevent restoring the previous live implementation.
-          for (const plugin of this.ordered(enabled)) {
-            try { await this.start(plugin) }
-            catch (rollbackError) {
-              rollbackFailed = true
-              plugin.error = rollbackError instanceof PluginError ? rollbackError.message : 'Plugin rollback activation failed'
-              console.error('[LLMHub] Plugin upgrade runtime rollback failed:', rollbackError)
-            }
-          }
-          if (rollbackFailed) throw new PluginError('Plugin upgrade failed and rollback could not fully restore runtime or state')
-        }
-        throw error
-      } finally {
-        this.storageRollback = undefined
-        if (!moved) await rm(directory, { recursive: true, force: true })
-      }
-      if (backedUp) await rm(backup, { recursive: true, force: true })
-      return this.list().find(record => record.id === manifest.id)!
     })
   }
 
@@ -872,8 +769,10 @@ export class PluginManager {
     if (!manifest) throw new PluginError('Plugin manifest not found')
     if (manifest.id !== id) throw new PluginError('Plugin identity mismatch')
     this.assertVersion(plugin.manifest, manifest)
+    const { cycles } = dependencyOrder([...this.plugins.values()].map(candidate => candidate === plugin ? manifest : candidate.manifest))
+    if (cycles.has(id)) throw new PluginError(cycles.get(id)!)
     const entry = manifest.entry ?? 'index.mjs'
-    await safePath(plugin.directory, entry)
+    await this.validateEntry(plugin.directory, entry)
     const configuration = validateConfiguration(manifest.configSchema ?? [], plugin.configuration, {}, false)
     const affected = this.affected(id)
     const enabled = new Set(affected.filter(candidate => candidate.enabled).map(candidate => candidate.manifest.id))

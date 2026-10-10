@@ -1,0 +1,22 @@
+{
+  "name": "@llmhub/example-text-service",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.mjs",
+  "engines": {
+    "llmhub": "^1.0.0"
+  },
+  "description": "Publish a small synchronous service for dependent plugins.",
+  "llmhub": {
+    "id": "example-text-service",
+    "name": "Text Service",
+    "configSchema": [
+      {
+        "key": "prefix",
+        "label": "Text prefix",
+        "type": "text",
+        "default": "[shared] "
+      }
+    ]
+  }
+}

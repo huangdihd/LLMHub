@@ -58,7 +58,7 @@ export interface PluginDependencyStatus {
 }
 
 export type PluginSource = {
-  [Type in 'builtin' | 'npm' | 'github' | 'directory' | 'upload']: {
+  [Type in 'builtin' | 'npm' | 'github' | 'directory']: {
     type: Type
     packageName?: string
     specification?: string
@@ -69,7 +69,7 @@ export type PluginSource = {
     commit?: string
     range?: string
   }
-}['builtin' | 'npm' | 'github' | 'directory' | 'upload']
+}['builtin' | 'npm' | 'github' | 'directory']
 
 export interface PluginRecord {
   capabilities?: { update: boolean; uninstall: boolean }

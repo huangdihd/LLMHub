@@ -54,5 +54,5 @@ export async function createRegistry() {
   })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const registry = `http://127.0.0.1:${server.address().port}`
-  return { registry, directory, marker, async close() { await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }) } }
+  return { registry, directory, marker, add, async close() { await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }) } }
 }

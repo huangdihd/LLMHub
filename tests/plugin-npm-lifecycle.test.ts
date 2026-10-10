@@ -165,3 +165,20 @@ test('scan isolates npm collisions with builtin ids and still discovers local pl
     assert.equal(fixture.manager.list().find((record: any) => record.id === 'local-survivor')?.enabled, true)
   } finally { await fixture.close() }
 })
+
+test('failed initial npm persistence rolls back installed files and allows retry', async () => {
+  const fixture = await lifecycleFixture({ npmRunner: async (_arguments: string[], target: string) => {
+    await writePackage(target, 'retry-package', '1.0.0')
+  } })
+  try {
+    const { readdir } = await import('node:fs/promises')
+    fixture.failNextWrite('runtime-plugins:npm-project')
+    await assert.rejects(fixture.manager.installNpm({ name: 'retry-package' }))
+    assert.deepEqual(fixture.manager.list(), [])
+    assert.deepEqual(await readdir(fixture.directory), [])
+    assert.equal(fixture.values.has('runtime-plugins:npm-project'), false)
+    const installed = await fixture.manager.installNpm({ name: 'retry-package' })
+    assert.equal(installed[0].id, 'retry-package')
+    assert.equal(installed[0].enabled, false)
+  } finally { await fixture.close() }
+})

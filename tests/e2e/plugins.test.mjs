@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { access, readFile, mkdir, writeFile, rm } from 'node:fs/promises'
+import { access, cp, mkdir, readdir, writeFile, rm } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import OpenAI from 'openai'
 import Anthropic from '@anthropic-ai/sdk'
@@ -10,6 +10,7 @@ const key = 'llmhub-e2e-test-key'
 const session = randomUUID()
 const sessionFile = new URL(`../../.data/auth/sessions/${session}`, import.meta.url)
 const installed = []
+const existingEmptyStateDirectories = []
 const providerName = `_e2e-plugin-${session.slice(0, 8)}`
 let providerCreated = false
 
@@ -102,12 +103,26 @@ try {
     assert.equal((await response.json()).message, `${label} login session not found`)
   }
   console.log('  ok - six builtin providers are listed read-only and migrated login routes are mounted')
-  for (const [filename, id] of [['echo.mjs', 'example-echo'], ['system-prompt.mjs', 'example-system-prompt']]) {
+  // The retired endpoint is an ordinary unknown route, not a compatibility API.
+  const retired = await fetch(`${gateway}/api/hub/plugins/install`, {
+    method: 'POST', headers: { cookie: `llmhub_session=${session}` }
+  })
+  assert.equal(retired.status, 404)
+  assert.equal((await retired.json()).message, 'Plugin endpoint not found')
+  for (const [directory, id] of [['echo', 'example-echo'], ['system-prompt', 'example-system-prompt']]) {
     assert.ok(!before.some(plugin => plugin.id === id), `Refusing to replace existing ${id}`)
-    const form = new FormData()
-    form.set('file', new Blob([await readFile(new URL(`../../examples/plugins/${filename}`, import.meta.url))]), filename)
-    await management('plugins/install', { method: 'POST', body: form })
+    const destination = new URL(`../../.data/plugins/${id}/`, import.meta.url)
+    await assert.rejects(access(destination), { code: 'ENOENT' })
+    const stateDirectory = new URL(`../../.data/runtime-plugins/${id}/`, import.meta.url)
+    try {
+      assert.deepEqual(await readdir(stateDirectory), [], `Refusing to replace existing ${id} state`)
+      existingEmptyStateDirectories.push(stateDirectory)
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error
+    }
     installed.push(id)
+    await cp(new URL(`../../examples/plugins/${directory}/`, import.meta.url), destination, { recursive: true, errorOnExist: true, force: false })
+    await management('plugins/scan', { method: 'POST' })
     await management(`plugins/${id}/enable`, { method: 'POST' })
   }
   await management('plugins/example-system-prompt/config', json('PUT', { suffix: 'E2E_PLUGIN_INSTRUCTION', enabled: true, token: 'e2e-secret-value' }))
@@ -148,6 +163,16 @@ try {
     }
     console.log('  ok - plugin directories and persisted state removed')
   } finally {
-    await rm(sessionFile, { force: true })
+    // These paths were checked absent before copying; remove partial fixtures even
+    // if scan/activation failed before the manager could register them.
+    try {
+      await Promise.all(installed.flatMap(id => [
+        rm(new URL(`../../.data/plugins/${id}/`, import.meta.url), { recursive: true, force: true }),
+        rm(new URL(`../../.data/runtime-plugins/${id}/`, import.meta.url), { recursive: true, force: true })
+      ]))
+      await Promise.all(existingEmptyStateDirectories.map(directory => mkdir(directory, { recursive: true })))
+    } finally {
+      await rm(sessionFile, { force: true })
+    }
   }
 }

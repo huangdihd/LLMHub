@@ -2,8 +2,8 @@
 
 Runtime plugins add upstream provider types, generation hooks, management routes,
 and optional dashboard pages without rebuilding or restarting LLMHub. Start with
-`examples/plugins/echo.mjs` (a network-free streaming provider) or
-`examples/plugins/system-prompt.mjs` (a configurable request hook).
+`examples/plugins/echo/` (a network-free streaming provider) or
+`examples/plugins/system-prompt/` (a configurable request hook).
 
 ## Trust model
 
@@ -49,13 +49,9 @@ matching Nitro's `data` storage at `./.data`:
 `^[a-z0-9][a-z0-9-]{1,40}$` and must equal the directory name. `entry` defaults to
 `index.mjs`; legacy entries remain `.mjs` files. Paths are relative to the plugin directory;
 absolute paths, traversal, encoded path components, backslashes, and symlinks are
-rejected. Place multi-file plugins there and use **Scan plugins**. Existing
-plugins are updated with **Reload**, not Scan.
-
-For single-file upload (maximum **1 MiB**), export the same object as
-`export const manifest = { ... }` alongside the default export. The installer
-writes `plugin.json` and `index.mjs`; external files and custom pages must be
-installed as a directory instead.
+rejected. Place local plugins there and use **Scan plugins**. Scan recognizes
+changed versions; **Reload** also refreshes code at the same version. Existing
+legacy directories remain loadable without migrating their files or state.
 
 ### Field declarations
 
@@ -130,11 +126,14 @@ For example:
   market. README, repository, homepage, author and other npm metadata remain npm
   metadata, not executable dashboard content.
 
-Single-file literal `export const manifest` accepts both shapes. Its server
-upload endpoint remains compatible for scripts/tests; the new installation
-workflow is package/GitHub installation. No dashboard controls are changed in
-this release. `examples/plugins/package-service/` is a publishable directory
-example; offline tests provide a tiny library package with no transitive dependencies.
+Installation supports npm packages (including market selections), GitHub
+repositories, and manually placed directories followed by Scan. Single-file
+installation is not supported; its former endpoint returns 404. Previously
+installed single-file plugins are ordinary local directories, including when
+persisted source metadata still uses the old value. No dashboard controls are
+changed in this release; its old upload control no longer works.
+`examples/plugins/package-service/` is a publishable directory example; offline
+tests provide a tiny library package with no transitive dependencies.
 
 `.data/plugins/` is a private npm project with its own `package.json`,
 `package-lock.json`, and `node_modules/`. Scan discovers `llmhub` packages,
@@ -156,7 +155,7 @@ code: this validation is not a supply-chain sandbox or a substitute for review.
 
 Runtime deployment needs **npm on PATH** and registry access; GitHub installation
 also needs **git on PATH**. Missing tools/connectivity report operation-level
-errors and do not prevent gateway startup, local plugins, or uploads. GitHub
+errors and do not prevent gateway startup or local plugins. GitHub
 `prepare`/build scripts do not run: the selected ref must contain a committed,
 loadable entry file. Private repositories have no dedicated support; operators
 may configure server-side git credentials. Registry defaults to
@@ -546,17 +545,15 @@ schema form for gateway configuration. No privileged postMessage bridge exists.
 - Disable revokes tracked providers, hooks, routes, and config listeners and calls
   the optional cleanup function (default one-second cleanup bound). Already
   running requests are not forcibly aborted. Own timers/sockets need cleanup.
-- Enable/reload imports the entry through a native dynamic `import()` with a new
-  URL generation, outside Rollup's module graph. Reload re-reads the manifest;
-  an already-disabled plugin remains disabled.
+- Enable and enabled reload import the entry through a native dynamic `import()`
+  with a new URL generation, outside Rollup's module graph. Reload re-reads the
+  manifest; a disabled plugin remains disabled without importing or running code.
 - Uninstall removes the directory, configuration, and plugin-scoped storage. It
   does not remove providers referring to its protocol.
 
 ESM modules cannot truly be unloaded; repeated reloads retain module instances.
-Avoid side effects at
-module top level, especially because single-file validation imports from a
-staging directory before activation. Timeout bounds asynchronous waits, not CPU
-execution: a synchronous infinite loop blocks the shared process. Timed-out
+Avoid side effects at module top level: failed activation cannot reverse them.
+Timeout bounds asynchronous waits, not CPU execution: a synchronous infinite loop blocks the shared process. Timed-out
 promises cannot be cancelled; late API registration/storage access is rejected,
 but arbitrary external side effects are not reversible. These are consequences
 of the trusted, in-process design, not security isolation guarantees.
@@ -626,7 +623,6 @@ All paths below require the existing dashboard session:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/hub/plugins` | Records, manifests, statuses, errors, provider/hook/protocol/ingress IDs |
-| POST | `/api/hub/plugins/install` | Multipart `file` containing one `.mjs`; Content-Length required |
 | POST | `/api/hub/plugins/scan` | Discover manually installed directories |
 | POST | `/api/hub/plugins/<id>/enable` | Activate |
 | POST | `/api/hub/plugins/<id>/disable` | Deactivate |
@@ -641,11 +637,11 @@ All paths below require the existing dashboard session:
 
 All endpoints below use the same hub session authentication, not API keys.
 JSON mutations return the updated `PluginRecord[]` unless noted. List records add
-`source: { type: 'builtin' | 'npm' | 'github' | 'directory' | 'upload',
+`source: { type: 'builtin' | 'npm' | 'github' | 'directory',
 packageName?, range?, owner?, repo?, ref?, commit?, specification?, direct? }`.
 `direct: false` package records cannot be individually upgraded/uninstalled.
 Records also expose `capabilities?: { update: boolean, uninstall: boolean }` for
-package-source actions. Existing list/enable/disable/config/upload response
+package-source actions. Existing list/enable/disable/config response
 shapes remain compatible.
 
 | Method and path (under `/api/hub/plugins`) | Input | Response |
@@ -658,7 +654,7 @@ shapes remain compatible.
 | `PUT /registry` | `{ registry: string }` | Normalized persisted `{ registry }`; HTTP(S), no credentials/query/fragment |
 | `GET /<id>/updates` | None | `{ available, currentVersion, latestVersion?, latestMatchingVersion?, updates: [{ version, ref?, commit? }], reason?, trackedRef?: { ref, currentCommit?, commit, changed } }`; unavailable queries return `available: false` with reason |
 | `POST /<id>/update` | `{ specification?: { name, version? } \| { owner, repo, ref? } \| { url }, force?: boolean }` | Updated records; omission re-resolves saved source, `force` permits downgrade but never bypasses validation |
-| `DELETE /<id>` | None | Updated records; npm/GitHub removal uses the project transaction, local/upload removal retains previous behavior |
+| `DELETE /<id>` | None | Updated records; npm/GitHub removal uses the project transaction, local directory removal retains previous behavior |
 | `GET /market` | Query `query?`, `page?` (1–1000), `pageSize?` (1–100), `sort?` (`relevance`, `downloads`, `updated`, `name`) | `{ items, total, page, pageSize, sort, sortScope, registry, apiVersion }` |
 | `GET /market/detail` | Query `name` (URL-encoded npm package name) | Package summary plus `readme`, `readmeTruncated`, `versions`, `releases`, `registry`, `apiVersion` |
 | `DELETE /market/cache` | None | `{ cleared: number }` |
@@ -711,7 +707,6 @@ fixtures. Run the normal acceptance sequence: `npx vue-tsc --noEmit`, `npm test`
 
 ## Plugin API versions, dependencies and upgrades
 
-This section supersedes the earlier scan/upload and API-surface descriptions.
 The kernel exports `PLUGIN_API_VERSION = '1.0.0'` from
 `server/core/plugin-version.ts`. This is **not** the application version. Adding
 hooks or optional API fields increments its minor version; changing signatures
@@ -719,12 +714,17 @@ or removing functionality increments its major version; compatible fixes increme
 its patch version. Built-in manifest versions come from root `package.json` and
 are bundled at build time (also available through the non-Nitro assembly).
 
-```js
-export const manifest = {
-  id: 'my-consumer', name: 'My Consumer', version: '1.0.0',
-  engines: { llmhub: '^1.0.0' },
-  dependencies: { 'example-text-service': '^1.0.0' },
-  optionalDependencies: { 'example-audit-service': '^1.0.0' }
+```json
+{
+  "name": "llmhub-plugin-my-consumer",
+  "version": "1.0.0",
+  "engines": { "llmhub": "^1.0.0" },
+  "llmhub": {
+    "id": "my-consumer",
+    "name": "My Consumer",
+    "dependencies": { "example-text-service": "^1.0.0" },
+    "optionalDependencies": { "example-audit-service": "^1.0.0" }
+  }
 }
 ```
 
@@ -733,20 +733,11 @@ Incompatible plugins fail before their module or setup is executed, with both
 required range and current version reported. Missing `engines.llmhub` remains
 supported and produces a warning. Already installed legacy manifests with invalid
 semver versions still load with a warning; they cannot satisfy a versioned
-dependency. New uploads and changed directory versions require valid semver.
+dependency. npm packages and changed directory versions require valid semver.
 Existing state requires no migration.
 
-Uploads extract the manifest **without executing JavaScript**. Use a literal
-`export const manifest = { ... }`, optionally preceded by comments and static ESM
-imports. Objects, arrays, quoted strings, finite decimal numbers, booleans/null,
-comments and trailing commas are supported. Computed values, spreads, getters,
-template literals, import attributes and arbitrary statements before the manifest
-are rejected; use a directory with `plugin.json` instead. After validation the
-module still executes with full process privileges: this is not a sandbox and
-installation still requires trust.
-
 Legacy `plugin.json` dependencies name **plugin IDs**, including built-ins, not
-npm packages. In the package format described below, those declarations move to
+npm packages. In the package format described above, those declarations move to
 `llmhub.dependencies` and `llmhub.optionalDependencies`; top-level npm dependencies
 are libraries installed by npm. Built-in catalog dependencies describe existing
 direct imports; those imports remain unchanged.
@@ -778,23 +769,24 @@ export: check it in setup when your plugin needs one. Stopped generations cannot
 publish or acquire exports; newly executing code never receives an old export
 through `require`. These are object references, not revocable proxies: code that
 already retained an object must release it during cleanup. See
-`examples/plugins/text-service.mjs` and `text-consumer.mjs`.
+`examples/plugins/text-service/` and `examples/plugins/text-consumer/`.
 
-Uploading an existing single-file ID upgrades in place only when the incoming
-version is newer. Same-precedence versions (including build metadata changes) or
-downgrades require multipart text `force=true`; absent/`false` does not force, and
-other values or duplicate force fields are rejected. Force bypasses only version
-ordering, never compatibility/dependency checks. Configuration, private storage
-and enabled state are preserved. Failed validation/setup/dependency activation
-rolls back the files and previous running generations; rollback failures are
-reported explicitly rather than claiming successful recovery. Disabled plugins
-stay disabled. Directory replacements are recognized by version on Scan and by
-Reload; downgrade checks still apply. Keep a backup before replacing directory
-files yourself: the gateway cannot restore bytes overwritten externally.
-Disabled replacements run setup and cleanup transactionally for validation, but
-remain disabled afterward; initial fresh installation still waits for Enable.
+npm/GitHub upgrades preserve configuration, private storage and enabled state.
+Downgrades require JSON `force: true`; same-precedence replacements (including
+build metadata changes) are allowed. Force bypasses only version ordering, never compatibility or
+dependency checks. Failed validation/setup/dependency activation rolls back the
+files and previous running generations; rollback failures are reported explicitly
+rather than claiming successful recovery. Directory replacements are recognized
+by version on Scan and by Reload; downgrade checks still apply. Keep a backup
+before replacing directory files yourself: the gateway cannot restore bytes
+overwritten externally.
 
-Initial local enable and single-file validation retain their existing entry locations.
+Disabled replacements on every path perform only static manifest, version,
+API compatibility and dependency validation. They do not import the entry or run
+setup/cleanup; setup waits until Enable. Initial fresh installation also waits
+for Enable.
+
+Initial local enable retains its existing entry location.
 Npm-installed packages, and local plugins after explicit Reload (or Scan detecting
 a changed version), load from a private snapshot of the plugin's code and assets
 under `<plugins directory>/.generations/`. This refreshes relative imports,
@@ -821,7 +813,7 @@ and requires a separate confirmation before forced replacement.
 
 Author declarations live in the single `examples/plugins/llmhub-plugin.d.ts`.
 Reference it from `.mjs` JSDoc, for example
-`/** @param {import('./llmhub-plugin').PluginAPI} api */`.
+`/** @param {import('../llmhub-plugin').PluginAPI} api */`.
 It uses standard Node/DOM environment types, not gateway imports. Its event type
 exposes the portable public event surface, not H3's private routing/session or
 WebSocket internals. `tests/plugin-api.type-test.ts` checks the public contract

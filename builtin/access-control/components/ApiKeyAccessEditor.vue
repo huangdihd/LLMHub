@@ -1,9 +1,9 @@
 <template>
           <!-- Allowed Providers -->
-          <UFormGroup help="Leave empty to allow all providers">
+          <UFormGroup help="Leave empty to allow every provider.">
             <template #label>
               <div class="flex items-center justify-between w-full">
-                <span>Allowed Providers</span>
+                <span>Allowed providers</span>
                 <UBadge v-if="form.selectedProviders.length > 0" color="blue" variant="soft" size="xs">
                   {{ form.selectedProviders.length }} selected
                 </UBadge>
@@ -26,10 +26,10 @@
           </UFormGroup>
 
           <!-- Allowed Models (filtered by selected providers) -->
-          <UFormGroup :help="form.selectedProviders.length > 0 ? 'Filtered by selected providers above' : 'Leave empty to allow all models'">
+          <UFormGroup :help="form.selectedProviders.length > 0 ? 'Only models from the providers selected above are listed.' : 'Leave empty to allow every model.'">
             <template #label>
               <div class="flex items-center justify-between w-full">
-                <span>Allowed Models</span>
+                <span>Allowed models</span>
                 <UBadge v-if="form.selectedModels.length > 0" color="purple" variant="soft" size="xs">
                   {{ form.selectedModels.length }} selected
                 </UBadge>

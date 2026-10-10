@@ -22,6 +22,7 @@ export default {
     const totalApiCalls = ref(0)
     const apiKeys = ref<DashboardKeyUsage[]>([])
     const refreshingKeys = ref(false)
+    const keysLoaded = ref(false)
     let pendingTotalCalls = 0
 
     async function loadKeyStats() {
@@ -36,12 +37,13 @@ export default {
         apiKeys.value = []
       } finally {
         refreshingKeys.value = false
+        keysLoaded.value = true
       }
     }
 
     return {
       metricProps: () => ({ totalApiCalls: totalApiCalls.value }),
-      usageProps: () => ({ apiKeys: apiKeys.value, refreshingKeys: refreshingKeys.value, loadKeyStats }),
+      usageProps: () => ({ apiKeys: apiKeys.value, refreshingKeys: refreshingKeys.value, keysLoaded: keysLoaded.value, loadKeyStats }),
       async load() {
         const data = await $fetch<{ totalCalls?: number }>('/api/hub/stats').catch(() => ({ totalCalls: 0 }))
         pendingTotalCalls = data.totalCalls || 0

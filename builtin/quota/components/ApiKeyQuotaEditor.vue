@@ -1,8 +1,8 @@
 <template>
           <!-- Model Quotas -->
-          <UFormGroup help="Set monthly token limits per model. 0 = unlimited.">
+          <UFormGroup help="Monthly token limit for individual models. 0 means no limit.">
             <template #label>
-              <span>Model Quotas</span>
+              <span>Model limits</span>
             </template>
             <div class="space-y-2">
               <div v-for="(entry, i) in form.modelQuotaList" :key="i" class="flex items-center gap-2">
@@ -23,16 +23,14 @@
                 <UInput v-model.number="entry.limit" type="number" min="0" step="10000" placeholder="Limit" class="w-24 sm:w-32" />
                 <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="form.modelQuotaList.splice(i, 1)" />
               </div>
-              <UButton color="blue" variant="soft" size="sm" @click="form.modelQuotaList.push({ model: '', limit: 0 })">
-                + Add Model Quota
-              </UButton>
+              <UButton color="gray" variant="soft" size="sm" icon="i-heroicons-plus" class="dark:!bg-gray-800 dark:!text-gray-100 dark:hover:!bg-gray-700" @click="form.modelQuotaList.push({ model: '', limit: 0 })">Add model limit</UButton>
             </div>
           </UFormGroup>
 
           <!-- Provider Quotas -->
-          <UFormGroup help="Set monthly token limits per provider. 0 = unlimited.">
+          <UFormGroup help="Monthly token limit for individual providers. 0 means no limit.">
             <template #label>
-              <span>Provider Quotas</span>
+              <span>Provider limits</span>
             </template>
             <div class="space-y-2">
               <div v-for="(entry, i) in form.providerQuotaList" :key="i" class="flex items-center gap-2">
@@ -53,9 +51,7 @@
                 <UInput v-model.number="entry.limit" type="number" min="0" step="100000" placeholder="Limit" class="w-24 sm:w-32" />
                 <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="form.providerQuotaList.splice(i, 1)" />
               </div>
-              <UButton color="blue" variant="soft" size="sm" @click="form.providerQuotaList.push({ provider: '', limit: 0 })">
-                + Add Provider Quota
-              </UButton>
+              <UButton color="gray" variant="soft" size="sm" icon="i-heroicons-plus" class="dark:!bg-gray-800 dark:!text-gray-100 dark:hover:!bg-gray-700" @click="form.providerQuotaList.push({ provider: '', limit: 0 })">Add provider limit</UButton>
             </div>
           </UFormGroup>
 </template>

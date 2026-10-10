@@ -1,104 +1,53 @@
 <template>
-  <UContainer class="py-8 max-w-6xl">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-      <div>
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h2>
-        <p class="text-gray-500 dark:text-gray-400 mt-1">Overview of your LLMHub gateway</p>
-      </div>
-      <div class="flex flex-wrap gap-3">
-        <UButton to="/providers" icon="i-heroicons-cog-6-tooth" color="gray" variant="solid">Manage Providers</UButton>
-        <component v-for="(contribution, index) in contributions.filter(item => item.action)" :is="contribution.action" :key="index" />
-      </div>
-    </div>
+  <UContainer class="py-8 max-w-5xl">
+    <PageHeader title="Dashboard" description="Overview of your LLMHub gateway.">
+      <UButton to="/providers" icon="i-heroicons-server-stack" color="gray" variant="soft" class="dark:!bg-gray-800 dark:!text-gray-100 dark:hover:!bg-gray-700">Providers</UButton>
+      <component v-for="(contribution, index) in contributions.filter(item => item.action)" :is="contribution.action" :key="index" />
+    </PageHeader>
 
-    <!-- Quick Stats -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <component v-for="(contribution, index) in contributions.filter(item => item.metric)" :is="contribution.metric" :key="index" :loading="loading" v-bind="contribution.metricProps()" />
-      
-      <UCard :ui="{ body: { padding: 'p-6 sm:p-6' } }">
-        <div class="flex items-center">
-          <div class="p-3 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-            <UIcon name="i-heroicons-server-stack" class="w-6 h-6" />
-          </div>
-          <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Active Providers</p>
-            <div class="flex items-baseline mt-1">
-              <h3 class="text-2xl font-bold text-gray-900 dark:text-white">
-                {{ loading ? '-' : activeProvidersCount }}
-              </h3>
-              <span class="ml-2 text-sm text-gray-500">/ {{ loading ? '-' : totalProvidersCount }} total</span>
-            </div>
-          </div>
-        </div>
-      </UCard>
-
-      <UCard :ui="{ body: { padding: 'p-6 sm:p-6' } }">
-        <div class="flex items-center">
-          <div class="p-3 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
-            <UIcon name="i-heroicons-cpu-chip" class="w-6 h-6" />
-          </div>
-          <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Available Models</p>
-            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-              {{ loading ? '-' : totalModelsCount }}
-            </h3>
-          </div>
-        </div>
-      </UCard>
-
-      <UCard :ui="{ body: { padding: 'p-6 sm:p-6' } }">
-        <div class="flex items-center">
-          <div class="p-3 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-            <UIcon name="i-heroicons-arrows-right-left" class="w-6 h-6" />
-          </div>
-          <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Active Protocols</p>
-            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-              {{ loading ? '-' : Object.keys(protocolCounts).length }}
-            </h3>
-            <p class="text-xs text-gray-500 mt-1 uppercase truncate w-24" :title="Object.keys(protocolCounts).join(', ')">
-              {{ loading ? '...' : Object.keys(protocolCounts).join(', ') || 'None' }}
-            </p>
-          </div>
-        </div>
-      </UCard>
+      <StatCard icon="i-heroicons-server-stack" tone="blue" label="Providers" :value="activeProvidersCount" :hint="totalProvidersCount > activeProvidersCount ? `of ${totalProvidersCount} enabled` : undefined" :loading="loading" />
+      <StatCard icon="i-heroicons-cpu-chip" tone="green" label="Models" :value="totalModelsCount" :loading="loading" />
+      <StatCard icon="i-heroicons-arrows-right-left" tone="purple" label="Provider types" :value="Object.keys(protocolCounts).length" :loading="loading" />
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- API Key Usage -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
       <div class="lg:col-span-2 space-y-6">
         <component v-for="(contribution, index) in contributions.filter(item => item.usage)" :is="contribution.usage" :key="index" v-bind="contribution.usageProps()" />
-      </div>
 
-      <!-- Quick Actions / Status -->
-      <div class="space-y-6">
-        <UCard>
+        <UCard :ui="{ body: { padding: '' } }">
           <template #header>
             <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white">Models Breakdown</h3>
-              <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-arrow-path" :loading="refreshing" @click="refreshModels" />
+              <h3 class="font-medium text-gray-900 dark:text-white">Models by provider</h3>
+              <div class="flex items-center gap-1">
+                <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-arrow-path" aria-label="Refresh models" :loading="refreshing" @click="refreshModels" />
+                <UButton color="gray" variant="ghost" size="xs" to="/models" trailing-icon="i-heroicons-arrow-right-20-solid">All models</UButton>
+              </div>
             </div>
           </template>
-          
-          <ul v-if="!loading && Object.keys(modelsByProvider).length > 0" class="space-y-3 text-sm">
-            <li v-for="(count, provider) in modelsByProvider" :key="provider" class="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-              <span class="text-gray-700 dark:text-gray-300 capitalize flex items-center gap-2">
-                <UIcon name="i-heroicons-server" class="w-4 h-4 text-gray-400" />
-                {{ getProviderDisplayName(provider) }}
-              </span>
-              <UBadge color="blue" variant="soft">{{ count }} model{{ count !== 1 ? 's' : '' }}</UBadge>
+          <div v-if="loading" class="flex justify-center py-8">
+            <UIcon name="i-heroicons-arrow-path" class="w-5 h-5 animate-spin text-gray-400" />
+          </div>
+          <ul v-else-if="Object.keys(modelsByProvider).length > 0" class="divide-y divide-gray-100 dark:divide-gray-800">
+            <li v-for="(count, provider) in modelsByProvider" :key="provider" class="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
+              <span class="text-sm text-gray-900 dark:text-white truncate">{{ getProviderDisplayName(provider) }}</span>
+              <span class="text-sm tabular-nums text-gray-500 dark:text-gray-400 flex-shrink-0">{{ count }} model{{ count !== 1 ? 's' : '' }}</span>
             </li>
           </ul>
-          <div v-else-if="loading" class="text-center py-4">
-             <UIcon name="i-heroicons-arrow-path" class="w-5 h-5 animate-spin text-gray-400 mx-auto" />
-          </div>
-          <div v-else class="text-center py-4 text-sm text-gray-500">
-            No models found.
-          </div>
+          <EmptyState v-else compact icon="i-heroicons-cpu-chip" title="No models found" description="Connect a provider to see its models here." />
         </UCard>
-
-        <component v-for="(contribution, index) in contributions.filter(item => item.endpoint)" :is="contribution.endpoint" :key="index" />
       </div>
+
+      <UCard v-if="contributions.some(item => item.endpoint)" :ui="{ body: { padding: '' } }">
+        <template #header>
+          <h3 class="font-medium text-gray-900 dark:text-white">Endpoints</h3>
+          <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Point your client's base URL here.</p>
+        </template>
+        <div class="divide-y divide-gray-100 dark:divide-gray-800">
+          <component v-for="(contribution, index) in contributions.filter(item => item.endpoint)" :is="contribution.endpoint" :key="index" />
+        </div>
+      </UCard>
     </div>
   </UContainer>
 </template>

@@ -1,18 +1,9 @@
 <template>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-sm mb-4">
-          <div>
-            <span class="text-gray-500 dark:text-gray-400">Calls:</span>
-            <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ record.call_count }}</span>
-          </div>
-          <div>
-            <span class="text-gray-500 dark:text-gray-400">Tokens used:</span>
-            <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ record.tokens_used.toLocaleString() }}</span>
-          </div>
-          <div>
-            <span class="text-gray-500 dark:text-gray-400">Created:</span>
-            <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ new Date(record.created_at).toLocaleDateString() }}</span>
-          </div>
-        </div>
+  <p class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
+    <span><span class="tabular-nums text-gray-900 dark:text-white">{{ record.call_count.toLocaleString() }}</span> calls</span>
+    <span><span class="tabular-nums text-gray-900 dark:text-white">{{ record.tokens_used.toLocaleString() }}</span> tokens used</span>
+    <span>Created {{ new Date(record.created_at).toLocaleDateString() }}</span>
+  </p>
 </template>
 
 <script setup lang="ts">

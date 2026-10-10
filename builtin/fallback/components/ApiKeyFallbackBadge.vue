@@ -1,7 +1,7 @@
 <template>
-              <UBadge v-if="record.fallback_strategy?.enabled" color="orange" variant="soft">
-                Auto: {{ record.fallback_strategy.name || 'auto' }}
-              </UBadge>
+  <UBadge v-if="record.fallback_strategy?.enabled" color="orange" variant="subtle" size="sm">
+    Fallback · {{ record.fallback_strategy.name || 'auto' }}
+  </UBadge>
 </template>
 
 <script setup lang="ts">

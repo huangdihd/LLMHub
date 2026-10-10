@@ -1,0 +1,24 @@
+{
+  "name": "llmhub-plugin-request-log",
+  "version": "1.0.0",
+  "description": "See recent requests: model, API key, tokens and errors.",
+  "type": "module",
+  "main": "index.mjs",
+  "files": ["index.mjs", "ui", "README.md"],
+  "keywords": ["llmhub-plugin", "llmhub", "logging"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/huangdihd/LLMHub.git", "directory": "plugins/request-log" },
+  "homepage": "https://github.com/huangdihd/LLMHub/tree/main/plugins/request-log",
+  "engines": { "llmhub": "^1.4.0" },
+  "llmhub": {
+    "name": "Request Log",
+    "configSchema": [
+      { "key": "limit", "label": "Requests to keep", "type": "number", "default": 200 }
+    ],
+    "contributes": {
+      "metrics": [{ "key": "today", "label": "Requests today", "icon": "i-heroicons-queue-list" }],
+      "panels": [{ "id": "log", "title": "Request log", "location": "page", "page": "ui/log.html" }],
+      "navigation": [{ "panel": "log", "label": "Requests" }]
+    }
+  }
+}

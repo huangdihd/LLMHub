@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request log</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --text: #111827; --muted: #6b7280; --faint: #9ca3af;
+      --card: #ffffff; --line: #e5e7eb; --row: #f9fafb;
+      --button: #f3f4f6; --button-hover: #e5e7eb;
+      --ok: #16a34a; --ok-bg: #f0fdf4; --bad: #dc2626; --bad-bg: #fef2f2;
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --text: #ffffff; --muted: #9ca3af; --faint: #6b7280;
+      --card: #111827; --line: #1f2937; --row: rgba(31, 41, 55, .4);
+      --button: #1f2937; --button-hover: #374151;
+      --ok: #4ade80; --ok-bg: rgba(74, 222, 128, .1); --bad: #f87171; --bad-bg: rgba(248, 113, 113, .1);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); background: transparent; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+    .bar p { margin: 0; color: var(--muted); }
+    .actions { display: flex; gap: 8px; }
+    button { font: inherit; font-weight: 500; color: var(--text); background: var(--button); border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+    button:hover { background: var(--button-hover); }
+    button.quiet { background: transparent; color: var(--muted); }
+    button.quiet:hover { color: var(--text); }
+    button:disabled { opacity: .5; cursor: default; }
+    .scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); padding: 10px 20px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    td { padding: 10px 20px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: var(--row); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; white-space: nowrap; }
+    .nowrap { white-space: nowrap; }
+    .sub { display: block; font-size: 12px; color: var(--muted); }
+    .time { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .pill { display: inline-block; font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 6px; white-space: nowrap; }
+    .ok { color: var(--ok); background: var(--ok-bg); }
+    .bad { color: var(--bad); background: var(--bad-bg); }
+    .error { display: block; margin-top: 4px; font-size: 12px; color: var(--bad); overflow-wrap: anywhere; max-width: 28rem; }
+    .empty { padding: 48px 20px; text-align: center; color: var(--muted); }
+    .empty strong { display: block; color: var(--text); font-weight: 500; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="bar">
+      <p id="summary">Loading…</p>
+      <div class="actions">
+        <button id="clear" class="quiet" type="button">Clear</button>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+    </div>
+    <div id="content"></div>
+  </div>
+
+  <script>
+    const summary = document.getElementById('summary')
+    const content = document.getElementById('content')
+    const formatter = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
+    // Everything shown comes from requests, so it is inserted as text, never as HTML.
+    function element(tag, className, text) {
+      const node = document.createElement(tag)
+      if (className) node.className = className
+      if (text !== undefined) node.textContent = text
+      return node
+    }
+    const count = value => (value === null || value === undefined ? '—' : Number(value).toLocaleString())
+
+    function render(entries, limit) {
+      summary.textContent = entries.length
+        ? `${entries.length.toLocaleString()} request${entries.length === 1 ? '' : 's'} · keeping the latest ${limit.toLocaleString()}`
+        : 'No requests yet'
+      content.replaceChildren()
+      if (!entries.length) {
+        const empty = element('div', 'empty')
+        empty.append(element('strong', '', 'Nothing has come through yet'), 'Requests appear here as soon as they finish.')
+        content.append(empty)
+        return
+      }
+      const table = element('table')
+      const head = element('tr')
+      for (const [label, className] of [['Time', ''], ['Model', ''], ['API key', ''], ['Input', 'num'], ['Output', 'num'], ['Result', '']]) head.append(element('th', className, label))
+      const thead = element('thead')
+      thead.append(head)
+      table.append(thead)
+      const body = element('tbody')
+      for (const entry of entries) {
+        const row = element('tr')
+        row.append(element('td', 'time', formatter.format(new Date(entry.time))))
+        const model = element('td')
+        model.append(element('span', 'mono', entry.model || '—'), element('span', 'sub', entry.protocol))
+        row.append(model, element('td', 'nowrap', entry.key || '—'))
+        const input = element('td', 'num', count(entry.inputTokens))
+        if (entry.cachedTokens) input.append(element('span', 'sub', `${count(entry.cachedTokens)} cached`))
+        row.append(input, element('td', 'num', count(entry.outputTokens)))
+        const result = element('td')
+        result.append(element('span', entry.error ? 'pill bad' : 'pill ok', entry.error ? 'Failed' : 'OK'))
+        if (entry.error) result.append(element('span', 'error', entry.error))
+        row.append(result)
+        body.append(row)
+      }
+      table.append(body)
+      const scroll = element('div', 'scroll')
+      scroll.append(table)
+      content.append(scroll)
+    }
+
+    async function load() {
+      try {
+        const data = await llmhub.fetch('entries')
+        render(data.entries, data.limit)
+      } catch (error) {
+        summary.textContent = `Could not load the log: ${error.message}`
+      }
+    }
+
+    document.getElementById('refresh').addEventListener('click', load)
+    document.getElementById('clear').addEventListener('click', async event => {
+      event.target.disabled = true
+      try { await llmhub.fetch('entries', { method: 'DELETE' }); await load() }
+      finally { event.target.disabled = false }
+    })
+    load()
+    setInterval(load, 5000)
+  </script>
+</body>
+</html>

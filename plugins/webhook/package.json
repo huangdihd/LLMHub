@@ -1,0 +1,26 @@
+{
+  "name": "llmhub-plugin-webhook",
+  "version": "1.0.0",
+  "description": "Get a message in Feishu, DingTalk, WeCom or any webhook when a request fails.",
+  "type": "module",
+  "main": "index.mjs",
+  "files": ["index.mjs", "README.md"],
+  "keywords": ["llmhub-plugin", "llmhub", "webhook", "feishu", "dingtalk", "wecom"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/huangdihd/LLMHub.git", "directory": "plugins/webhook" },
+  "homepage": "https://github.com/huangdihd/LLMHub/tree/main/plugins/webhook",
+  "engines": { "llmhub": "^1.4.0" },
+  "llmhub": {
+    "name": "Webhook Alerts",
+    "configSchema": [
+      { "key": "url", "label": "Webhook URL", "type": "secret", "required": true },
+      { "key": "format", "label": "Send as", "type": "select", "default": "feishu", "options": [
+        { "label": "Feishu / Lark bot", "value": "feishu" },
+        { "label": "DingTalk bot", "value": "dingtalk" },
+        { "label": "WeCom bot", "value": "wecom" },
+        { "label": "Plain JSON", "value": "json" }
+      ] },
+      { "key": "interval", "label": "Minimum seconds between alerts", "type": "number", "default": 60 }
+    ]
+  }
+}

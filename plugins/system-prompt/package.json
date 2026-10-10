@@ -1,0 +1,29 @@
+{
+  "name": "llmhub-plugin-system-prompt",
+  "version": "1.0.0",
+  "description": "Add a system prompt to every request, globally or per model.",
+  "type": "module",
+  "main": "index.mjs",
+  "files": ["index.mjs", "README.md"],
+  "keywords": ["llmhub-plugin", "llmhub", "system-prompt"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/huangdihd/LLMHub.git", "directory": "plugins/system-prompt" },
+  "homepage": "https://github.com/huangdihd/LLMHub/tree/main/plugins/system-prompt",
+  "engines": { "llmhub": "^1.1.0" },
+  "llmhub": {
+    "name": "System Prompt",
+    "configSchema": [
+      { "key": "prompt", "label": "Prompt for every model", "type": "text", "default": "" },
+      { "key": "position", "label": "Where to add it", "type": "select", "default": "before", "options": [
+        { "label": "Before the client's system prompt", "value": "before" },
+        { "label": "After the client's system prompt", "value": "after" },
+        { "label": "Replace the client's system prompt", "value": "replace" }
+      ] }
+    ],
+    "contributes": {
+      "models": [
+        { "key": "prompt", "label": "Prompt", "type": "text", "default": "" }
+      ]
+    }
+  }
+}

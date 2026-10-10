@@ -24,6 +24,20 @@ privileges.** Install only plugins you trust. See
 | Work on LLMHub's own built-in plugins | [Built-in plugins](builtin.md) |
 | See what changed between plugin API versions | [Changelog](changelog.md) |
 
+## Official plugins
+
+Maintained alongside LLMHub in [`plugins/`](../../plugins) and published to
+npm, so they appear in the market. They are also good reading: each is under a
+hundred lines.
+
+| Plugin | Does | Uses |
+| --- | --- | --- |
+| [System Prompt](../../plugins/system-prompt) | Adds a system prompt to every request, globally or per model | A request hook, settings, a field on each model |
+| [Request Log](../../plugins/request-log) | Lists recent requests with model, key, tokens and errors | An event, storage, a route, a page, a home metric |
+| [Webhook Alerts](../../plugins/webhook) | Messages Feishu, DingTalk, WeCom or any webhook when a request fails | An event, a secret setting |
+
+## Examples
+
 Working examples live in [`examples/plugins/`](../../examples/plugins):
 
 | Example | Shows |

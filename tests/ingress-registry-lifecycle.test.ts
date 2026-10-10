@@ -61,7 +61,7 @@ test('builtin protocol and ingress setup rolls back, retains original IDs and cl
   const options = fixture()
   const host = new BuiltinPluginHost(options)
   let captured!: PluginAPI
-  const plugin = { manifest: { id: 'wire-plugin', version: '1' }, layer: './wire-plugin', setup(api: PluginAPI) {
+  const plugin = { manifest: { id: 'wire-plugin', version: '1.0.0' }, layer: './wire-plugin', setup(api: PluginAPI) {
     captured = api
     api.registerProtocol(protocol)
     api.registerIngress(ingress)
@@ -159,7 +159,7 @@ test('omitted host registries are isolated rather than production singletons', a
   const { protocolRegistry: unusedProtocols, ingressRegistry: unusedIngresses, ...legacyOptions } = options
   const first = new BuiltinPluginHost(legacyOptions)
   const second = new BuiltinPluginHost(legacyOptions)
-  const plugin = { manifest: { id: 'wire-plugin', version: '1' }, layer: './wire-plugin', setup(api: PluginAPI) {
+  const plugin = { manifest: { id: 'wire-plugin', version: '1.0.0' }, layer: './wire-plugin', setup(api: PluginAPI) {
     api.registerProtocol(protocol)
     api.registerIngress(ingress)
   } }

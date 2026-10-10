@@ -7,6 +7,14 @@
       <div>
         <h2 class="text-2xl font-bold">{{ plugin.manifest?.name || plugin.id }}</h2>
         <p class="mt-1 text-sm text-gray-500">{{ plugin.id }} · {{ plugin.manifest?.version || 'Unknown version' }} · {{ plugin.status }}</p>
+        <p class="mt-2 text-sm text-gray-500">Plugin API: {{ plugin.apiVersion || 'Unknown' }} · Required API: {{ plugin.manifest?.engines?.llmhub || 'Not declared (legacy)' }}</p>
+        <ul v-if="plugin.dependencies?.length" class="mt-3 space-y-1 text-sm">
+          <li v-for="dependency in plugin.dependencies" :key="dependency.id" :class="dependency.satisfied ? 'text-gray-500' : dependency.optional ? 'text-amber-500' : 'text-red-500'">
+            {{ dependency.id }} {{ dependency.range }} · {{ dependency.optional ? 'Optional' : 'Required' }} · {{ dependency.satisfied ? 'Satisfied' : 'Unsatisfied' }} · {{ dependency.version || 'Not installed' }}<span v-if="dependency.reason"> — {{ dependency.reason }}</span>
+          </li>
+        </ul>
+        <p v-if="plugin.requiredBy?.length" class="mt-2 text-sm text-gray-500">Required by: {{ plugin.requiredBy.join(', ') }}</p>
+        <ul v-if="plugin.warnings?.length" class="mt-2 text-sm text-amber-500"><li v-for="warning in plugin.warnings" :key="warning">{{ warning }}</li></ul>
         <p v-if="plugin.error" class="mt-2 text-sm text-red-500">{{ plugin.error }}</p>
       </div>
       <UAlert v-if="plugin.builtin" color="blue" title="Built-in plugin" description="Always enabled. Built-in plugins cannot be configured, disabled, reloaded, or removed here." />
@@ -31,7 +39,8 @@
 import type { PluginRecord } from '~/shared/types/plugin'
 const route = useRoute()
 const toast = useToast()
-const plugin = ref<PluginRecord | null>(null)
+type DashboardPlugin = PluginRecord & { apiVersion?: string }
+const plugin = ref<DashboardPlugin | null>(null)
 const configuration = ref<Record<string, unknown>>({})
 const configurationLoaded = ref(false)
 const loading = ref(true)
@@ -57,7 +66,7 @@ async function load() {
   configuration.value = {}
   configurationLoaded.value = false
   try {
-    const records = await $fetch<PluginRecord[]>('/api/hub/plugins')
+    const records = await $fetch<DashboardPlugin[]>('/api/hub/plugins')
     if (version !== loadVersion) return
     const record = records.find(item => item.id === id)
     if (!record) throw new Error('Plugin not found')

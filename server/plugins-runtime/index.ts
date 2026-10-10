@@ -12,7 +12,7 @@ export type { PluginAPI, PluginModule, PluginStorage, PluginManagerOptions } fro
 export type { PluginField, PluginManifest, PluginRecord } from '../../shared/types/plugin'
 
 let manager: PluginManager | undefined
-let builtinOptions: Pick<PluginManagerOptions, 'builtinPlugins' | 'dispatchBuiltinRoute'> = {}
+let builtinOptions: Pick<PluginManagerOptions, 'builtinPlugins' | 'dispatchBuiltinRoute' | 'requireBuiltin'> = {}
 
 export function configureBuiltinHost(options: typeof builtinOptions): void {
   if (manager) throw new Error('Builtin host must be configured before plugin manager creation')

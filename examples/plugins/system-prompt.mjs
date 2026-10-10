@@ -1,5 +1,6 @@
 export const manifest = {
   id: 'example-system-prompt', name: 'System Prompt', version: '1.0.0',
+  engines: { llmhub: '^1.0.0' },
   description: 'Append a configured instruction to each generation request.',
   configSchema: [
     { key: 'suffix', label: 'System instruction', type: 'text', default: 'PLUGIN_INSTRUCTION' },

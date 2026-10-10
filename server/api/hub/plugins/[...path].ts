@@ -37,7 +37,14 @@ async function handle(event: H3Event) {
     const file = parts?.find(part => part.name === 'file' && part.filename)
     if (!file || !file.filename?.endsWith('.mjs')) throw createError({ statusCode: 400, message: 'Upload one .mjs plugin as file' })
     if (file.data.length > MAX_UPLOAD_BYTES) throw createError({ statusCode: 413, message: 'Plugin upload limit is 1 MiB' })
-    return manager.install(file.data)
+    const forceParts = parts?.filter(part => part.name === 'force') ?? []
+    // Only the literal multipart field force=true opts into version replacement.
+    // Do not coerce arbitrary strings (notably "false") to a truthy boolean.
+    if (forceParts.length > 1 || forceParts.some(part => part.filename || !['true', 'false'].includes(part.data.toString('utf8')))) {
+      throw createError({ statusCode: 400, message: 'force must be a single text field containing true or false' })
+    }
+    const force = forceParts[0]?.data.toString('utf8') === 'true'
+    return manager.install(file.data, force)
   }
   if (!id) throw createError({ statusCode: 404 })
   if (action === 'api') return manager.dispatchRoute(id, method, rest.join('/'), event)

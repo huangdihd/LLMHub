@@ -67,3 +67,6 @@ node tests/e2e/chat-clients.test.mjs
 
 echo "== running runtime plugin tests =="
 node tests/e2e/plugins.test.mjs
+
+echo "== running plugin dependency and upgrade tests =="
+node tests/e2e/plugin-dependencies.test.mjs

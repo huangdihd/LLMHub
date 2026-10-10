@@ -1,9 +1,13 @@
+/// <reference path="./semver.d.ts" />
+import { valid, validRange } from 'semver'
 import { lstat, realpath } from 'node:fs/promises'
 import { resolve, relative, isAbsolute, sep, parse } from 'node:path'
 import type { PluginField, PluginManifest } from '../../shared/types/plugin'
 
 /** Gateway-authored failure whose message is safe to show to dashboard administrators. */
 export class PluginError extends Error {}
+
+export { parseUploadedManifest } from './upload-manifest'
 
 export function validateId(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9-]{1,40}$/.test(value)) throw new PluginError('Invalid plugin identifier')
@@ -53,16 +57,30 @@ export function validateFields(input: unknown): PluginField[] {
   return structuredClone(input)
 }
 
-export function validateManifest(input: unknown): PluginManifest {
+export function validateManifest(input: unknown, strictVersion = false): PluginManifest {
   if (!input || typeof input !== 'object') throw new PluginError('Invalid plugin manifest')
   const value = input as PluginManifest
   validateId(value.id)
   if (typeof value.name !== 'string' || !value.name.trim()) throw new PluginError('Plugin name is required')
   if (typeof value.version !== 'string' || !value.version || value.version.length > 100) throw new PluginError('Invalid plugin version')
+  if (strictVersion && !valid(value.version)) throw new PluginError(`Invalid plugin semver version: ${value.version}`)
+  if (value.engines !== undefined && (!value.engines || typeof value.engines !== 'object' || Array.isArray(value.engines))) throw new PluginError('Invalid plugin engines')
+  if (value.engines?.llmhub !== undefined && (typeof value.engines.llmhub !== 'string' || !value.engines.llmhub.trim() || !validRange(value.engines.llmhub))) throw new PluginError('Invalid engines.llmhub semver range')
+  for (const dependencies of [value.dependencies, value.optionalDependencies]) {
+    if (dependencies === undefined) continue
+    if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) throw new PluginError('Invalid plugin dependencies')
+    for (const [id, range] of Object.entries(dependencies)) {
+      validateId(id)
+      if (typeof range !== 'string' || !range.trim() || !validRange(range)) throw new PluginError(`Invalid dependency range for ${id}`)
+    }
+  }
   for (const text of [value.name, value.description]) if (text !== undefined && (typeof text !== 'string' || text.length > 2000)) throw new PluginError('Invalid plugin manifest')
   if (value.entry !== undefined) validatePath(value.entry)
   if (value.ui !== undefined) validatePath(value.ui.page)
   return { id: value.id, name: value.name, version: value.version, description: value.description,
+    engines: value.engines ? { llmhub: value.engines.llmhub } : undefined,
+    dependencies: value.dependencies ? { ...value.dependencies } : undefined,
+    optionalDependencies: value.optionalDependencies ? { ...value.optionalDependencies } : undefined,
     entry: value.entry, configSchema: validateFields(value.configSchema), ui: value.ui ? { page: value.ui.page } : undefined }
 }
 

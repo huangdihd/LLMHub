@@ -66,7 +66,8 @@ function harness() {
       },
       require: (name: string) => {
         if (name === 'h3') return { getCookie: (event: Event) => event.actor ?? 'test-admin' }
-        if (name.startsWith('node:')) return nativeRequire(name)
+        if (name.startsWith('node:') || name === 'semver') return nativeRequire(name)
+        if (name.endsWith('.json')) return { default: JSON.parse(readFileSync(resolve(dirname(absolute), name), 'utf8')) }
         assert.ok(name.startsWith('.'), `Unexpected dependency: ${name}`)
         return load(resolve(dirname(absolute), `${name.replace(/\.ts$/, '')}.ts`))
       }

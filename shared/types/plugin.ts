@@ -12,12 +12,27 @@ export interface PluginManifest {
   name?: string
   version: string
   description?: string
+  engines?: { llmhub?: string }
+  dependencies?: Record<string, string>
+  optionalDependencies?: Record<string, string>
   entry?: string
   configSchema?: PluginField[]
   ui?: { page: string }
 }
 
+export interface PluginDependencyStatus {
+  id: string
+  range: string
+  optional: boolean
+  satisfied: boolean
+  version?: string
+  reason?: string
+}
+
 export interface PluginRecord {
+  warnings?: string[]
+  dependencies?: PluginDependencyStatus[]
+  requiredBy?: string[]
   /** Built-in application plugins are always enabled and read-only. */
   builtin?: boolean
   id: string

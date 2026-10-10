@@ -10,6 +10,11 @@ BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/llmhub-test-build.XXXXXX")"
 export NODE_PATH="$PWD/node_modules${NODE_PATH:+:$NODE_PATH}"
 trap 'rm -rf "$BUILD_DIR"' EXIT HUP INT TERM
 
+echo "== checking public plugin declarations (tsc) =="
+npx tsc --noEmit --strict --skipLibCheck --target es2022 \
+  --module commonjs --moduleResolution node --esModuleInterop --resolveJsonModule \
+  .nuxt/types/nitro-imports.d.ts tests/plugin-api.type-test.ts
+
 echo "== compiling adapters (tsc) =="
 npx tsc .nuxt/types/nitro-imports.d.ts \
   server/providers/manager.ts server/providers/loader.ts \
@@ -20,9 +25,9 @@ npx tsc .nuxt/types/nitro-imports.d.ts \
   server/plugins-runtime/manager.ts server/plugins-runtime/manifest.ts \
   --rootDir . --outDir "$BUILD_DIR" \
   --module commonjs --target es2022 --moduleResolution node \
-  --esModuleInterop --skipLibCheck --rewriteRelativeImportExtensions
+  --esModuleInterop --skipLibCheck --resolveJsonModule --rewriteRelativeImportExtensions
 
-printf '%s\n' '{"type":"commonjs"}' > "$BUILD_DIR/package.json"
+node -e 'const files = require("node:fs"); const source = JSON.parse(files.readFileSync("package.json", "utf8")); files.writeFileSync(process.argv[1], JSON.stringify({ type: "commonjs", version: source.version }))' "$BUILD_DIR/package.json"
 
 # Match Nitro startup before tests use the shared provider registry.
 cat > "$BUILD_DIR/run-test.mjs" <<'EOF'

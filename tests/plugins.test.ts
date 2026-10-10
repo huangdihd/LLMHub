@@ -151,7 +151,7 @@ test('invalid discovered manifests cannot be activated by their placeholder reco
 test('install rejects missing setup, duplicate ids and invalid uploads; valid uploads activate', async () => {
   const { root, manager } = await fixture()
   try {
-    const manifest = `export const manifest = { id: 'upload-plugin', name: 'Upload', version: '1' };`
+    const manifest = `export const manifest = { id: 'upload-plugin', name: 'Upload', version: '1.0.0' };`
     await assert.rejects(manager.install(Buffer.from(manifest)))
     assert.equal(manager.list().length, 0)
     await assert.rejects(manager.install(Buffer.alloc(0)))
@@ -244,7 +244,7 @@ test('install evaluation timeouts remove staging directories and do not poison t
     await assert.rejects(manager.install(Buffer.from('await new Promise(() => {});')))
     const { readdir } = await import('node:fs/promises')
     assert.deepEqual(await readdir(root), [])
-    await manager.install(Buffer.from(`export const manifest = { id: 'after-timeout', name: 'After', version: '1' }; export default { setup() {} };`))
+    await manager.install(Buffer.from(`export const manifest = { id: 'after-timeout', name: 'After', version: '1.0.0' }; export default { setup() {} };`))
     assert.equal(manager.list()[0].id, 'after-timeout')
   } finally { await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
 })
@@ -253,7 +253,7 @@ test('failed install persistence rolls back the directory and allows retry', asy
   const { root, manager, storage } = await fixture()
   const save = storage.setItem
   try {
-    const source = Buffer.from(`export const manifest = { id: 'retry-plugin', name: 'Retry', version: '1' }; export default { setup() {} };`)
+    const source = Buffer.from(`export const manifest = { id: 'retry-plugin', name: 'Retry', version: '1.0.0' }; export default { setup() {} };`)
     storage.setItem = async () => { throw new Error('storage unavailable') }
     await assert.rejects(manager.install(source))
     assert.deepEqual(manager.list(), [])

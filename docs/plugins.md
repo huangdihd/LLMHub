@@ -458,10 +458,8 @@ schema form for gateway configuration. No privileged postMessage bridge exists.
 - Uninstall removes the directory, configuration, and plugin-scoped storage. It
   does not remove providers referring to its protocol.
 
-ESM modules cannot truly be unloaded. Repeated reloads retain module instances;
-relative imported helper modules use Node's normal cache, so entry cache busting
-does not recursively refresh unchanged helper URLs. For helper upgrades use
-versioned filenames/import URLs (or bundle into the entry). Avoid side effects at
+ESM modules cannot truly be unloaded; repeated reloads retain module instances.
+Avoid side effects at
 module top level, especially because single-file validation imports from a
 staging directory before activation. Timeout bounds asynchronous waits, not CPU
 execution: a synchronous infinite loop blocks the shared process. Timed-out
@@ -551,3 +549,117 @@ checks OpenAI/Claude/Gemini streaming and non-streaming calls, verifies hook
 removal, reload, disabled-provider behavior, and built-in health, then removes its
 fixtures. Run the normal acceptance sequence: `npx vue-tsc --noEmit`, `npm test`,
 `npm run build`, and `npm run test:e2e`.
+
+## Plugin API versions, dependencies and upgrades
+
+This section supersedes the earlier scan/upload and API-surface descriptions.
+The kernel exports `PLUGIN_API_VERSION = '1.0.0'` from
+`server/core/plugin-version.ts`. This is **not** the application version. Adding
+hooks or optional API fields increments its minor version; changing signatures
+or removing functionality increments its major version; compatible fixes increment
+its patch version. Built-in manifest versions come from root `package.json` and
+are bundled at build time (also available through the non-Nitro assembly).
+
+```js
+export const manifest = {
+  id: 'my-consumer', name: 'My Consumer', version: '1.0.0',
+  engines: { llmhub: '^1.0.0' },
+  dependencies: { 'example-text-service': '^1.0.0' },
+  optionalDependencies: { 'example-audit-service': '^1.0.0' }
+}
+```
+
+Version/range parsing uses `semver`. `engines.llmhub` targets the plugin API.
+Incompatible plugins fail before their module or setup is executed, with both
+required range and current version reported. Missing `engines.llmhub` remains
+supported and produces a warning. Already installed legacy manifests with invalid
+semver versions still load with a warning; they cannot satisfy a versioned
+dependency. New uploads and changed directory versions require valid semver.
+Existing state requires no migration.
+
+Uploads now extract the manifest **without executing JavaScript**, contrary to
+the historical trust-model description above. Use a literal
+`export const manifest = { ... }`, optionally preceded by comments and static ESM
+imports. Objects, arrays, quoted strings, finite decimal numbers, booleans/null,
+comments and trailing commas are supported. Computed values, spreads, getters,
+template literals, import attributes and arbitrary statements before the manifest
+are rejected; use a directory with `plugin.json` instead. After validation the
+module still executes with full process privileges: this is not a sandbox and
+installation still requires trust.
+
+Dependencies name **plugin IDs**, including built-ins, not npm packages. Runtime
+plugins may use Node built-ins and files shipped in their own directory only;
+bundle third-party libraries yourself. No npm dependency installation or resolver
+is provided. Built-in catalog dependencies describe existing direct imports;
+those imports remain unchanged.
+
+Startup discovers manifests before activation, orders runtime plugins by stable
+topological layers, and isolates dependency cycles. Cycle members fail with their
+IDs; required dependents fail pointing to the unavailable dependency, while
+unrelated plugins continue. Built-in assembly pulls dependencies forward while
+preserving existing ingress parser precedence; dashboard listing retains catalog
+order. Required dependencies must be installed, enabled, healthy and satisfy the
+range before enable. All unmet required dependencies are reported together.
+Missing, disabled or incompatible optional dependencies do not prevent activation.
+Stopping or uninstalling a plugin is refused while an enabled plugin requires it;
+there is no cascading disable. Reload/upgrade restarts enabled transitive
+consumers in dependency order, including optional consumers.
+
+The shared runtime/built-in API adds:
+
+```ts
+provide(value: object): void
+require<T extends object = Record<string, unknown>>(pluginId: string): T | undefined
+```
+
+Call `provide` during setup to publish an object (the last provided object wins). `require` permits only IDs
+in the caller's required or optional dependencies. It returns the currently
+available, range-compatible export, or `undefined` when unavailable or when the
+provider published nothing. Required dependency activation does not guarantee an
+export: check it in setup when your plugin needs one. Stopped generations cannot
+publish or acquire exports; newly executing code never receives an old export
+through `require`. These are object references, not revocable proxies: code that
+already retained an object must release it during cleanup. See
+`examples/plugins/text-service.mjs` and `text-consumer.mjs`.
+
+Uploading an existing single-file ID upgrades in place only when the incoming
+version is newer. Same-precedence versions (including build metadata changes) or
+downgrades require multipart text `force=true`; absent/`false` does not force, and
+other values or duplicate force fields are rejected. Force bypasses only version
+ordering, never compatibility/dependency checks. Configuration, private storage
+and enabled state are preserved. Failed validation/setup/dependency activation
+rolls back the files and previous running generations; rollback failures are
+reported explicitly rather than claiming successful recovery. Disabled plugins
+stay disabled. Directory replacements are recognized by version on Scan and by
+Reload; downgrade checks still apply. Keep a backup before replacing directory
+files yourself: the gateway cannot restore bytes overwritten externally.
+Disabled replacements run setup and cleanup transactionally for validation, but
+remain disabled afterward; initial fresh installation still waits for Enable.
+
+Initial enable and single-file validation retain their existing entry locations.
+After explicit Reload (or Scan detecting a changed version), activations use a
+private system-temporary snapshot of the whole plugin directory. This refreshes
+relative imports, including lazy imports, and keeps assets until stop. Symlinks
+and nonregular files are rejected. `import.meta.url` then points into the snapshot;
+writes there are ephemeral, so use plugin storage for durable state. Imports outside
+the plugin directory and ancestor-resolved bare packages are not preserved.
+Snapshots are removed on stop/failure and again after timed-out work settles.
+
+`GET /api/hub/plugins` remains an array for compatibility. Each record includes
+`apiVersion`, `manifest.version`, `manifest.engines`, dependency declarations,
+`dependencies` entries (`id`, `range`, `optional`, `satisfied`, `version`, `reason`),
+`requiredBy`, and `warnings`. The dashboard augments existing cards with these
+fields, displays lifecycle refusal reasons and successful old → new versions,
+and requires a separate confirmation before forced replacement.
+
+Author declarations live in the single `examples/plugins/llmhub-plugin.d.ts`.
+Reference it from `.mjs` JSDoc, for example
+`/** @param {import('./llmhub-plugin').PluginAPI} api */`.
+It uses standard Node/DOM environment types, not gateway imports. Its event type
+exposes the portable public event surface, not H3's private routing/session or
+WebSocket internals. `tests/plugin-api.type-test.ts` checks the public contract
+against real kernel types using TypeScript, including a separately checked event
+projection; `tests/run-all.sh` runs this check before runtime tests. Dependency,
+version, lifecycle and rollback regression tests accompany a real HTTP e2e flow
+that installs two plugins, checks exported-interface use, rejects provider
+removal, upgrades the provider, and verifies the consumer uses the new instance.

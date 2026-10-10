@@ -5,6 +5,7 @@ export default defineNitroPlugin(async application => {
   await initializeBuiltinPlugins()
   configureBuiltinHost({
     builtinPlugins: () => builtinHost.list(),
+    requireBuiltin: id => builtinHost.require(id),
     dispatchBuiltinRoute: (id, method, path, event) => builtinHost.dispatchRoute(id, method, path, event)
   })
   const manager = getPluginManager()

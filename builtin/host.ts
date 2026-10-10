@@ -4,11 +4,13 @@ import type { ProviderRegistry } from '../server/core/registry'
 import { ProtocolRegistry } from '../server/core/protocol-registry'
 import { IngressRegistry } from '../server/core/ingress-registry'
 import type { PluginAPI, PluginStorage } from '../server/plugins-runtime/manager'
-import { PluginError, validateId, validatePath } from '../server/plugins-runtime/manifest'
+import { PluginError, validateId, validatePath, validateManifest } from '../server/plugins-runtime/manifest'
 import type { PluginRecord } from '../shared/types/plugin'
+import { assertCompatibility, decorateRecords, dependencyIssues } from '../server/plugins-runtime/dependencies'
 import type { BuiltinPlugin } from './catalog'
 
 export interface BuiltinHostOptions {
+  pluginOrder?: readonly string[]
   hookRegistry: HookRegistry
   providerRegistry: ProviderRegistry
   protocolRegistry?: ProtocolRegistry
@@ -21,6 +23,7 @@ export class BuiltinPluginHost {
   private readonly records = new Map<string, PluginRecord>()
   private readonly routes = new Map<string, (event: H3Event) => unknown | Promise<unknown>>()
 
+  private readonly exports = new Map<string, object>()
   private readonly pending = new Map<string, Promise<void>>()
   private readonly disposers = new Map<string, () => Promise<void>>()
   private closing = false
@@ -36,11 +39,12 @@ export class BuiltinPluginHost {
 
   async register(plugin: BuiltinPlugin): Promise<void> {
     if (this.closing) throw new PluginError('Builtin host is shutting down')
-    const id = plugin.manifest.id
-    validateId(id)
+    const manifest = validateManifest({ ...plugin.manifest, name: plugin.manifest.name ?? plugin.manifest.id }, true)
+    assertCompatibility(manifest)
+    const id = manifest.id
     if (this.records.has(id) || this.pending.has(id)) throw new PluginError(`Builtin plugin already registered: ${id}`)
     // Defer setup until the pending reservation exists, including for reentrant setup.
-    const operation = Promise.resolve().then(() => this.setup(plugin))
+    const operation = Promise.resolve().then(() => this.setup({ ...plugin, manifest }))
     this.pending.set(id, operation)
     try { await operation }
     finally { this.pending.delete(id) }
@@ -50,14 +54,21 @@ export class BuiltinPluginHost {
     const id = plugin.manifest.id
     validateId(id)
     if (this.records.has(id)) throw new PluginError(`Builtin plugin already registered: ${id}`)
+    const issues = dependencyIssues(plugin.manifest, this.list())
+    if (issues.length) throw new PluginError(`Plugin dependencies are unavailable: ${issues.join('; ')}`)
     const providers: string[] = []
     const protocols: string[] = []
     const ingresses: string[] = []
     const hooks: string[] = []
     const unregister: Array<() => void> = []
     let accepting = true
+    let active = true
+    let provided: object | undefined
+    const assertActive = () => {
+      if (!active) throw new PluginError('Plugin is inactive')
+    }
     const assertRegistration = () => {
-      if (!accepting) throw new PluginError('Plugin registration is closed')
+      if (!accepting || !active) throw new PluginError('Plugin registration is closed')
     }
     const registrationId = (name: string) => {
       assertRegistration()
@@ -65,12 +76,30 @@ export class BuiltinPluginHost {
       return `${id}:${name}`
     }
     const storageKey = (key: string) => {
+      assertActive()
       validatePath(key)
       if (!/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*$/.test(key)) throw new PluginError('Invalid plugin storage key')
       return `builtin-plugins:${id}:storage:${key}`
     }
     const api: PluginAPI = {
       config: Object.freeze({}),
+      provide: value => {
+        assertRegistration()
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new PluginError('Plugin exports must be an object')
+        provided = value
+      },
+      require: <T extends object = Record<string, unknown>>(dependencyId: string): T | undefined => {
+        assertActive()
+        validateId(dependencyId)
+        const required = plugin.manifest.dependencies ?? {}
+        const optional = plugin.manifest.optionalDependencies ?? {}
+        if (!Object.hasOwn(required, dependencyId) && !Object.hasOwn(optional, dependencyId)) {
+          throw new PluginError('Plugin dependency must be declared')
+        }
+        const range = required[dependencyId] ?? optional[dependencyId]!
+        if (dependencyIssues({ ...plugin.manifest, dependencies: { [dependencyId]: range } }, this.list()).length) return undefined
+        return this.require(dependencyId) as T | undefined
+      },
       registerHook: hook => {
         const name = registrationId(hook.id)
         unregister.push(this.options.hookRegistry.register({ ...hook, id: name }))
@@ -116,16 +145,34 @@ export class BuiltinPluginHost {
       const setup = plugin.default?.setup ?? plugin.setup
       if (typeof setup !== 'function') throw new PluginError('Plugin setup is required')
       const cleanup = await setup(api)
+      if (provided) this.exports.set(id, provided)
       this.disposers.set(id, async () => {
-        for (const remove of unregister.reverse()) remove()
-        if (typeof cleanup === 'function') await cleanup()
+        active = false
+        this.exports.delete(id)
+        this.records.delete(id)
+        const errors: unknown[] = []
+        for (const remove of unregister.reverse()) {
+          try { remove() }
+          catch (error) { errors.push(error) }
+        }
+        try { if (typeof cleanup === 'function') await cleanup() }
+        catch (error) { errors.push(error) }
+        if (errors.length) throw new AggregateError(errors, `Builtin plugin cleanup failed: ${id}`)
       })
       this.records.set(id, {
         id, manifest: structuredClone(plugin.manifest), builtin: true,
         enabled: true, status: 'enabled', providers, hooks, protocols, ingresses
       })
     } catch (error) {
-      for (const cleanup of unregister.reverse()) cleanup()
+      active = false
+      provided = undefined
+      this.exports.delete(id)
+      const errors: unknown[] = [error]
+      for (const cleanup of unregister.reverse()) {
+        try { cleanup() }
+        catch (cleanupError) { errors.push(cleanupError) }
+      }
+      if (errors.length > 1) throw new AggregateError(errors, 'Builtin setup and rollback failed')
       throw error
     } finally {
       accepting = false
@@ -147,11 +194,20 @@ export class BuiltinPluginHost {
     }
     this.disposers.clear()
     this.records.clear()
+    this.exports.clear()
     if (errors.length) throw new AggregateError(errors, 'Builtin plugin cleanup failed')
   }
 
+  require(id: string): object | undefined {
+    validateId(id)
+    return this.exports.get(id)
+  }
+
   list(): PluginRecord[] {
-    return structuredClone([...this.records.values()])
+    const records = [...this.records.values()]
+    const order = this.options.pluginOrder
+    if (order) records.sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id))
+    return decorateRecords(structuredClone(records))
   }
 
   dispatchRoute(id: string, method: string, path: string, event: H3Event): unknown | Promise<unknown> {

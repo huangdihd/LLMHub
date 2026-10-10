@@ -20,7 +20,7 @@ const format = { type: 'json_schema', name: 'memory_selection', description: 'Se
 const answer = '{"memory_ids":["memory-1"]}'
 const plain = (value: any) => JSON.parse(JSON.stringify(value))
 
-function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', signedThinking = false) {
+function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', signedThinking = false, failStream = false) {
   const payloads: any[] = []
   const writes: string[] = []
   const usage: any[] = []
@@ -128,7 +128,8 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
         const bytes = new TextEncoder().encode(sse)
         controller.enqueue(bytes.slice(0, 23))
         controller.enqueue(bytes.slice(23))
-        controller.close()
+        if (failStream) controller.error(new Error('upstream dropped'))
+        else controller.close()
       }
     })
   }
@@ -238,4 +239,18 @@ test('actual Responses route forwards signature-only thinking chunks', async () 
   assert.deepEqual(JSON.parse(Buffer.from(state.slice('llmhub:thinking:v1:'.length), 'base64url').toString()), [
     { thinking: 'Original thought', signature: 'opaque-signature' }
   ])
+})
+
+test('Responses stream errors carry a sequence number continuing the stream', async () => {
+  const h = harness('openai-responses', false, true)
+  await h.invoke(true, { type: 'text' })
+  const events = h.writes.join('').split('\n\n')
+    .map(frame => frame.split('\n').find(line => line.startsWith('data: ')))
+    .filter((line): line is string => !!line)
+    .map(line => JSON.parse(line.slice(6)))
+  const failure = events.at(-1)
+  assert.deepEqual({ type: failure.type, code: failure.code, message: failure.message, param: failure.param },
+    { type: 'error', code: null, message: 'upstream dropped', param: null })
+  assert.deepEqual(events.map(event => event.sequence_number), events.map((_, index) => index))
+  assert.equal(h.res.writableEnded, true)
 })

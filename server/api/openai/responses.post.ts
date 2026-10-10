@@ -118,12 +118,7 @@ export default defineEventHandler(async (event) => {
         emitDone(pendingDone || { type: 'done' })
       } catch (streamError: any) {
         const resp = formatErrorResponse(streamError)
-        event.node.res.write(`event: error\ndata: ${JSON.stringify({
-          type: 'error',
-          code: resp.error?.code || null,
-          message: resp.error?.message || 'Stream error',
-          param: null
-        })}\n\n`)
+        writeEvents([serializer.errorEvent(resp.error?.message || 'Stream error', resp.error?.code || null)])
       } finally {
         clearInterval(keepAliveTimer)
         event.node.res.end()

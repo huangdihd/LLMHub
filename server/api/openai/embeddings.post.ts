@@ -1,3 +1,4 @@
+import { completeIngressAccounting } from '../../core/accounting'
 import { ProviderManager } from '../../providers/manager'
 import type { EmbeddingRequest } from '../../core/types'
 
@@ -27,10 +28,10 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    incrementCalls().catch(() => {})
+    completeIngressAccounting(event, 'openai-embedding', { kind: 'attempt' }).catch(() => {})
     const result = await manager.embed(request)
 
-    trackUsage(event, result.usage.totalTokens || 0, model)
+    completeIngressAccounting(event, 'openai-embedding', { kind: 'usage', usage: result.usage.totalTokens || 0, model })
 
     const useBase64 = request.encodingFormat === 'base64'
     return {

@@ -10,8 +10,8 @@ if (!buildDir) {
   console.error('ADAPTER_BUILD not set — run via tests/run-all.sh')
   process.exit(1)
 }
-const { applyThinkingPolicy } = require(`${buildDir}/services/thinking-policy.js`)
-const { DEFAULT_THINKING_SETTINGS } = require(`${buildDir}/stores/thinking.store.js`)
+const { applyThinkingPolicy } = require(`${buildDir}/../builtin/thinking-policy/service.js`)
+const { DEFAULT_THINKING_SETTINGS } = require(`${buildDir}/../builtin/thinking-policy/store.js`)
 
 const base = (config: any = {}) => ({ messages: [], config })
 const freshSettings = () => JSON.parse(JSON.stringify(DEFAULT_THINKING_SETTINGS))

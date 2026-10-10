@@ -52,6 +52,8 @@ interface Runtime {
   listeners: Array<(configuration: Readonly<Record<string, unknown>>) => void | Promise<void>>
 }
 export interface PluginManagerOptions {
+  builtinPlugins?: () => PluginRecord[]
+  dispatchBuiltinRoute?: (id: string, method: string, path: string, event: H3Event) => unknown | Promise<unknown>
   directory?: string
   rootDirectory?: string
   storage: PluginStorage
@@ -98,15 +100,21 @@ export class PluginManager {
 
   private get(id: string): InstalledPlugin {
     validateId(id)
+    this.assertRuntimePlugin(id)
     const plugin = this.plugins.get(id)
     if (!plugin) throw new PluginError('Plugin not found')
     return plugin
   }
 
+  private assertRuntimePlugin(id: string): void {
+    if (this.options.builtinPlugins?.().some(plugin => plugin.id === id)) throw new PluginError('Built-in plugins are read-only')
+  }
+
   list(): PluginRecord[] {
-    return [...this.plugins.values()].map(plugin => ({ id: plugin.manifest.id, manifest: structuredClone(plugin.manifest),
+    const runtimePlugins: PluginRecord[] = [...this.plugins.values()].map(plugin => ({ id: plugin.manifest.id, manifest: structuredClone(plugin.manifest),
       enabled: plugin.enabled, status: plugin.error ? 'error' : plugin.enabled ? 'enabled' : plugin.installed ? 'installed' : 'disabled', error: plugin.error,
       providers: [...(plugin.runtime?.providers ?? [])], hooks: [...(plugin.runtime?.hooks ?? [])] }))
+    return [...(this.options.builtinPlugins?.() ?? []), ...runtimePlugins]
   }
 
   private async prepareDirectory(): Promise<void> {
@@ -137,6 +145,7 @@ export class PluginManager {
         if (!item.isDirectory() || item.name.startsWith('.')) continue
         try {
           validateId(item.name)
+          if (this.options.builtinPlugins?.().some(plugin => plugin.id === item.name)) continue
           await this.serial(item.name, async () => {
             if (this.plugins.has(item.name)) return
             const directory = await safePath(this.directory, item.name)
@@ -179,6 +188,7 @@ export class PluginManager {
         await writeFile(resolve(directory, 'index.mjs'), source, { flag: 'wx', mode: 0o600 })
         const module = await this.loadModule(directory, 'index.mjs')
         const manifest = validateManifest(module.manifest)
+        this.assertRuntimePlugin(manifest.id)
         if (typeof module.default?.setup !== 'function') throw new PluginError('Plugin setup missing')
         manifest.entry = 'index.mjs'
         // Single-file uploads cannot supply static assets.
@@ -381,6 +391,12 @@ export class PluginManager {
   }
 
   dispatchRoute(id: string, method: string, path: string, event: H3Event): Promise<unknown> {
+    if (this.options.builtinPlugins?.().some(plugin => plugin.id === id)) {
+      return Promise.resolve().then(() => {
+        if (!this.options.dispatchBuiltinRoute) throw new PluginError('Plugin route not found')
+        return this.options.dispatchBuiltinRoute(id, method, path, event)
+      })
+    }
     return this.serial(id, async () => {
       const plugin = this.get(id)
       const handler = plugin.enabled ? plugin.runtime?.routes.get(`${method.toUpperCase()} ${validatePath(path)}`) : undefined

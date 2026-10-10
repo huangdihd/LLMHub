@@ -16,14 +16,16 @@
       <UCard v-for="plugin in plugins" :key="plugin.id">
         <div class="flex flex-wrap justify-between gap-4">
           <div>
-            <NuxtLink :to="`/plugins/${encodeURIComponent(plugin.id)}`" class="text-lg font-medium hover:underline">{{ plugin.manifest?.name || plugin.id }}</NuxtLink>
+            <span v-if="plugin.builtin" class="text-lg font-medium">{{ plugin.manifest?.name || plugin.id }}</span>
+            <NuxtLink v-else :to="`/plugins/${encodeURIComponent(plugin.id)}`" class="text-lg font-medium hover:underline">{{ plugin.manifest?.name || plugin.id }}</NuxtLink>
+            <UBadge v-if="plugin.builtin" class="ml-2" color="gray" variant="subtle">Built-in · Read-only</UBadge>
             <UBadge class="ml-2" :color="plugin.error ? 'red' : plugin.enabled ? 'green' : 'gray'" variant="subtle">{{ plugin.status }}</UBadge>
             <p class="text-sm text-gray-500">{{ plugin.id }} · {{ plugin.manifest?.version || 'Unknown version' }}</p>
             <p v-if="plugin.manifest?.description" class="mt-2 text-sm">{{ plugin.manifest?.description }}</p>
             <p class="mt-2 text-xs text-gray-500">Providers: {{ plugin.providers.join(', ') || 'None' }} · Hooks: {{ plugin.hooks.join(', ') || 'None' }}</p>
             <p v-if="plugin.error" class="mt-2 text-sm text-red-500">{{ plugin.error }}</p>
           </div>
-          <div class="flex flex-wrap items-start gap-2">
+          <div v-if="!plugin.builtin" class="flex flex-wrap items-start gap-2">
             <UButton color="gray" :to="`/plugins/${encodeURIComponent(plugin.id)}`">Configure</UButton>
             <UButton color="gray" :disabled="busy" @click="runAction(plugin.id, plugin.enabled ? 'disable' : 'enable')">{{ plugin.enabled ? 'Disable' : 'Enable' }}</UButton>
             <UButton color="gray" :disabled="busy" @click="runAction(plugin.id, 'reload')">Reload</UButton>

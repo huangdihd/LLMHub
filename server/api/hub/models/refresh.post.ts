@@ -1,6 +1,6 @@
 import { ProviderLoader } from '../../../providers/loader'
 import { ProviderManager } from '../../../providers/manager'
-import { getAuthStore } from '../../../stores/auth.store'
+import { requestHooks } from '../../../core/hooks'
 
 export default defineEventHandler(async () => {
   ProviderLoader.invalidateCache()
@@ -14,8 +14,7 @@ export default defineEventHandler(async () => {
   const validModelIds = new Set<string>(models.map(m => m.id))
 
   // Clean up stale model references from all API keys
-  const store = getAuthStore()
-  await store.cleanupStaleModels(validModelIds)
+  await requestHooks.modelsRefreshed(validModelIds)
 
   return { success: true, message: 'Model cache cleared and stale references cleaned up.' }
 })

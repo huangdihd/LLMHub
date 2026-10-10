@@ -1,3 +1,4 @@
+import { completeIngressAccounting } from '../../../core/accounting'
 import { ProviderManager } from '../../../providers/manager'
 import { RequestPipeline } from '../../../core/pipeline'
 
@@ -78,9 +79,9 @@ export default defineEventHandler(async (event) => {
     }
 
     try {
-      incrementCalls().catch(() => {})
+      completeIngressAccounting(event, 'gemini-embedding', { kind: 'attempt' }).catch(() => {})
       const result = await manager.embed({ model: fullModel, input, dimensions, taskType, title })
-      trackUsage(event, result.usage.totalTokens || 0, fullModel)
+      completeIngressAccounting(event, 'gemini-embedding', { kind: 'usage', usage: result.usage.totalTokens || 0, model: fullModel })
 
       if (action === 'embedContent') {
         return { embedding: { values: result.embeddings[0] || [] } }
@@ -109,12 +110,12 @@ export default defineEventHandler(async (event) => {
 
     if (action === 'generateContent') {
       try {
-        pipeline.incrementCalls().catch(() => {})
+        pipeline.accountingComplete({ kind: 'attempt' }).catch(() => {})
         const response = await pipeline.call(request)
         const serializer = manager.getSerializer('gemini-generate')
         if (!serializer) throwFormattedError(manager.buildGatewayError('Serializer not found', 500))
         const u = response.usage
-        pipeline.trackUsage(u || 0, request.model)
+        pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
         return serializer.serializeResponse(response)
       } catch (e: any) {
         await pipeline.error(e)
@@ -128,7 +129,7 @@ export default defineEventHandler(async (event) => {
     request.stream = true
     const useSSE = getQuery(event).alt === 'sse'
     try {
-      pipeline.incrementCalls().catch(() => {})
+      pipeline.accountingComplete({ kind: 'attempt' }).catch(() => {})
       const resolved = pipeline.resolve(request)
       if (!resolved) throwFormattedError(manager.buildGatewayError(`No adapter found for model: ${request.model}`, 404))
 
@@ -166,9 +167,9 @@ export default defineEventHandler(async (event) => {
           onChunks: (unifiedChunks) => {
             for (const uc of unifiedChunks) {
               if (uc.type === 'done') {
-                if (doneSent) { const u = (uc as any).usage; if (u) pipeline.trackUsage(u, request.model); return }
+                if (doneSent) { const u = (uc as any).usage; if (u) pipeline.accountingComplete({ kind: 'usage', usage: u, model: request.model }); return }
                 doneSent = true
-                const u = (uc as any).usage; if (u) pipeline.trackUsage(u, request.model)
+                const u = (uc as any).usage; if (u) pipeline.accountingComplete({ kind: 'usage', usage: u, model: request.model })
                 emit(serializer!.serializeStreamChunk(uc))
               } else {
                 // Serializer buffers partial tool-call args and returns null for them

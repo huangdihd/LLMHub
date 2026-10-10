@@ -52,10 +52,10 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
         }
       }
     },
-    'server/services/thinking-policy.ts': { applyThinkingPolicy: async (request: any) => request },
-    'server/utils/stats.ts': {
-      incrementCalls: async () => {},
-      trackUsage: (_event: any, value: any) => usage.push(plain(value))
+    'server/core/accounting.ts': {
+      completeAccounting: async (completion: any) => {
+        if (completion.kind === 'usage') usage.push(plain(completion.usage))
+      }
     },
     'server/stores/provider.store.ts': { getProviderStore: forbidden },
     'server/utils/fetch.ts': { fetchWithRetry: forbidden },
@@ -67,7 +67,6 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
     'server/api/openai/responses.post.ts',
     'server/core/pipeline.ts',
     'server/core/hooks.ts',
-    'server/core/builtin-hooks.ts',
     'server/protocols/openai-responses.ts',
     'server/protocols/openai-responses-serializer.ts',
     'server/utils/structured-output.ts',

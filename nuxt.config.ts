@@ -1,4 +1,7 @@
+import { builtinCatalog } from './builtin/catalog'
+
 export default defineNuxtConfig({
+  extends: builtinCatalog.map(plugin => plugin.layer),
   compatibilityDate: '2025-05-15',
   devtools: { enabled: true },
   typescript: {

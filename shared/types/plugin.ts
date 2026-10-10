@@ -18,6 +18,8 @@ export interface PluginManifest {
 }
 
 export interface PluginRecord {
+  /** Built-in application plugins are always enabled and read-only. */
+  builtin?: boolean
   id: string
   manifest: PluginManifest
   enabled: boolean

@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     let request = parser.parseRequest(body)
 
     try {
-      pipeline.incrementCalls().catch(() => {})
+      pipeline.accountingComplete({ kind: 'attempt' }).catch(() => {})
       const prepared = await pipeline.prepare(request)
       request = prepared.request
       const resolved = prepared.resolved
@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
             if (doneSent) return
             doneSent = true
             const u = chunk.usage
-            if (u) pipeline.trackUsage(u, request.model)
+            if (u) pipeline.accountingComplete({ kind: 'usage', usage: u, model: request.model })
             const serializedChunk = serializer!.serializeStreamChunk(chunk)
             event.node.res.write(`data: ${JSON.stringify(serializedChunk)}\n\n`)
           }
@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
               for (const unifiedChunk of unifiedChunks) {
                 if (unifiedChunk.type === 'done') {
                   if (doneSent) {
-                    if (unifiedChunk.usage) pipeline.trackUsage(unifiedChunk.usage, request.model)
+                    if (unifiedChunk.usage) pipeline.accountingComplete({ kind: 'usage', usage: unifiedChunk.usage, model: request.model })
                     continue
                   }
                   if (!unifiedChunk.usage) {
@@ -116,7 +116,7 @@ export default defineEventHandler(async (event) => {
       }
 
       const u = response.usage
-      pipeline.trackUsage(u || 0, request.model)
+      pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
       return serializer.serializeResponse(response)
     } catch (error: any) {
       await pipeline.error(error)

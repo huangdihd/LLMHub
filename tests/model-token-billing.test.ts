@@ -8,8 +8,8 @@ if (!buildDir) {
   console.error('ADAPTER_BUILD not set — run via tests/run-all.sh')
   process.exit(1)
 }
-const { calculateBillableTokens } = require(`${buildDir}/services/model-token-billing.js`)
-const { validateModelTokenRatioSettings } = require(`${buildDir}/stores/model-token-ratios.store.js`)
+const { calculateBillableTokens } = require(`${buildDir}/../builtin/token-billing/service.js`)
+const { validateModelTokenRatioSettings } = require(`${buildDir}/../builtin/token-billing/store.js`)
 
 const usage = { promptTokens: 1000, completionTokens: 200, cachedTokens: 600 }
 

@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
 
     try {
       let request = parser.parseRequest(body)
-      pipeline.incrementCalls().catch(() => {})
+      pipeline.accountingComplete({ kind: 'attempt' }).catch(() => {})
       const prepared = await pipeline.prepare(request)
       request = prepared.request
       const resolved = prepared.resolved
@@ -60,7 +60,7 @@ export default defineEventHandler(async (event) => {
             if (doneSent) return
             doneSent = true
             const u = chunk.usage
-            pipeline.trackUsage(u || 0, request.model)
+            pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
             writeEvents(serializer.serializeStreamChunk(chunk))
           }
 
@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
               for (const unifiedChunk of unifiedChunks) {
                 if (unifiedChunk.type === 'done') {
                   if (doneSent) {
-                    if (unifiedChunk.usage) pipeline.trackUsage(unifiedChunk.usage, request.model)
+                    if (unifiedChunk.usage) pipeline.accountingComplete({ kind: 'usage', usage: unifiedChunk.usage, model: request.model })
                     continue
                   }
                   if (!unifiedChunk.usage) {
@@ -112,7 +112,7 @@ export default defineEventHandler(async (event) => {
       const serializer = new OpenAIResponsesSerializer(request.config?.outputFormat)
 
       const u = response.usage
-      pipeline.trackUsage(u || 0, request.model)
+      pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
       return serializer.serializeResponse(response)
     } catch (error: any) {
       await pipeline.error(error)

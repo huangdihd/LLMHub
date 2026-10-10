@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     let request = parser.parseRequest(body)
 
     try {
-      pipeline.incrementCalls().catch(() => {})
+      pipeline.accountingComplete({ kind: 'attempt' }).catch(() => {})
       const prepared = await pipeline.prepare(request)
       request = prepared.request
       const resolved = prepared.resolved
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
               for (const unifiedChunk of unifiedChunks) {
                 if (unifiedChunk.type === 'done') {
                   const u = unifiedChunk.usage
-                  if (u) pipeline.trackUsage(u, request.model)
+                  if (u) pipeline.accountingComplete({ kind: 'usage', usage: u, model: request.model })
                   if (doneSent) continue
                   doneSent = true
                   writeCompletion(serializer!.serializeStreamChunk(unifiedChunk))
@@ -99,7 +99,7 @@ export default defineEventHandler(async (event) => {
       }
 
       const u = response.usage
-      pipeline.trackUsage(u || 0, request.model)
+      pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
       return serializer.serializeResponse(response)
     } catch (error: any) {
       await pipeline.error(error)

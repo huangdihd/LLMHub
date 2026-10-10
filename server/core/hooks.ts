@@ -1,4 +1,5 @@
-import type { LLMRequest, LLMResponse, LLMStreamChunk, ProviderConfig, Usage } from './types'
+import type { H3Event } from 'h3'
+import type { LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ProviderConfig, Usage } from './types'
 import type { ApiKeyRecord } from '../stores/auth.store'
 
 type Awaitable<T> = T | Promise<T>
@@ -10,6 +11,26 @@ export interface HookContext {
   apiKeyRecord?: ApiKeyRecord
 }
 
+export interface AdmissionRejection {
+  status: number
+  message: string
+  code: string
+}
+
+export interface AdmissionContext {
+  event: H3Event
+  incomingProtocol: string
+  apiKeyRecord?: ApiKeyRecord
+  model: string
+}
+
+export type AdmissionStage = 'onBeforeIdentity' | 'onAfterIdentity' | 'onModelResolved'
+
+/** Accounting boundaries are emitted where the legacy routes observed them. */
+export type AccountingCompletion =
+  | { kind: 'attempt' }
+  | { kind: 'usage'; usage: number | Usage; model?: string; tokens?: number }
+
 export interface CompletionInfo {
   usage?: Usage
   error?: unknown
@@ -19,6 +40,13 @@ export interface RequestHook {
   id: string
   /** Lower priorities run first; equal priorities retain registration order. */
   priority?: number
+  onBeforeIdentity?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
+  onAfterIdentity?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
+  onModelResolved?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
+  onModels?: (models: ModelInfo[], context: HookContext) => Awaitable<ModelInfo[] | void>
+  onModelsRefreshed?: (validModelIds: ReadonlySet<string>) => Awaitable<void>
+  onAccountingComplete?: (completion: AccountingCompletion, context: HookContext) => Awaitable<void>
+  onNormalize?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
   onRequest?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
   onResponse?: (response: LLMResponse, context: HookContext) => Awaitable<LLMResponse | void>
   /** undefined preserves the chunk, null or [] drops it. */
@@ -39,6 +67,41 @@ export class HookRegistry {
 
   private ordered(): RequestHook[] {
     return [...this.hooks.values()].sort((left, right) => (left.priority ?? 0) - (right.priority ?? 0))
+  }
+
+  async admission(stage: AdmissionStage, context: AdmissionContext): Promise<AdmissionRejection | undefined> {
+    for (const hook of this.ordered()) {
+      const rejection = await hook[stage]?.(context)
+      if (rejection) return rejection
+    }
+  }
+
+  async models(models: ModelInfo[], context: HookContext): Promise<ModelInfo[]> {
+    for (const hook of this.ordered()) {
+      const result = await hook.onModels?.(models, context)
+      if (result) models = result
+    }
+    return models
+  }
+
+  async modelsRefreshed(validModelIds: ReadonlySet<string>): Promise<void> {
+    for (const hook of this.ordered()) {
+      await hook.onModelsRefreshed?.(validModelIds)
+    }
+  }
+
+  async accountingComplete(completion: AccountingCompletion, context: HookContext): Promise<void> {
+    for (const hook of this.ordered()) {
+      await hook.onAccountingComplete?.(completion, context)
+    }
+  }
+
+  async normalize(request: LLMRequest, context: HookContext): Promise<LLMRequest> {
+    for (const hook of this.ordered()) {
+      const result = await hook.onNormalize?.(request, context)
+      if (result) request = result
+    }
+    return request
   }
 
   async request(request: LLMRequest, context: HookContext): Promise<LLMRequest> {

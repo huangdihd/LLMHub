@@ -9,7 +9,8 @@
         <p class="mt-1 text-sm text-gray-500">{{ plugin.id }} · {{ plugin.manifest?.version || 'Unknown version' }} · {{ plugin.status }}</p>
         <p v-if="plugin.error" class="mt-2 text-sm text-red-500">{{ plugin.error }}</p>
       </div>
-      <UCard>
+      <UAlert v-if="plugin.builtin" color="blue" title="Built-in plugin" description="Always enabled. Built-in plugins cannot be configured, disabled, reloaded, or removed here." />
+      <UCard v-else>
         <template #header><h3 class="font-medium">Configuration</h3></template>
         <form class="space-y-5" @submit.prevent="save">
           <PluginSchemaForm v-if="fields.length" ref="schemaForm" v-model="configuration" :fields="fields" editing />
@@ -61,7 +62,7 @@ async function load() {
     const record = records.find(item => item.id === id)
     if (!record) throw new Error('Plugin not found')
     plugin.value = record
-    const values = record.manifest?.configSchema?.length
+    const values = !record.builtin && record.manifest?.configSchema?.length
       ? await $fetch<Record<string, unknown>>(configurationEndpoint)
       : {}
     if (version !== loadVersion) return
@@ -79,7 +80,7 @@ async function load() {
   }
 }
 async function save() {
-  if (saving.value || !configurationLoaded.value || !schemaForm.value?.validate()) return
+  if (plugin.value?.builtin || saving.value || !configurationLoaded.value || !schemaForm.value?.validate()) return
   saving.value = true
   errorMessage.value = ''
   try {

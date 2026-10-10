@@ -39,6 +39,16 @@ before installing. There is no server-side sandbox. See [Writing plugins](docs/p
 for the API, lifecycle, security boundaries, and the local echo/request-hook
 examples in `examples/plugins/`.
 
+### Built-in Plugins
+
+Rate limiting, fallback, access control, quota/accounting, token billing,
+thinking policy, CCH normalization and statistics ship as always-on plugins in
+`builtin/`. They use the same `setup(api)` hook contract as runtime plugins and
+appear read-only in **Plugins**; they cannot be disabled or uninstalled. Their
+existing settings URLs and `.data` records are unchanged. See
+[Writing plugins](docs/plugins.md) for admission and accounting stages and the
+Nuxt-layer registration convention.
+
 ### Thinking Policy
 
 The **Thinking** dashboard page configures the global effort-to-token-budget mapping used when requests cross Claude, OpenAI/Codex, and Gemini protocols. Explicit client settings are respected by default. Claude signatures/redacted thinking and Codex encrypted reasoning remain opaque and are only replayed to compatible upstreams.

@@ -1,9 +1,8 @@
 import type { H3Event } from 'h3'
 import type { ProviderManager } from '../providers/manager'
 import type { LLMRequest, LLMResponse, LLMStreamChunk, ProviderAdapter, Usage } from './types'
-import { HookRegistry, requestHooks, type HookContext } from './hooks'
-import { normalizationHooks } from './builtin-hooks'
-import { incrementCalls, trackUsage } from '../utils/stats'
+import { HookRegistry, requestHooks, type AccountingCompletion, type HookContext } from './hooks'
+import { completeAccounting } from './accounting'
 
 export interface StreamConsumer {
   onChunks(chunks: LLMStreamChunk[]): void | Promise<void>
@@ -49,19 +48,15 @@ export class RequestPipeline {
 
   async normalizeRequest(request: LLMRequest): Promise<LLMRequest> {
     try {
-      return await normalizationHooks.request(request, this.context)
+      return await this.hooks.normalize(request, this.context)
     } catch (error) {
       throw this.manager.buildGatewayError(error instanceof Error ? error.message : String(error), 500)
     }
   }
 
-  incrementCalls(): Promise<void> {
-    return incrementCalls()
-  }
-
-  trackUsage(usage: number | Usage, model?: string): Promise<void> {
-    if (typeof usage !== 'number') this.usage = usage
-    return trackUsage(this.event, usage, model)
+  accountingComplete(completion: AccountingCompletion): Promise<void> {
+    if (completion.kind === 'usage' && typeof completion.usage !== 'number') this.usage = completion.usage
+    return completeAccounting(completion, this.context, this.hooks)
   }
 
   async call(request: LLMRequest): Promise<LLMResponse> {

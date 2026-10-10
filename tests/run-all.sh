@@ -5,18 +5,20 @@
 set -e
 cd "$(dirname "$0")/.."
 
-mkdir -p .programmer/tmp
-BUILD_DIR="$(mktemp -d "$PWD/.programmer/tmp/test-build.XXXXXX")"
+BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/llmhub-test-build.XXXXXX")"
+# Resolve compiled CommonJS dependencies without node_modules symlink loops.
+export NODE_PATH="$PWD/node_modules${NODE_PATH:+:$NODE_PATH}"
 trap 'rm -rf "$BUILD_DIR"' EXIT HUP INT TERM
 
 echo "== compiling adapters (tsc) =="
 npx tsc .nuxt/types/nitro-imports.d.ts \
   server/providers/openai.ts server/providers/openai-responses.ts server/providers/manager.ts server/providers/claude.ts server/providers/gemini.ts server/providers/codex.ts \
   server/providers/claude-subscription.ts server/providers/antigravity.ts server/providers/loader.ts \
-  server/core/registry.ts server/core/protocol-registry.ts server/core/hooks.ts server/core/builtin-hooks.ts server/core/pipeline.ts \
+  server/core/registry.ts server/core/protocol-registry.ts server/core/hooks.ts server/core/pipeline.ts \
   server/providers/builtins.ts server/providers/model-discovery.ts server/protocols/builtins.ts \
-  server/services/antigravity-token-manager.ts server/services/subscription-usage.ts server/services/thinking-policy.ts server/services/model-token-billing.ts \
-  server/stores/provider.store.ts server/stores/thinking.store.ts server/stores/model-token-ratios.store.ts \
+  server/services/antigravity-token-manager.ts server/services/subscription-usage.ts \
+  server/stores/provider.store.ts builtin/assembly.ts builtin/*/plugin.ts \
+  server/middleware/ingress-auth.ts server/protocols/admission.ts \
   server/utils/codex-auth.ts server/utils/claude-auth.ts server/utils/antigravity-auth.ts \
   server/protocols/gemini-generate.ts server/protocols/gemini-generate-serializer.ts \
   server/plugins-runtime/manager.ts server/plugins-runtime/manifest.ts \

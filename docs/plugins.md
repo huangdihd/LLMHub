@@ -203,6 +203,13 @@ unified messages, tool calls, reasoning, embedding, and usage structures.
 interface RequestHook {
   id: string
   priority?: number
+  onBeforeIdentity?(context: AdmissionContext): Awaitable<AdmissionRejection | void>
+  onAfterIdentity?(context: AdmissionContext): Awaitable<AdmissionRejection | void>
+  onModelResolved?(context: AdmissionContext): Awaitable<AdmissionRejection | void>
+  onModels?(models: ModelInfo[], context: HookContext): Awaitable<ModelInfo[] | void>
+  onModelsRefreshed?(validModelIds: ReadonlySet<string>): Awaitable<void>
+  onNormalize?(request: LLMRequest, context: HookContext): Awaitable<LLMRequest | void>
+  onAccountingComplete?(completion: AccountingCompletion, context: HookContext): Awaitable<void>
   onRequest?(request: LLMRequest, context: HookContext): Awaitable<LLMRequest | void>
   onResponse?(response: LLMResponse, context: HookContext): Awaitable<LLMResponse | void>
   onStreamChunk?(chunk: LLMStreamChunk, context: HookContext):
@@ -218,14 +225,84 @@ interface HookContext {
 }
 ```
 
+```ts
+interface AdmissionRejection { status: number; message: string; code: string }
+interface AdmissionContext {
+  event: H3Event
+  incomingProtocol: string // openai, claude, gemini
+  apiKeyRecord?: ApiKeyRecord
+  model: string
+}
+type AccountingCompletion =
+  | { kind: 'attempt' }
+  | { kind: 'usage'; usage: number | Usage; model?: string; tokens?: number }
+```
+
 Lower priorities run first; ties retain registration order. `undefined` preserves
-the value, stream `null` or `[]` drops a chunk, and arrays expand a chunk. Request
-hook exceptions abort forwarding. Other hook exceptions are logged and processing
-continues. Return replacements instead of mutating inputs before throwing.
-Hooks cover generation, not embeddings. This stage adds no per-chunk plugin
-wrapper or registry to the existing pipeline; with no plugins its hook dispatch
-cost is unchanged from the first-stage pipeline.
-See [Request pipeline](request-pipeline.md) for protocol-specific boundaries.
+the value, stream `null` or `[]` drops a chunk, and arrays expand a chunk.
+Admission stops at the first returned rejection; ingress code formats its response.
+POST admission runs before identity (IP rate limiting), after identity (monthly
+quota), then, for a nonempty model, model resolution (fallback at -300, access
+control at -200, model/provider quotas at -100). Change `context.model` to route
+before parsing the unified request. GET model lists skip POST checks and run
+`onModels` for filtering and fallback catalog insertion. Administrator sessions
+without a valid impersonation target bypass post-identity admission, as before.
+These boundaries also cover embeddings; unified generation hooks do not.
+
+`onNormalize` is a formal main-registry stage, currently called at the Claude
+messages boundary after request logging. CCH normalization uses that stage;
+there is no separate normalization registry. Thinking remains `onRequest`.
+
+`onAccountingComplete` observes the original route accounting boundaries, not a
+new end-of-request flush: `attempt` counts calls; `usage` runs token billing at
+-200 then quota persistence at -100. Numeric usage bypasses billing ratios.
+The original awaited versus fire-and-forget route calls are preserved. It can
+fire more than once for streaming usage snapshots; it is not deduplicated.
+`onComplete` remains the generation lifecycle notification, not an accounting
+barrier. Do not perform the same accounting in both hooks.
+
+Admission, model catalog, normalization and request exceptions propagate.
+Accounting attempt errors propagate; usage errors are logged and swallowed at
+the ingress accounting boundary, matching legacy tracking. Response, stream,
+error and lifecycle-complete hook errors are logged and processing continues.
+Return replacements instead of mutating inputs before throwing.
+See [Request pipeline](request-pipeline.md) for the original generation framing
+boundaries; the additional policy stages documented here supersede its old
+separate-normalization-registry description.
+
+`onModelsRefreshed` runs after the existing model-refresh endpoint discovers the
+current catalog. Quota uses it to prune stale stored model references; failures
+propagate to the refresh caller.
+
+## Built-in plugins and assembly
+
+Eight always-on policy plugins ship under `builtin/<plugin-id>/`: rate-limit,
+fallback, access-control, quota, token-billing, thinking-policy,
+cch-normalization and stats. Each directory is a Nuxt layer with its own
+`nuxt.config.ts`, definition, and optional server routes/components/pages.
+`builtin/catalog.ts` is the single registration list, also used by the root
+Nuxt `extends`. Add a directory and a catalog entry to add a built-in.
+
+Built-ins use the same `setup(api)` contract, including async setup and cleanup,
+but may import internal gateway modules and retain legacy storage keys. Their
+injected storage uses `builtin-plugins:<id>:storage:` for new plugin-private data;
+existing policy data continues using its original `auth:`, `settings:` and
+`stats:` keys. Login brute-force protection remains in the core AuthStore,
+sharing the unchanged configuration record with the request rate-limit plugin.
+
+Nitro startup awaits assembly before serving. Non-Nitro callers must explicitly
+`await initializeBuiltinPlugins()` from `builtin/assembly.ts` before using the
+shared registries (provide a `useStorage` implementation when exercising policy
+storage). The function is idempotent. Tests may instead create a
+`BuiltinPluginHost` with injected registries/storage and await `register(plugin)`.
+Core registry and pipeline modules do not assemble plugins themselves.
+
+`GET /api/hub/plugins` includes records with `builtin: true`, registered provider
+and hook IDs. The dashboard displays them read-only. Enable, disable, reload,
+configuration mutation and uninstall are rejected, and runtime installation
+cannot replace a built-in ID. Shutdown cleanup is process lifecycle, not a user
+uninstall operation. Built-in file-based management routes keep their URLs;
+`registerRoute` uses the same namespaced URL as runtime plugins.
 
 ### Routes and custom pages
 

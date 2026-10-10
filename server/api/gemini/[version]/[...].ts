@@ -1,5 +1,5 @@
 import { ProviderManager } from '../../../providers/manager'
-import { applyThinkingPolicy } from '../../../services/thinking-policy'
+import { RequestPipeline } from '../../../core/pipeline'
 
 export default defineEventHandler(async (event) => {
   const rawPath = event.context.params?._ || ''
@@ -91,132 +91,124 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  let request
+  const pipeline = new RequestPipeline(manager, event, 'gemini-generate')
   try {
-    const parser = manager.getParser(`/models/X:${action}`, 'POST', {})
-    if (!parser) throwFormattedError(manager.buildGatewayError('Invalid request', 400))
-    const body = await readBody(event)
-    request = (parser as any).parseRequest(body, fullModel)
-  } catch (e: any) {
-    throwFormattedError(manager.buildGatewayError(`Parse error: ${e.message}`, 400))
-  }
-
-  if (!request.model) request.model = fullModel
-  request = await applyThinkingPolicy(request, request.model?.split('/')[0])
-
-  if (action === 'generateContent') {
+    let request
     try {
-      incrementCalls().catch(() => {})
-      const response = await manager.callLLM(request)
-      const serializer = manager.getSerializer('gemini-generate')
-      if (!serializer) throwFormattedError(manager.buildGatewayError('Serializer not found', 500))
-      const u = response.usage
-      trackUsage(event, u || 0, request.model)
-      return serializer.serializeResponse(response)
+      const parser = manager.getParser(`/models/X:${action}`, 'POST', {})
+      if (!parser) throwFormattedError(manager.buildGatewayError('Invalid request', 400))
+      const body = await readBody(event)
+      request = (parser as any).parseRequest(body, fullModel)
     } catch (e: any) {
+      await pipeline.error(e)
+      throwFormattedError(manager.buildGatewayError(`Parse error: ${e.message}`, 400))
+    }
+
+    if (!request.model) request.model = fullModel
+    request = (await pipeline.prepare(request)).request
+
+    if (action === 'generateContent') {
+      try {
+        pipeline.incrementCalls().catch(() => {})
+        const response = await pipeline.call(request)
+        const serializer = manager.getSerializer('gemini-generate')
+        if (!serializer) throwFormattedError(manager.buildGatewayError('Serializer not found', 500))
+        const u = response.usage
+        pipeline.trackUsage(u || 0, request.model)
+        return serializer.serializeResponse(response)
+      } catch (e: any) {
+        await pipeline.error(e)
+        throwFormattedError(e)
+      }
+    }
+
+    // streamGenerateContent
+    // With ?alt=sse the reply is an SSE stream; without it the official API
+    // returns one JSON array of GenerateContentResponse chunks.
+    request.stream = true
+    const useSSE = getQuery(event).alt === 'sse'
+    try {
+      pipeline.incrementCalls().catch(() => {})
+      const resolved = pipeline.resolve(request)
+      if (!resolved) throwFormattedError(manager.buildGatewayError(`No adapter found for model: ${request.model}`, 404))
+
+      const adapter = resolved.adapter
+      const stream = await pipeline.openStream(request, adapter)
+
+      let keepAliveTimer: any = null
+      const collected: any[] = []
+
+      if (useSSE) {
+        setResponseHeaders(event, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no'
+        })
+        event.node.res.flushHeaders()
+
+        keepAliveTimer = setInterval(() => {
+          if (!event.node.res.writableEnded) event.node.res.write(': ping\n\n')
+        }, 15000)
+      }
+
+      const emit = (serialized: any) => {
+        if (useSSE) event.node.res.write(`data: ${JSON.stringify(serialized)}\n\n`)
+        else collected.push(serialized)
+      }
+
+      try {
+        const serializer = manager.getSerializer('gemini-generate')
+
+        let doneSent = false
+
+        await pipeline.consumeStream(stream, adapter, {
+          onChunks: (unifiedChunks) => {
+            for (const uc of unifiedChunks) {
+              if (uc.type === 'done') {
+                if (doneSent) { const u = (uc as any).usage; if (u) pipeline.trackUsage(u, request.model); return }
+                doneSent = true
+                const u = (uc as any).usage; if (u) pipeline.trackUsage(u, request.model)
+                emit(serializer!.serializeStreamChunk(uc))
+              } else {
+                // Serializer buffers partial tool-call args and returns null for them
+                const serialized = serializer!.serializeStreamChunk(uc)
+                if (serialized) emit(serialized)
+              }
+            }
+          },
+          onDoneMarker: () => {
+            if (!doneSent) { doneSent = true; emit(serializer!.serializeStreamChunk({ type: 'done' })) }
+          },
+          onChunkError: (e) => {
+            console.error('[LLMHub] gemini: failed to process stream chunk, dropping it:', e)
+          }
+        })
+
+        // Upstream ended without a terminal chunk — still close the response
+        if (!doneSent) {
+          doneSent = true
+          emit(serializer!.serializeStreamChunk({ type: 'done' }))
+        }
+      } catch (e: any) {
+        await pipeline.error(e)
+        if (!useSSE || !event.node.res.headersSent) throwFormattedError(manager.buildGatewayError(e.message, 500))
+        else event.node.res.write(`data: ${JSON.stringify({ error: { message: e.message } })}\n\n`)
+      } finally {
+        if (keepAliveTimer) clearInterval(keepAliveTimer)
+        if (useSSE && !event.node.res.writableEnded) event.node.res.end()
+      }
+
+      if (!useSSE) return collected
+      return
+    } catch (e: any) {
+      await pipeline.error(e)
       throwFormattedError(e)
     }
-  }
-
-  // streamGenerateContent
-  // With ?alt=sse the reply is an SSE stream; without it the official API
-  // returns one JSON array of GenerateContentResponse chunks.
-  request.stream = true
-  const useSSE = getQuery(event).alt === 'sse'
-  try {
-    incrementCalls().catch(() => {})
-    const resolved = manager.resolveAdapter(request.model || '', 'gemini-generate', true)
-    if (!resolved) throwFormattedError(manager.buildGatewayError(`No adapter found for model: ${request.model}`, 404))
-
-    const adapter = resolved.adapter
-    const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
-    const stream = await adapter.callStream(providerRequest)
-
-    let keepAliveTimer: any = null
-    const collected: any[] = []
-
-    if (useSSE) {
-      setResponseHeaders(event, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'
-      })
-      event.node.res.flushHeaders()
-
-      keepAliveTimer = setInterval(() => {
-        if (!event.node.res.writableEnded) event.node.res.write(': ping\n\n')
-      }, 15000)
-    }
-
-    const emit = (serialized: any) => {
-      if (useSSE) event.node.res.write(`data: ${JSON.stringify(serialized)}\n\n`)
-      else collected.push(serialized)
-    }
-
-    try {
-      const serializer = manager.getSerializer('gemini-generate')
-      const reader = stream.getReader()
-      const decoder = new TextDecoder()
-      let lineBuffer = ''
-      let providerState = {}
-      let doneSent = false
-
-      const processLine = (line: string) => {
-        if (!line.startsWith('data: ')) return
-        const data = line.slice(6).trim()
-        if (data === '[DONE]') {
-          if (!doneSent) { doneSent = true; emit(serializer!.serializeStreamChunk({ type: 'done' })) }
-          return
-        }
-        if (!data) return
-        try {
-          const originalChunk = JSON.parse(data)
-          const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk, providerState)
-          const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
-          for (const uc of unifiedChunks) {
-            if (uc.type === 'done') {
-              if (doneSent) { const u = (uc as any).usage; if (u) trackUsage(event, u, request.model); return }
-              doneSent = true
-              const u = (uc as any).usage; if (u) trackUsage(event, u, request.model)
-              emit(serializer!.serializeStreamChunk(uc))
-            } else {
-              // Serializer buffers partial tool-call args and returns null for them
-              const serialized = serializer!.serializeStreamChunk(uc)
-              if (serialized) emit(serialized)
-            }
-          }
-        } catch (e) {
-          console.error('[LLMHub] gemini: failed to process stream chunk, dropping it:', e)
-        }
-      }
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        lineBuffer += decoder.decode(value, { stream: true })
-        const lines = lineBuffer.split('\n')
-        lineBuffer = lines.pop() || ''
-        for (const l of lines) processLine(l)
-      }
-      if (lineBuffer.trim()) processLine(lineBuffer.trim())
-
-      // Upstream ended without a terminal chunk — still close the response
-      if (!doneSent) {
-        doneSent = true
-        emit(serializer!.serializeStreamChunk({ type: 'done' }))
-      }
-    } catch (e: any) {
-      if (!useSSE || !event.node.res.headersSent) throwFormattedError(manager.buildGatewayError(e.message, 500))
-      else event.node.res.write(`data: ${JSON.stringify({ error: { message: e.message } })}\n\n`)
-    } finally {
-      if (keepAliveTimer) clearInterval(keepAliveTimer)
-      if (useSSE && !event.node.res.writableEnded) event.node.res.end()
-    }
-
-    if (!useSSE) return collected
-    return
-  } catch (e: any) {
-    throwFormattedError(e)
+  } catch (error) {
+    await pipeline.error(error)
+    throw error
+  } finally {
+    await pipeline.complete()
   }
 })

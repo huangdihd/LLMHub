@@ -1,125 +1,114 @@
 import { ProviderManager } from '../../../providers/manager'
+import { RequestPipeline } from '../../../core/pipeline'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const manager = new ProviderManager()
   await manager.loadProviders()
 
-  const parser = manager.getParser('/v1/complete', 'POST', body)
-  if (!parser) {
-    throwFormattedError(manager.buildGatewayError('Invalid request', 400))
-  }
-
-  const request = parser.parseRequest(body)
-
+  const pipeline = new RequestPipeline(manager, event, 'claude-completion')
   try {
-    incrementCalls().catch(() => {})
-    const resolved = manager.resolveAdapter(request.model || '', 'claude-completion', request.stream)
-    const adapter = resolved?.adapter
+    const parser = manager.getParser('/v1/complete', 'POST', body)
+    if (!parser) {
+      throwFormattedError(manager.buildGatewayError('Invalid request', 400))
+    }
 
-    if (request.stream && adapter) {
-      const providerRequest = adapter.toProviderRequest({ ...request, stream: true })
-      const stream = await adapter.callStream(providerRequest)
+    let request = parser.parseRequest(body)
 
-      setResponseHeaders(event, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'
-      })
+    try {
+      pipeline.incrementCalls().catch(() => {})
+      const prepared = await pipeline.prepare(request)
+      request = prepared.request
+      const resolved = prepared.resolved
+      const adapter = resolved?.adapter
 
-      event.node.res.flushHeaders()
+      if (request.stream && adapter) {
+        const stream = await pipeline.openStream(request, adapter)
 
-      const keepAliveTimer = setInterval(() => {
-        if (!event.node.res.writableEnded) {
-          event.node.res.write(`event: ping\ndata: {"type":"ping"}\n\n`)
-        }
-      }, 15000)
+        setResponseHeaders(event, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no'
+        })
 
-      try {
-        const serializer = manager.getSerializer('claude-completion')
-        const reader = stream.getReader()
-        const decoder = new TextDecoder()
+        event.node.res.flushHeaders()
 
-        let lineBuffer = ''
-        let providerState = {}
-        let doneSent = false
-
-        const writeCompletion = (data: any) => {
-          event.node.res.write(`event: completion\ndata: ${JSON.stringify(data)}\n\n`)
-        }
-
-        const processLine = (line: string) => {
-          if (!line.startsWith('data: ')) return
-          const data = line.slice(6).trim()
-          if (data === '[DONE]') {
-            if (!doneSent) {
-              doneSent = true
-              writeCompletion(serializer!.serializeStreamChunk({ type: 'done' }))
-            }
-            return
+        const keepAliveTimer = setInterval(() => {
+          if (!event.node.res.writableEnded) {
+            event.node.res.write(`event: ping\ndata: {"type":"ping"}\n\n`)
           }
-          if (!data) return
-          try {
-            const originalChunk = JSON.parse(data)
-            const unifiedChunksRaw = adapter!.fromProviderStreamChunk(originalChunk, providerState)
-            const unifiedChunks = Array.isArray(unifiedChunksRaw) ? unifiedChunksRaw : [unifiedChunksRaw]
+        }, 15000)
 
-            for (const unifiedChunk of unifiedChunks) {
-              if (unifiedChunk.type === 'done') {
-                const u = unifiedChunk.usage
-                if (u) trackUsage(event, u, request.model)
-                if (doneSent) continue
-                doneSent = true
-                writeCompletion(serializer!.serializeStreamChunk(unifiedChunk))
-              } else if (unifiedChunk.type === 'content' && unifiedChunk.delta) {
-                writeCompletion(serializer!.serializeStreamChunk(unifiedChunk))
+        try {
+          const serializer = manager.getSerializer('claude-completion')
+
+          let doneSent = false
+
+          const writeCompletion = (data: any) => {
+            event.node.res.write(`event: completion\ndata: ${JSON.stringify(data)}\n\n`)
+          }
+
+          await pipeline.consumeStream(stream, adapter, {
+            onChunks: (unifiedChunks) => {
+              for (const unifiedChunk of unifiedChunks) {
+                if (unifiedChunk.type === 'done') {
+                  const u = unifiedChunk.usage
+                  if (u) pipeline.trackUsage(u, request.model)
+                  if (doneSent) continue
+                  doneSent = true
+                  writeCompletion(serializer!.serializeStreamChunk(unifiedChunk))
+                } else if (unifiedChunk.type === 'content' && unifiedChunk.delta) {
+                  writeCompletion(serializer!.serializeStreamChunk(unifiedChunk))
+                }
+                // thinking / tool_call chunks have no representation in legacy completions
               }
-              // thinking / tool_call chunks have no representation in legacy completions
+            },
+            onDoneMarker: () => {
+              if (!doneSent) {
+                doneSent = true
+                writeCompletion(serializer!.serializeStreamChunk({ type: 'done' }))
+              }
+            },
+            onChunkError: (e) => {
+              console.error('[LLMHub] claude/complete: failed to process stream chunk, dropping it:', e)
             }
-          } catch (e) {
-            console.error('[LLMHub] claude/complete: failed to process stream chunk, dropping it:', e)
+          })
+
+          if (!doneSent) {
+            doneSent = true
+            writeCompletion(serializer!.serializeStreamChunk({ type: 'done' }))
           }
+        } catch (streamError: any) {
+          await pipeline.error(streamError)
+          const resp = formatErrorResponse(streamError)
+          event.node.res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: resp.error })}\n\n`)
+        } finally {
+          clearInterval(keepAliveTimer)
+          event.node.res.end()
         }
 
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          lineBuffer += decoder.decode(value, { stream: true })
-          const lines = lineBuffer.split('\n')
-          lineBuffer = lines.pop() || ''
-          for (const line of lines) {
-            processLine(line)
-          }
-        }
-        if (lineBuffer.trim()) processLine(lineBuffer.trim())
-
-        if (!doneSent) {
-          doneSent = true
-          writeCompletion(serializer!.serializeStreamChunk({ type: 'done' }))
-        }
-      } catch (streamError: any) {
-        const resp = formatErrorResponse(streamError)
-        event.node.res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: resp.error })}\n\n`)
-      } finally {
-        clearInterval(keepAliveTimer)
-        event.node.res.end()
+        return
       }
 
-      return
+      const response = await pipeline.call(request)
+
+      const serializer = manager.getSerializer('claude-completion')
+      if (!serializer) {
+        throw manager.buildGatewayError('Serializer not found', 500)
+      }
+
+      const u = response.usage
+      pipeline.trackUsage(u || 0, request.model)
+      return serializer.serializeResponse(response)
+    } catch (error: any) {
+      await pipeline.error(error)
+      throwFormattedError(error)
     }
-
-    const response = await manager.callLLM(request)
-
-    const serializer = manager.getSerializer('claude-completion')
-    if (!serializer) {
-      throw manager.buildGatewayError('Serializer not found', 500)
-    }
-
-    const u = response.usage
-    trackUsage(event, u || 0, request.model)
-    return serializer.serializeResponse(response)
-  } catch (error: any) {
-    throwFormattedError(error)
+  } catch (error) {
+    await pipeline.error(error)
+    throw error
+  } finally {
+    await pipeline.complete()
   }
 })

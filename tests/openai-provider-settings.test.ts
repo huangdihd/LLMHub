@@ -28,7 +28,7 @@ function handler(path: string) {
   }).outputText
   const exports: any = {}
   const mockedRequire = (id: string) => {
-    if (id.endsWith('/provider.store')) return { getProviderStore, validateProviderApiType: require(`${buildDir}/stores/provider.store.js`).validateProviderApiType }
+    if (id.endsWith('/provider.store')) return require(`${buildDir}/stores/provider.store.js`)
     if (id.endsWith('/auth.store')) return { getAuthStore: () => ({ getSSRFConfig: async () => ({}) }) }
     if (id.endsWith('/loader')) return { ProviderLoader: { invalidateCache() {} } }
     if (id.endsWith('/validate-url')) return { validateBaseUrl: () => ({ valid: true }) }

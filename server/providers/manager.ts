@@ -1,24 +1,7 @@
 import type { ProviderAdapter, ProtocolParser, ProtocolSerializer, ModelInfo, LLMRequest, LLMResponse, EmbeddingRequest, EmbeddingResponse } from '../core/types'
 import { ProviderLoader } from './loader'
-import { OpenAIAdapter } from './openai'
-import { OpenAIResponsesAdapter } from './openai-responses'
-import { ClaudeAdapter } from './claude'
-import { GeminiAdapter } from './gemini'
-import { CodexAdapter } from './codex'
-import { ClaudeSubscriptionAdapter } from './claude-subscription'
-import { AntigravityAdapter } from './antigravity'
-import { OpenAIChatParser } from '../protocols/openai-chat'
-import { OpenAICompletionParser } from '../protocols/openai-completion'
-import { OpenAIResponsesParser } from '../protocols/openai-responses'
-import { ClaudeMessagesParser } from '../protocols/claude-messages'
-import { ClaudeCompletionParser } from '../protocols/claude-completion'
-import { GeminiGenerateParser } from '../protocols/gemini-generate'
-import { OpenAIChatSerializer } from '../protocols/openai-chat-serializer'
-import { OpenAIResponsesSerializer } from '../protocols/openai-responses-serializer'
-import { OpenAICompletionSerializer } from '../protocols/openai-completion-serializer'
-import { ClaudeMessagesSerializer } from '../protocols/claude-messages-serializer'
-import { ClaudeCompletionSerializer } from '../protocols/claude-completion-serializer'
-import { GeminiGenerateSerializer } from '../protocols/gemini-generate-serializer'
+import { providerRegistry } from './builtins'
+import { protocolRegistry } from '../protocols/builtins'
 
 export class ProviderManager {
   private loader: ProviderLoader
@@ -29,42 +12,22 @@ export class ProviderManager {
   constructor() {
     this.loader = new ProviderLoader()
 
-    this.parsers = [
-      new OpenAIChatParser(),
-      new OpenAICompletionParser(),
-      new OpenAIResponsesParser(),
-      new ClaudeMessagesParser(),
-      new ClaudeCompletionParser(),
-      new GeminiGenerateParser()
-    ]
-
-    this.serializers.set('openai-chat', new OpenAIChatSerializer())
-    this.serializers.set('openai-responses', new OpenAIResponsesSerializer())
-    this.serializers.set('openai-completion', new OpenAICompletionSerializer())
-    this.serializers.set('claude-messages', new ClaudeMessagesSerializer())
-    this.serializers.set('claude-completion', new ClaudeCompletionSerializer())
-    this.serializers.set('gemini-generate', new GeminiGenerateSerializer())
+    for (const definition of protocolRegistry.list()) {
+      this.parsers.push(definition.createParser())
+      this.serializers.set(definition.id, definition.createSerializer())
+    }
   }
 
   async loadProviders(): Promise<void> {
     await this.loader.loadAll()
 
     for (const config of this.loader.getAllProviders()) {
-      if (config.protocol === 'openai') {
-        this.adapters.set(config.name, config.connection.api_type === 'responses'
-          ? new OpenAIResponsesAdapter(config)
-          : new OpenAIAdapter(config))
-      } else if (config.protocol === 'claude') {
-        this.adapters.set(config.name, new ClaudeAdapter(config))
-      } else if (config.protocol === 'gemini') {
-        this.adapters.set(config.name, new GeminiAdapter(config))
-      } else if (config.protocol === 'codex-subscription') {
-        this.adapters.set(config.name, new CodexAdapter(config))
-      } else if (config.protocol === 'claude-subscription') {
-        this.adapters.set(config.name, new ClaudeSubscriptionAdapter(config))
-      } else if (config.protocol === 'antigravity-subscription') {
-        this.adapters.set(config.name, new AntigravityAdapter(config))
+      const definition = providerRegistry.get(config.protocol)
+      if (!definition) {
+        console.warn(`[LLMHub] Skipping unknown provider protocol: ${config.protocol}`)
+        continue
       }
+      this.adapters.set(config.name, definition.createAdapter(config))
     }
   }
 
@@ -74,6 +37,10 @@ export class ProviderManager {
 
   getSerializer(name: string): ProtocolSerializer | undefined {
     return this.serializers.get(name)
+  }
+
+  getProviderConfig(providerName: string) {
+    return this.loader.getProvider(providerName)
   }
 
   getAdapter(providerName: string): ProviderAdapter | undefined {

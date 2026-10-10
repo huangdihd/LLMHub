@@ -9,6 +9,18 @@ export MOCK_PORT="${MOCK_PORT:-4000}"
 GATEWAY_PORT="${GATEWAY_PORT:-3999}"
 export GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}"
 
+# Never mistake an already-running service for this test's gateway.
+GATEWAY_PORT="$GATEWAY_PORT" node --input-type=module -e '
+import net from "node:net";
+for (const port of [process.env.MOCK_PORT, process.env.GATEWAY_PORT]) {
+  await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(Number(port), () => server.close(resolve));
+  });
+}
+'
+
 if [ ! -d .output/server ] || [ -n "$FORCE_BUILD" ]; then
   echo "== building gateway =="
   npx nuxt build
@@ -52,3 +64,6 @@ node tests/e2e/sdk.test.mjs
 
 echo "== running chat-page client contract tests =="
 node tests/e2e/chat-clients.test.mjs
+
+echo "== running runtime plugin tests =="
+node tests/e2e/plugins.test.mjs

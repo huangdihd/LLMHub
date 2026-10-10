@@ -197,7 +197,7 @@ export interface ToolCallDelta {
 export interface ProviderConfig {
   name: string
   display_name: string
-  protocol: 'openai' | 'claude' | 'gemini' | 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription'
+  protocol: string
   enabled: boolean
   use_custom_models: boolean
   normalize_cch?: boolean
@@ -234,6 +234,8 @@ export interface ProviderConfig {
     project_id?: string
     /** Google account email used by Antigravity. Never returned by provider APIs. */
     account_email?: string
+    /** Schema-validated runtime provider configuration; may contain secrets. */
+    extra?: Record<string, unknown>
   }
   models: ModelConfig[]
   defaults?: {

@@ -1,4 +1,6 @@
 import type { ProviderConfig } from '../core/types'
+import type { SafeProviderConnection } from '../core/registry'
+import { BUILTIN_PROVIDER_IDS, providerRegistry } from '../providers/builtins'
 
 const STORAGE_PREFIX = 'providers:'
 
@@ -6,6 +8,67 @@ export function validateProviderApiType(value: unknown): void {
   if (value !== undefined && value !== 'responses' && value !== 'chat_completions') {
     throw createError({ statusCode: 400, message: 'Invalid API protocol: api_type must be responses or chat_completions' })
   }
+}
+
+export function isBuiltinProvider(protocol: string): boolean {
+  return Object.values(BUILTIN_PROVIDER_IDS).some(id => id === protocol)
+}
+
+export function validateRegisteredProvider(protocol: unknown): asserts protocol is string {
+  if (typeof protocol !== 'string' || !providerRegistry.get(protocol)) {
+    throw createError({ statusCode: 400, message: 'Provider type is not registered' })
+  }
+}
+
+/** Validate plugin-specific input without coercing values or accepting undeclared fields. */
+export function validatePluginConnectionExtra(
+  protocol: string,
+  input: unknown,
+  existing: Record<string, unknown> = {}
+): Record<string, unknown> {
+  validateRegisteredProvider(protocol)
+  if (input !== undefined && (input === null || typeof input !== 'object' || Array.isArray(input))) {
+    throw createError({ statusCode: 400, message: 'connection.extra must be an object' })
+  }
+  const definition = providerRegistry.get(protocol)!
+  const fields = definition.connectionSchema ?? []
+  const supplied = (input ?? {}) as Record<string, unknown>
+  for (const key of Object.keys(supplied)) {
+    if (!fields.some(field => field.key === key)) {
+      throw createError({ statusCode: 400, message: `Unknown connection field: ${key}` })
+    }
+  }
+  const result: Record<string, unknown> = {}
+  for (const field of fields) {
+    const secret = field.type === 'secret' || definition.secretConnectionFields.includes(`extra.${field.key}`)
+    const provided = Object.hasOwn(supplied, field.key) ? supplied[field.key] : undefined
+    const previous = Object.hasOwn(existing, field.key) ? existing[field.key] : undefined
+    const value = provided === undefined || (secret && provided === '' && previous !== undefined)
+      ? previous ?? field.default
+      : provided
+    if (value === undefined || (value === '' && (field.type === 'text' || field.type === 'secret' || field.type === 'select'))) {
+      if (field.required) {
+        throw createError({ statusCode: 400, message: `Required connection field: ${field.key}` })
+      }
+      if (value !== undefined) Object.defineProperty(result, field.key, { value, enumerable: true, writable: true, configurable: true })
+      continue
+    }
+    let valid: boolean
+    if (field.type === 'number') {
+      valid = typeof value === 'number' && Number.isFinite(value)
+    } else if (field.type === 'boolean') {
+      valid = typeof value === 'boolean'
+    } else if (field.type === 'select') {
+      valid = Boolean(field.options?.some(option => option.value === value))
+    } else {
+      valid = typeof value === 'string'
+    }
+    if (!valid) {
+      throw createError({ statusCode: 400, message: `Invalid connection field: ${field.key}` })
+    }
+    Object.defineProperty(result, field.key, { value, enumerable: true, writable: true, configurable: true })
+  }
+  return result
 }
 
 /**
@@ -86,12 +149,17 @@ export class ProviderStore {
     const existing = await this.get(name)
     if (!existing) return null
 
+    const nextProtocol = patch.protocol ?? existing.protocol
+    const previousExtra = nextProtocol === existing.protocol ? existing.connection.extra : undefined
     const merged: ProviderConfig = {
       ...existing,
       ...patch,
       connection: {
         ...existing.connection,
-        ...(patch.connection || {})
+        ...(patch.connection || {}),
+        ...(!isBuiltinProvider(nextProtocol) && patch.connection?.extra !== undefined
+          ? { extra: { ...previousExtra, ...patch.connection.extra } }
+          : {})
       }
     }
 
@@ -114,28 +182,33 @@ export class ProviderStore {
   }
 
   /** Strip credentials from provider API responses. */
-  sanitize(config: ProviderConfig): Omit<ProviderConfig, 'connection'> & { connection: Omit<ProviderConfig['connection'], 'api_key' | 'refresh_token' | 'id_token' | 'device_id' | 'account_id' | 'project_id' | 'account_email'> & { authenticated: boolean } } {
+  sanitize(config: ProviderConfig): Omit<ProviderConfig, 'connection'> & { connection: SafeProviderConnection } {
     const { connection, ...rest } = config
-    const authenticated = config.protocol === 'codex-subscription'
-      || config.protocol === 'claude-subscription'
-      || config.protocol === 'antigravity-subscription'
-      ? Boolean(connection.api_key && connection.refresh_token)
-      : Boolean(connection.api_key)
+    const definition = providerRegistry.get(config.protocol)
     const {
-      api_key: _apiKey,
-      refresh_token: _refreshToken,
-      id_token: _idToken,
-      device_id: _deviceId,
-      account_id: _accountId,
-      project_id: _projectId,
-      account_email: _accountEmail,
+      api_key, refresh_token, id_token: _idToken, device_id: _deviceId,
+      account_id: _accountId, project_id: _projectId, account_email: _accountEmail,
       ...safeConnection
     } = connection
+    if (!isBuiltinProvider(config.protocol) && safeConnection.extra) {
+      // When a plugin is unavailable its schema cannot identify secrets: fail closed.
+      safeConnection.extra = definition ? { ...safeConnection.extra } : {}
+      for (const field of definition?.connectionSchema ?? []) {
+        if (field.type === 'secret') delete safeConnection.extra[field.key]
+      }
+    }
+    for (const field of definition?.secretConnectionFields ?? []) {
+      if (field.startsWith('extra.') && safeConnection.extra) {
+        delete safeConnection.extra[field.slice('extra.'.length)]
+      } else {
+        delete (safeConnection as Record<string, unknown>)[field]
+      }
+    }
     return {
       ...rest,
       connection: {
         ...safeConnection,
-        authenticated
+        authenticated: Boolean(api_key && (!definition?.requiresRefreshToken || refresh_token))
       }
     }
   }
@@ -189,7 +262,10 @@ export class ProviderStore {
         ...(connection?.subscription_type ? { subscription_type: connection.subscription_type } : {}),
         ...(connection?.rate_limit_tier ? { rate_limit_tier: connection.rate_limit_tier } : {}),
         ...(connection?.project_id ? { project_id: connection.project_id } : {}),
-        ...(connection?.account_email ? { account_email: connection.account_email } : {})
+        ...(connection?.account_email ? { account_email: connection.account_email } : {}),
+        ...(!isBuiltinProvider(protocol) && connection?.extra !== undefined
+          ? { extra: { ...connection.extra } }
+          : {})
       },
       models: models ?? [],
       ...(defaults ? { defaults } : {})

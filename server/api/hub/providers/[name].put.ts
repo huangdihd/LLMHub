@@ -1,5 +1,5 @@
 import type { ProviderConfig } from '../../../core/types'
-import { getProviderStore, validateProviderApiType } from '../../../stores/provider.store'
+import { getProviderStore, isBuiltinProvider, validatePluginConnectionExtra, validateProviderApiType, validateRegisteredProvider } from '../../../stores/provider.store'
 import { getAuthStore } from '../../../stores/auth.store'
 import { ProviderLoader } from '../../../providers/loader'
 import { validateBaseUrl } from '../../../utils/validate-url'
@@ -24,6 +24,14 @@ export default defineEventHandler(async (event) => {
     }
 
     const nextProtocol = body.protocol ?? existing.protocol
+    validateRegisteredProvider(nextProtocol)
+    const pluginExtra = isBuiltinProvider(nextProtocol)
+      ? undefined
+      : validatePluginConnectionExtra(
+        nextProtocol,
+        body.connection?.extra !== undefined ? body.connection.extra : body.extra,
+        nextProtocol === existing.protocol ? existing.connection.extra : undefined
+      )
     const subscriptionProtocol = nextProtocol === 'codex-subscription'
       || nextProtocol === 'claude-subscription'
       || nextProtocol === 'antigravity-subscription'
@@ -37,8 +45,8 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, message: 'Use Connect Google to add an Antigravity Subscription provider' })
     }
 
-    // Validate base_url if it's being changed
-    const newBaseUrl = body.base_url ?? body.connection?.base_url
+    // Nested connection fields win during merging; validate that same effective URL.
+    const newBaseUrl = body.connection?.base_url ?? body.base_url
     if (newBaseUrl) {
       const ssrfConfig = await getAuthStore().getSSRFConfig()
       const result = validateBaseUrl(newBaseUrl, ssrfConfig)
@@ -84,6 +92,11 @@ export default defineEventHandler(async (event) => {
         delete nested.token_expires_at
       }
       Object.assign(connectionPatch, nested)
+    }
+
+    if (pluginExtra !== undefined) {
+      connectionPatch.extra = pluginExtra
+      if (connectionPatch.api_key === '') delete connectionPatch.api_key
     }
 
     const patch: Partial<ProviderConfig> = {

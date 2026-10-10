@@ -44,6 +44,7 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
           return parser
         }
         resolveAdapter() { return { adapter, providerName: 'offline' } }
+        getProviderConfig() { return undefined }
         async callLLM(request: any) {
           syncCalls++
           const payload = adapter.toProviderRequest(request)
@@ -52,6 +53,11 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
       }
     },
     'server/services/thinking-policy.ts': { applyThinkingPolicy: async (request: any) => request },
+    'server/utils/stats.ts': {
+      incrementCalls: async () => {},
+      trackUsage: (_event: any, value: any) => usage.push(plain(value))
+    },
+    'server/stores/provider.store.ts': { getProviderStore: forbidden },
     'server/utils/fetch.ts': { fetchWithRetry: forbidden },
     'server/utils/codex-auth.ts': { extractChatGptAccountId: forbidden },
     'server/services/codex-token-manager.ts': { ensureCodexAccessToken: forbidden },
@@ -59,6 +65,9 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
   }
   const allowed = new Set([
     'server/api/openai/responses.post.ts',
+    'server/core/pipeline.ts',
+    'server/core/hooks.ts',
+    'server/core/builtin-hooks.ts',
     'server/protocols/openai-responses.ts',
     'server/protocols/openai-responses-serializer.ts',
     'server/utils/structured-output.ts',

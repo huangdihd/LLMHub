@@ -8,6 +8,8 @@
       <UButton icon="i-heroicons-plus" class="self-start sm:self-auto" @click="openAddModal">Add provider</UButton>
     </div>
 
+    <UAlert v-if="providerTypesError" class="mb-4" color="amber" :title="providerTypesError" />
+
     <div v-if="loading" class="flex justify-center py-16">
       <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-gray-400" />
     </div>
@@ -39,6 +41,7 @@
                 {{ provider.connection.authenticated ? subscriptionConnectedLabel(provider.protocol) : 'Reconnect required' }}
               </UBadge>
             </div>
+            <p v-if="provider.available === false" class="mt-2 text-sm text-amber-600 dark:text-amber-400">Unavailable: {{ provider.unavailableReason || 'Provider plugin is not active' }}</p>
             <div class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
               <span>{{ protocolLabel(provider.protocol) }}</span>
               <span class="font-mono text-xs">{{ provider.name }}</span>
@@ -431,6 +434,11 @@
             />
           </section>
 
+          <section v-else-if="isPluginProvider" class="space-y-4">
+            <UAlert v-if="providerTypeUnavailable" color="amber" title="Provider type unavailable" description="Enable the plugin before editing this provider." />
+            <PluginSchemaForm v-else :key="`${form.protocol}:${form.name}`" ref="schemaForm" v-model="form.extra" :fields="connectionSchema" :editing="!!editingProvider" />
+          </section>
+
           <section v-else class="space-y-4">
             <UFormGroup v-if="form.protocol === 'openai'" label="API protocol">
               <USelect v-model="form.api_type" :options="[
@@ -502,7 +510,7 @@
               <UButton
                 v-if="protocolChosen && (!isSubscriptionProtocol(form.protocol) || !!editingProvider)"
                 :loading="saving"
-                :disabled="activeLogin?.status === 'pending'"
+                :disabled="activeLogin?.status === 'pending' || providerTypeUnavailable"
                 @click="saveProvider"
               >Save changes</UButton>
             </div>
@@ -515,8 +523,10 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import type { PluginField } from '~/shared/types/plugin'
 
-type Protocol = 'openai' | 'claude' | 'gemini' | 'codex-subscription' | 'claude-subscription' | 'antigravity-subscription'
+type Protocol = string
+type ProviderType = { id: string; displayName: string; connectionSchema?: PluginField[] }
 type LoginState = {
   login_id: string
   status: 'pending' | 'completed' | 'failed' | 'cancelled'
@@ -587,7 +597,7 @@ const nameTouched = ref(false)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let usageClockTimer: ReturnType<typeof setInterval> | null = null
 
-const protocolOptions: { value: Protocol; label: string; description: string; icon: string }[] = [
+const builtinProtocolOptions: { value: Protocol; label: string; description: string; icon: string }[] = [
   { value: 'openai', label: 'OpenAI compatible', description: 'OpenAI, DeepSeek, OpenRouter, Ollama, and compatible APIs.', icon: 'i-heroicons-command-line' },
   { value: 'codex-subscription', label: 'ChatGPT subscription', description: 'Use Codex models included with a ChatGPT plan. Sign in with OpenAI.', icon: 'i-heroicons-user-circle' },
   { value: 'claude-subscription', label: 'Claude Code subscription', description: 'Use Claude models included with a Claude plan. Sign in with Anthropic.', icon: 'i-heroicons-user-circle' },
@@ -595,6 +605,29 @@ const protocolOptions: { value: Protocol; label: string; description: string; ic
   { value: 'claude', label: 'Anthropic Claude', description: 'Providers using the Anthropic Messages API.', icon: 'i-heroicons-chat-bubble-left-right' },
   { value: 'gemini', label: 'Google Gemini', description: 'Providers using the Gemini generateContent API.', icon: 'i-heroicons-sparkles' }
 ]
+
+const providerTypes = ref<ProviderType[]>([])
+const providerTypesError = ref('')
+const schemaForm = ref<{ validate: () => boolean } | null>(null)
+const protocolOptions = computed(() => [
+  ...builtinProtocolOptions,
+  ...providerTypes.value.filter(provider => !builtinProtocolOptions.some(option => option.value === provider.id)).map(provider => ({
+    value: provider.id, label: provider.displayName, description: 'Plugin provider', icon: 'i-heroicons-puzzle-piece'
+  }))
+])
+const isPluginProvider = computed(() => !builtinProtocolOptions.some(option => option.value === form.protocol))
+const connectionSchema = computed(() => providerTypes.value.find(provider => provider.id === form.protocol)?.connectionSchema || [])
+const providerTypeUnavailable = computed(() => isPluginProvider.value && !providerTypes.value.some(provider => provider.id === form.protocol))
+
+async function loadProviderTypes() {
+  try {
+    providerTypes.value = await $fetch<ProviderType[]>('/api/hub/provider-types')
+    providerTypesError.value = ''
+  } catch (error) {
+    providerTypesError.value = 'Plugin provider types could not be loaded. Built-in providers are still available.'
+    showError(error, 'Unable to load provider types')
+  }
+}
 
 const protocolDefaults: Record<Protocol, { baseUrl: string; keyPlaceholder: string }> = {
   openai: { baseUrl: 'https://api.openai.com/v1', keyPlaceholder: 'sk-…' },
@@ -611,7 +644,7 @@ const form = reactive({
   api_type: 'responses' as 'responses' | 'chat_completions',
   base_url: '', api_key: '', timeout: 30000, enable_timeout: true,
   max_retries: 3, version: '2023-06-01', normalize_cch: false,
-  client_version: '0.149.0'
+  client_version: '0.149.0', extra: {} as Record<string, unknown>
 })
 
 const errors = reactive({ name: '', display_name: '', base_url: '', api_key: '' })
@@ -641,6 +674,7 @@ watch(() => form.display_name, value => {
 
 onMounted(() => {
   loadProviders()
+  loadProviderTypes()
   usageClockTimer = setInterval(() => { usageNow.value = Date.now() }, 60000)
 })
 onBeforeUnmount(() => {
@@ -837,7 +871,7 @@ function openAddModal() {
 
 function chooseProtocol(protocol: Protocol) {
   form.protocol = protocol
-  const option = protocolOptions.find(item => item.value === protocol)!
+  const option = protocolOptions.value.find(item => item.value === protocol)!
   if (protocol === 'codex-subscription') {
     form.display_name = 'Codex Subscription'
     form.name = 'codex'
@@ -851,7 +885,7 @@ function chooseProtocol(protocol: Protocol) {
     form.display_name = option.label
     form.name = slugify(form.display_name)
   }
-  form.base_url = protocolDefaults[protocol].baseUrl
+  form.base_url = protocolDefaults[protocol]?.baseUrl || ''
   form.timeout = protocol === 'antigravity-subscription' ? 120000 : 30000
   nameTouched.value = false
   protocolChosen.value = true
@@ -880,9 +914,24 @@ function editProvider(provider: any) {
   form.max_retries = provider.connection.max_retries ?? 3
   form.version = provider.connection.version || '2023-06-01'
   form.client_version = provider.connection.client_version || '0.149.0'
+  form.extra = {}
+  // Copy only known non-secret fields, even when provider types are still loading.
+  populatePluginFields()
   form.normalize_cch = provider.normalize_cch || false
   isModalOpen.value = true
 }
+
+function populatePluginFields() {
+  if (!editingProvider.value || !isPluginProvider.value) return
+  const stored = editingProvider.value.connection.extra || {}
+  for (const field of connectionSchema.value) {
+    if (field.type !== 'secret' && Object.hasOwn(stored, field.key) && !Object.hasOwn(form.extra, field.key)) {
+      form.extra[field.key] = stored[field.key]
+    }
+  }
+}
+
+watch(connectionSchema, populatePluginFields)
 
 function resetForm() {
   stopPolling()
@@ -894,7 +943,7 @@ function resetForm() {
     name: '', display_name: '', protocol: 'openai', enabled: true,
     use_custom_models: false, custom_models: [], base_url: '', api_key: '',
     api_type: 'responses', timeout: 30000, enable_timeout: true, max_retries: 3,
-    version: '2023-06-01', normalize_cch: false, client_version: '0.149.0'
+    version: '2023-06-01', normalize_cch: false, client_version: '0.149.0', extra: {}
   })
 }
 
@@ -1085,6 +1134,7 @@ async function copyLoginCode() {
 }
 
 async function saveProvider() {
+  if (saving.value) return
   if (isSubscriptionProtocol(form.protocol) && !editingProvider.value) return
   if (!validateForm()) return
   saving.value = true
@@ -1099,7 +1149,8 @@ async function saveProvider() {
       models, normalize_cch: form.normalize_cch
     }
     if (form.protocol === 'openai') body.api_type = form.api_type
-    if (!isSubscriptionProtocol(form.protocol)) {
+    if (isPluginProvider.value) body.connection = { extra: form.extra }
+    if (!isPluginProvider.value && !isSubscriptionProtocol(form.protocol)) {
       body.base_url = form.base_url
       body.api_key = form.api_key
     }
@@ -1141,6 +1192,8 @@ function validateBasics(): boolean {
 
 function validateForm(): boolean {
   const basicsValid = validateBasics()
+  if (providerTypeUnavailable.value) return false
+  if (isPluginProvider.value) return (schemaForm.value?.validate() ?? false) && basicsValid
   if (!isSubscriptionProtocol(form.protocol)) {
     if (!form.base_url.trim()) errors.base_url = 'Enter the provider base URL'
     if (!editingProvider.value && !form.api_key.trim()) errors.api_key = 'Enter an API key'
@@ -1168,7 +1221,7 @@ function subscriptionConnectedLabel(protocol: Protocol): string {
 }
 
 function protocolLabel(protocol: Protocol): string {
-  return protocolOptions.find(option => option.value === protocol)?.label || protocol
+  return protocolOptions.value.find(option => option.value === protocol)?.label || protocol
 }
 
 function slugify(value: string): string {

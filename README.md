@@ -26,6 +26,19 @@ Open http://localhost:3000 and set up your admin password.
 
 ## Configuration
 
+### Runtime Plugins
+
+The **Plugins** dashboard installs trusted single-file `.mjs` plugins and manages
+configuration, enable/disable, reload, and uninstall without rebuilding or
+restarting the gateway. For multi-file plugins, place a directory containing
+`plugin.json` in `.data/plugins/<id>/` and choose **Scan plugins**. Plugin provider
+types appear alongside built-in types in **Providers**.
+
+Plugins run with the gateway's full Node.js permissions: review their source
+before installing. There is no server-side sandbox. See [Writing plugins](docs/plugins.md)
+for the API, lifecycle, security boundaries, and the local echo/request-hook
+examples in `examples/plugins/`.
+
 ### Thinking Policy
 
 The **Thinking** dashboard page configures the global effort-to-token-budget mapping used when requests cross Claude, OpenAI/Codex, and Gemini protocols. Explicit client settings are respected by default. Claude signatures/redacted thinking and Codex encrypted reasoning remain opaque and are only replayed to compatible upstreams.

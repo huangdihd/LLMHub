@@ -1,3 +1,4 @@
+import { removeRecordContributions } from '../plugins-runtime/record-values'
 import type { ProviderConfig } from '../core/types'
 import type { SafeProviderConnection } from '../core/registry'
 import { providerRegistry } from '../core/registry'
@@ -181,6 +182,7 @@ export class ProviderStore {
     if (!existing) return false
 
     await storage.removeItem(key)
+    await removeRecordContributions(storage, 'providers', name)
     return true
   }
 

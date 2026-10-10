@@ -145,6 +145,7 @@
               </div>
 
               <component :is="section.advanced" v-for="section in dashboard.sections" :key="section.id" :form="form" />
+              <RuntimeContributionFields v-if="isModalOpen" :key="editorSession" ref="contributionFields" location="providers" :record-id="editingProvider?.name" />
             </div>
           </details>
         </form>
@@ -171,6 +172,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import RuntimeContributionFields from '~/components/RuntimeContributionFields.vue'
 import { useProviderDashboard } from '~/composables/useProviderDashboard'
 import type { PluginField } from '~/shared/types/plugin'
 import type { DashboardProviderForm, DashboardProviderRecord } from '~/shared/dashboard/providers'
@@ -193,6 +195,9 @@ form.protocol = dashboard.extensions[0]?.id || ''
 const providerTypes = ref<ProviderType[]>([])
 const providerTypesError = ref('')
 const schemaForm = ref<{ validate: () => boolean } | null>(null)
+const contributionFields = ref<InstanceType<typeof RuntimeContributionFields> | null>(null)
+const editorSession = ref(0)
+const createdProviderName = ref('')
 const protocolOptions = computed(() => [
   ...builtinProtocolOptions,
   ...providerTypes.value.filter(provider => !builtinProtocolOptions.some(option => option.value === provider.id)).map(provider => ({
@@ -289,6 +294,8 @@ function populatePluginFields() {
 watch(connectionSchema, populatePluginFields)
 
 function resetForm() {
+  editorSession.value++
+  createdProviderName.value = ''
   dashboard.reset()
   nameTouched.value = false
   clearErrors()
@@ -302,7 +309,7 @@ async function closeModal() {
 async function saveProvider() {
   if (saving.value) return
   if (isSubscriptionProtocol(form.protocol) && !editingProvider.value) return
-  if (!validateForm()) return
+  if (!validateForm() || !contributionFields.value?.validate()) return
   saving.value = true
   try {
     const models = form.use_custom_models ? form.custom_models.filter(model => model.id.trim()) : []
@@ -316,8 +323,13 @@ async function saveProvider() {
     Object.assign(body, dashboard.payload())
     if (isPluginProvider.value) body.connection = { extra: form.extra }
 
-    if (editingProvider.value) await $fetch(`/api/hub/providers/${form.name}`, { method: 'PUT', body })
-    else await $fetch('/api/hub/providers', { method: 'POST', body })
+    if (editingProvider.value || createdProviderName.value) {
+      await $fetch(`/api/hub/providers/${encodeURIComponent(createdProviderName.value || form.name)}`, { method: 'PUT', body })
+    } else {
+      await $fetch('/api/hub/providers', { method: 'POST', body })
+      createdProviderName.value = form.name
+    }
+    await contributionFields.value.save(createdProviderName.value || form.name)
 
     toast.add({ title: editingProvider.value ? 'Provider updated' : 'Provider added', color: 'green', icon: 'i-heroicons-check-circle' })
     isModalOpen.value = false

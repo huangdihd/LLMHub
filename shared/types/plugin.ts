@@ -7,6 +7,41 @@ export interface PluginField {
   options?: { label: string; value: string | number | boolean }[]
 }
 
+export type PluginRecordLocation = 'models' | 'apiKeys' | 'providers'
+export type PluginRecordValues = Record<string, unknown>
+export interface PluginRecordValuesChange {
+  location: PluginRecordLocation
+  recordId: string
+  values: Readonly<PluginRecordValues>
+}
+export type PluginMetricValue = string | number | null
+export type PluginMetricGetter = () => PluginMetricValue | Promise<PluginMetricValue>
+export interface PluginContributionField extends PluginField {
+  /** Only API-key non-secret fields may be shown in a list. */
+  showInList?: boolean
+}
+export interface PluginContributions {
+  models?: PluginContributionField[]
+  apiKeys?: PluginContributionField[]
+  providers?: PluginContributionField[]
+  metrics?: { key: string; label: string; icon?: string }[]
+  panels?: { id: string; title: string; location: 'home' | 'detail' | 'page'; page: string }[]
+  navigation?: { panel: string; label: string; icon?: string }[]
+}
+export interface PluginContributionRecord {
+  id: string
+  name: string
+  contributes: PluginContributions
+}
+export interface PluginMetricResult {
+  pluginId: string
+  key: string
+  label: string
+  icon?: string
+  value: PluginMetricValue
+  error?: string
+}
+
 export interface PluginManifest {
   id: string
   name?: string
@@ -16,6 +51,7 @@ export interface PluginManifest {
   dependencies?: Record<string, string>
   optionalDependencies?: Record<string, string>
   entry?: string
+  contributes?: PluginContributions
   configSchema?: PluginField[]
   ui?: { page: string }
 }
@@ -24,6 +60,7 @@ export interface PluginManifest {
 export interface PluginPackageMetadata {
   id?: string
   name?: string
+  contributes?: PluginContributions
   configSchema?: PluginField[]
   ui?: { page: string }
   dependencies?: Record<string, string>

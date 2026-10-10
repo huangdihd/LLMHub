@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { removeRecordContributions } from '../plugins-runtime/record-values'
 import { generateTOTPSecret, verifyTOTP } from '../utils/totp'
 import { readApiKeys, writeApiKeys, monthKey } from './api-key-storage'
 
@@ -136,6 +137,7 @@ export class AuthStore {
     const filtered = keys.filter(k => k.id !== id)
     if (filtered.length === keys.length) return false
     await writeApiKeys(filtered)
+    await removeRecordContributions(useStorage('data'), 'apiKeys', id)
     return true
   }
 

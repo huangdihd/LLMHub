@@ -80,8 +80,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useRuntimePluginContributions } from '~/composables/useRuntimePluginContributions'
 
-const navLinks = useDashboardNavigation()
+const builtinNavLinks = useDashboardNavigation()
+const runtime = useRuntimePluginContributions()
+const navLinks = computed(() => [...builtinNavLinks, ...runtime.navigation.value])
 
 const mobileMenuOpen = ref(false)
 const route = useRoute()

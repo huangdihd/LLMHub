@@ -73,3 +73,6 @@ node tests/e2e/plugin-dependencies.test.mjs
 
 echo "== running offline npm plugin tests =="
 node tests/e2e/plugin-npm.test.mjs
+
+echo "== running runtime dashboard contribution tests =="
+node tests/e2e/plugin-contributions.test.mjs

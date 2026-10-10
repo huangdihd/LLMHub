@@ -43,7 +43,7 @@ try {
   } }`)
   gateway = await createPluginGateway()
   const before = await list()
-  for (const plugin of before) assert.equal(plugin.apiVersion, '1.0.0')
+  for (const plugin of before) assert.equal(plugin.apiVersion, '1.1.0')
   assert.equal((await gateway.request('/registry', json('PUT', { registry: fixture.registry }))).status, 200)
   assert.equal((await install(provider, '1.0.0')).status, 200)
   assert.equal((await gateway.request(`/${provider}/enable`, { method: 'POST' })).status, 200)

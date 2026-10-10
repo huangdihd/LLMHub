@@ -1,6 +1,6 @@
 <template>
           <!-- Fallback Strategy -->
-          <UCard :ui="{ body: { padding: 'p-4' }, ring: 'ring-1 ring-gray-200 dark:ring-gray-700' }">
+          <UCard :ui="{ body: { padding: form.fallbackEnabled ? 'p-4' : 'p-0 sm:p-0' }, divide: form.fallbackEnabled ? 'divide-y divide-gray-200 dark:divide-gray-800' : '', ring: 'ring-1 ring-gray-200 dark:ring-gray-700' }">
             <template #header>
               <div class="flex items-center justify-between">
                 <div><p class="text-sm font-medium text-gray-900 dark:text-white">Fallback model</p><p class="mt-0.5 text-xs font-normal text-gray-500 dark:text-gray-400">One model name that tries a list of real models in order.</p></div>

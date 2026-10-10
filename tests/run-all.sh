@@ -20,9 +20,10 @@ npx tsc .nuxt/types/nitro-imports.d.ts \
   server/providers/manager.ts server/providers/loader.ts \
   server/core/registry.ts server/core/protocol-registry.ts server/core/hooks.ts server/core/pipeline.ts \
   server/core/ingress-registry.ts server/services/subscription-usage.ts \
-  server/stores/provider.store.ts builtin/assembly.ts builtin/*/plugin.ts \
+  server/stores/provider.store.ts server/stores/auth.store.ts builtin/assembly.ts builtin/*/plugin.ts \
   server/middleware/ingress-auth.ts \
   server/plugins-runtime/manager.ts server/plugins-runtime/manifest.ts server/plugins-runtime/market.ts \
+  server/api/hub/plugin-contributions/*.ts \
   --rootDir . --outDir "$BUILD_DIR" \
   --module commonjs --target es2022 --moduleResolution node \
   --esModuleInterop --skipLibCheck --resolveJsonModule --rewriteRelativeImportExtensions

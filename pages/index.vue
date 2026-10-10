@@ -10,11 +10,19 @@
       <StatCard icon="i-heroicons-server-stack" tone="blue" label="Providers" :value="activeProvidersCount" :hint="totalProvidersCount > activeProvidersCount ? `of ${totalProvidersCount} enabled` : undefined" :loading="loading" />
       <StatCard icon="i-heroicons-cpu-chip" tone="green" label="Models" :value="totalModelsCount" :loading="loading" />
       <StatCard icon="i-heroicons-arrows-right-left" tone="purple" label="Provider types" :value="Object.keys(protocolCounts).length" :loading="loading" />
+      <StatCard v-for="metric in runtimeMetrics" :key="`${metric.pluginId}:${metric.key}`" :icon="metric.icon || 'i-heroicons-puzzle-piece'" :label="metric.label" :value="metric.error ? 'Unavailable' : metric.value ?? '—'" :hint="metric.error" />
     </div>
+
+    <UAlert v-if="runtime.error.value || metricsError" color="amber" title="Some plugin dashboard contributions could not be loaded." class="mb-6" />
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
       <div class="lg:col-span-2 space-y-6">
         <component v-for="(contribution, index) in contributions.filter(item => item.usage)" :is="contribution.usage" :key="index" v-bind="contribution.usageProps()" />
+
+        <UCard v-for="item in homePanels" :key="`${item.pluginId}:${item.panel.id}`" :ui="{ body: { padding: '' } }">
+          <template #header><h3 class="font-medium text-gray-900 dark:text-white">{{ item.panel.title }}</h3></template>
+          <RuntimePluginPanel :plugin-id="item.pluginId" :panel="item.panel" />
+        </UCard>
 
         <UCard :ui="{ body: { padding: '' } }">
           <template #header>
@@ -54,6 +62,24 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRuntimePluginContributions } from '~/composables/useRuntimePluginContributions'
+import type { RuntimePluginMetric } from '~/composables/useRuntimePluginContributions'
+
+const runtime = useRuntimePluginContributions()
+const homePanels = computed(() => runtime.panels.value.filter(item => item.panel.location === 'home'))
+const runtimeMetrics = ref<RuntimePluginMetric[]>([])
+const metricsError = ref(false)
+watch(() => runtime.plugins.value, async (plugins, previous, onCleanup) => {
+  let active = true
+  onCleanup(() => { active = false })
+  runtimeMetrics.value = []
+  metricsError.value = false
+  if (!plugins.some(plugin => plugin.contributes.metrics?.length)) return
+  try {
+    const metrics = await $fetch<RuntimePluginMetric[]>('/api/hub/plugin-contributions/metrics')
+    if (active) runtimeMetrics.value = metrics
+  } catch { if (active) metricsError.value = true }
+}, { immediate: true })
 
 const dashboard = useDashboardHome()
 const contributions = dashboard.contributions

@@ -1,0 +1,34 @@
+{
+  "name": "@llmhub/example-dashboard-contributions",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.mjs",
+  "engines": { "llmhub": "^1.1.0" },
+  "llmhub": {
+    "id": "example-dashboard",
+    "name": "Dashboard contributions",
+    "contributes": {
+      "models": [
+        { "key": "instruction", "label": "Model instruction", "type": "text", "default": "" },
+        { "key": "enabled", "label": "Apply instruction", "type": "boolean", "default": true }
+      ],
+      "apiKeys": [
+        { "key": "team", "label": "Team", "type": "text", "showInList": true },
+        { "key": "token", "label": "Private team token", "type": "secret" }
+      ],
+      "providers": [
+        { "key": "weight", "label": "Routing weight", "type": "number", "default": 1 },
+        { "key": "region", "label": "Region", "type": "select", "default": "local", "options": [
+          { "label": "Local", "value": "local" }, { "label": "Remote", "value": "remote" }
+        ] }
+      ],
+      "metrics": [{ "key": "requests", "label": "Example requests", "icon": "i-heroicons-bolt" }],
+      "panels": [
+        { "id": "home", "title": "Example status", "location": "home", "page": "ui/index.html" },
+        { "id": "details", "title": "Example status", "location": "detail", "page": "ui/index.html" },
+        { "id": "status", "title": "Example dashboard", "location": "page", "page": "ui/index.html" }
+      ],
+      "navigation": [{ "panel": "status", "label": "Example", "icon": "i-heroicons-puzzle-piece" }]
+    }
+  }
+}

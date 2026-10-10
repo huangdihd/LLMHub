@@ -144,6 +144,7 @@
 
 <script setup lang="ts">
 import type { PluginRecord } from '~/shared/types/plugin'
+import { useRuntimePluginContributions } from '~/composables/useRuntimePluginContributions'
 
 type DashboardPlugin = PluginRecord & { apiVersion?: string }
 interface Tool { available: boolean; version?: string; reason?: string }
@@ -158,6 +159,7 @@ interface UpdateInfo {
 }
 interface UpdateState { summary: string; target?: string; specification?: Record<string, string> }
 
+const runtime = useRuntimePluginContributions()
 const plugins = ref<DashboardPlugin[]>([])
 const capabilities = ref<{ npm: Tool; git: Tool } | null>(null)
 const loading = ref(true)
@@ -229,7 +231,7 @@ async function run(key: string, action: () => Promise<unknown>, done: string) {
   errorMessage.value = ''
   try {
     await action()
-    await load()
+    await Promise.all([load(), runtime.refresh()])
     toast.add({ title: done, color: 'green', icon: 'i-heroicons-check-circle' })
     return true
   } catch (error) {
@@ -250,7 +252,7 @@ async function scan() {
   errorMessage.value = ''
   try {
     await $fetch<unknown>('/api/hub/plugins/scan', { method: 'POST' })
-    await load()
+    await Promise.all([load(), runtime.refresh()])
     toast.add({ title: 'Plugins directory rescanned', color: 'green', icon: 'i-heroicons-check-circle' })
   } catch (error) { errorMessage.value = message(error) }
   finally { scanning.value = false }

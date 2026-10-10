@@ -14,7 +14,8 @@ import type { ProviderDefinition, ProviderRegistry } from '../core/registry'
 import type { RequestHook, HookRegistry } from '../core/hooks'
 import { ProtocolRegistry, type ProtocolDefinition } from '../core/protocol-registry'
 import { IngressRegistry, type IngressDefinition } from '../core/ingress-registry'
-import type { PluginManifest, PluginRecord, PluginSource } from '../../shared/types/plugin'
+import { recordValuesKey, withRecordValuesLock, type StoredRecordValues } from './record-values'
+import type { PluginRecordLocation, PluginRecordValues, PluginRecordValuesChange, PluginMetricGetter, PluginMetricResult, PluginContributionRecord, PluginManifest, PluginRecord, PluginSource } from '../../shared/types/plugin'
 import { PluginError, safePath, validatePath, validateId, validateManifest, validatePackageManifest, normalizeManifest, validateFields, validateConfiguration } from './manifest'
 
 export interface PluginStorage {
@@ -26,6 +27,10 @@ export interface PluginStorage {
 type Cleanup = () => void | Promise<void>
 type RouteHandler = (event: H3Event) => unknown | Promise<unknown>
 export interface PluginAPI {
+  getRecordValues(location: PluginRecordLocation, recordId: string): Promise<PluginRecordValues>
+  getAllRecordValues(location: PluginRecordLocation): Promise<Record<string, PluginRecordValues>>
+  onRecordValuesChange(listener: (change: PluginRecordValuesChange) => void | Promise<void>): void
+  registerMetric(key: string, getter: PluginMetricGetter): void
   readonly config: Readonly<Record<string, unknown>>
   provide(value: object): void
   require<T extends object = Record<string, unknown>>(pluginId: string): T | undefined
@@ -56,6 +61,8 @@ interface InstalledPlugin {
   isolateModules?: boolean
 }
 interface Runtime {
+  recordListeners: Array<(change: PluginRecordValuesChange) => void | Promise<void>>
+  metrics: Map<string, PluginMetricGetter>
   moduleGeneration?: ModuleGeneration
   exports?: object
   accepting: boolean
@@ -70,6 +77,7 @@ interface Runtime {
   listeners: Array<(configuration: Readonly<Record<string, unknown>>) => void | Promise<void>>
 }
 export interface PluginManagerOptions {
+  listRecordIds?: (location: PluginRecordLocation) => Promise<string[]>
   requireBuiltin?: (id: string) => object | undefined
   builtinPlugins?: () => PluginRecord[]
   dispatchBuiltinRoute?: (id: string, method: string, path: string, event: H3Event) => unknown | Promise<unknown>
@@ -400,7 +408,7 @@ export class PluginManager {
       for (const id of previous.keys()) {
         if (replacements.has(id)) continue
         const keys = await this.options.storage.getKeys?.(`runtime-plugins:${id}:storage:`) ?? []
-        for (const key of [...keys, `runtime-plugins:${id}:state`, `runtime-plugins:${id}:source`]) {
+        for (const key of [...keys, recordValuesKey(id), `runtime-plugins:${id}:state`, `runtime-plugins:${id}:source`]) {
           this.storageRollback.set(key, await this.options.storage.getItem(key))
           await this.options.storage.removeItem(key)
         }
@@ -593,7 +601,7 @@ export class PluginManager {
     if (cycles.has(plugin.manifest.id)) throw new PluginError(cycles.get(plugin.manifest.id)!)
     const issues = dependencyIssues(plugin.manifest, this.list())
     if (issues.length) throw new PluginError(issues.join('; '))
-    const runtime: Runtime = { accepting: true, active: true, unregister: [], providers: [], protocols: [], ingresses: [], hooks: [], routes: new Map(), listeners: [] }
+    const runtime: Runtime = { recordListeners: [], metrics: new Map(), accepting: true, active: true, unregister: [], providers: [], protocols: [], ingresses: [], hooks: [], routes: new Map(), listeners: [] }
     plugin.runtime = runtime
     const assertRegistration = () => { if (!runtime.accepting || !runtime.active) throw new PluginError('Plugin registration is closed') }
     const prefix = (id: string) => {
@@ -617,6 +625,30 @@ export class PluginManager {
       return mutation()
     }
     const api: PluginAPI = {
+      getRecordValues: async (location, recordId) => {
+        if (!runtime.active) throw new PluginError('Plugin is inactive')
+        const values = await this.readRecordValues(plugin, location, recordId)
+        if (!runtime.active) throw new PluginError('Plugin is inactive')
+        return values
+      },
+      getAllRecordValues: async location => {
+        if (!runtime.active) throw new PluginError('Plugin is inactive')
+        this.recordFields(plugin, location)
+        const result: Record<string, PluginRecordValues> = Object.create(null)
+        for (const recordId of await this.options.listRecordIds?.(location) ?? []) result[recordId] = await this.readRecordValues(plugin, location, recordId)
+        if (!runtime.active) throw new PluginError('Plugin is inactive')
+        return result
+      },
+      onRecordValuesChange: listener => {
+        assertRegistration()
+        if (typeof listener !== 'function') throw new PluginError('Invalid record values listener')
+        runtime.recordListeners.push(listener)
+      },
+      registerMetric: (key, getter) => {
+        assertRegistration()
+        if (!plugin.manifest.contributes?.metrics?.some(metric => metric.key === key) || runtime.metrics.has(key) || typeof getter !== 'function') throw new PluginError('Invalid metric registration')
+        runtime.metrics.set(key, getter)
+      },
       get config() { return Object.freeze(structuredClone(plugin.configuration)) },
       provide: value => {
         assertRegistration()
@@ -726,6 +758,8 @@ export class PluginManager {
     runtime.accepting = false
     runtime.routes.clear()
     runtime.listeners.length = 0
+    runtime.recordListeners.length = 0
+    runtime.metrics.clear()
     for (const unregister of runtime.unregister.reverse()) {
       try { await this.bounded(Promise.resolve().then(unregister), true) } catch { plugin.error = 'Plugin cleanup failed' }
     }
@@ -812,10 +846,110 @@ export class PluginManager {
       const prefix = `runtime-plugins:${id}:storage:`
       const keys = await this.options.storage.getKeys?.(prefix) ?? []
       for (const key of keys) await this.options.storage.removeItem(key)
+      await this.options.storage.removeItem(recordValuesKey(id))
       await this.options.storage.removeItem(`runtime-plugins:${id}:state`)
       await this.options.storage.removeItem(`runtime-plugins:${id}:source`)
       this.plugins.delete(id)
       return this.list()
+    })
+  }
+
+  listContributions(): PluginContributionRecord[] {
+    return [...this.plugins.values()].filter(plugin => plugin.enabled && plugin.runtime?.active && plugin.manifest.contributes)
+      .map(plugin => ({ id: plugin.manifest.id, name: plugin.manifest.name ?? plugin.manifest.id, contributes: structuredClone(plugin.manifest.contributes!) }))
+  }
+
+  private recordFields(plugin: InstalledPlugin, location: PluginRecordLocation) {
+    if (!['models', 'apiKeys', 'providers'].includes(location)) throw new PluginError('Unknown contribution location')
+    const fields = plugin.manifest.contributes?.[location]
+    if (!fields) throw new PluginError('Contribution location not found')
+    return fields
+  }
+
+  private async recordExists(location: PluginRecordLocation, recordId: string): Promise<boolean> {
+    if (typeof recordId !== 'string' || !recordId || recordId.length > 2000 || /[\u0000-\u001f]/.test(recordId) || ['__proto__', 'constructor', 'prototype'].includes(recordId)) throw new PluginError('Invalid record identifier')
+    return (await this.options.listRecordIds?.(location))?.includes(recordId) ?? false
+  }
+
+  private async readRecordValues(plugin: InstalledPlugin, location: PluginRecordLocation, recordId: string): Promise<PluginRecordValues> {
+    const fields = this.recordFields(plugin, location)
+    if (!await this.recordExists(location, recordId)) return validateConfiguration(fields, {}, {}, false)
+    const stored = await this.options.storage.getItem<StoredRecordValues>(recordValuesKey(plugin.manifest.id))
+    const previous = stored?.[location]?.[recordId] ?? {}
+    // Removed schema keys must not leak through after a plugin upgrade.
+    const selected = Object.fromEntries(fields.filter(field => Object.hasOwn(previous, field.key)).map(field => [field.key, previous[field.key]]))
+    return validateConfiguration(fields, selected, {}, false)
+  }
+
+  private enabledContributionPlugin(id: string): InstalledPlugin {
+    const plugin = this.get(id)
+    if (!plugin.enabled || !plugin.runtime?.active) throw new PluginError('Plugin contributions not found')
+    return plugin
+  }
+
+  async getRecordValues(id: string, location: PluginRecordLocation, recordId: string): Promise<PluginRecordValues> {
+    const plugin = this.enabledContributionPlugin(id)
+    const values = await this.readRecordValues(plugin, location, recordId)
+    for (const field of this.recordFields(plugin, location)) if (field.type === 'secret') delete values[field.key]
+    return values
+  }
+
+  updateRecordValues(id: string, location: PluginRecordLocation, recordId: string, input: unknown): Promise<PluginRecordValues> {
+    return this.serial(id, async () => {
+      const plugin = this.enabledContributionPlugin(id)
+      const fields = this.recordFields(plugin, location)
+      const values = await withRecordValuesLock(async () => {
+        if (!await this.recordExists(location, recordId)) throw new PluginError('Contribution record not found')
+        const previous = await this.readRecordValues(plugin, location, recordId)
+        const values = validateConfiguration(fields, input, previous)
+        const key = recordValuesKey(id)
+        const stored = await this.options.storage.getItem<StoredRecordValues>(key) ?? {}
+        stored[location] ??= {}
+        stored[location]![recordId] = values
+        await this.options.storage.setItem(key, stored)
+        return values
+      })
+      for (const listener of plugin.runtime?.recordListeners ?? []) {
+        try { await this.bounded(Promise.resolve().then(() => listener({ location, recordId, values: Object.freeze(structuredClone(values)) }))) }
+        catch { throw new PluginError('Plugin record values saved, but a change listener failed') }
+      }
+      const result = structuredClone(values)
+      for (const field of fields) if (field.type === 'secret') delete result[field.key]
+      return result
+    })
+  }
+
+  async getMetrics(): Promise<PluginMetricResult[]> {
+    const operations: Promise<PluginMetricResult>[] = []
+    for (const plugin of this.plugins.values()) {
+      const runtime = plugin.runtime
+      if (!plugin.enabled || !runtime?.active) continue
+      for (const metric of plugin.manifest.contributes?.metrics ?? []) {
+        operations.push((async () => {
+          const result: PluginMetricResult = { pluginId: plugin.manifest.id, ...metric, value: null }
+          try {
+            const getter = runtime.metrics.get(metric.key)
+            if (!getter) throw new PluginError('Metric is not registered')
+            const value = await this.bounded(Promise.resolve().then(getter))
+            if (!runtime.active || plugin.runtime !== runtime) throw new PluginError('Plugin is inactive')
+            if (value !== null && typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) throw new PluginError('Invalid metric value')
+            result.value = value
+          } catch { result.error = 'Metric unavailable' }
+          return result
+        })())
+      }
+    }
+    return Promise.all(operations)
+  }
+
+  resolvePanel(id: string, panelId: string): Promise<string> {
+    return this.serial(id, async () => {
+      const plugin = this.enabledContributionPlugin(id)
+      const panel = plugin.manifest.contributes?.panels?.find(panel => panel.id === panelId)
+      if (!panel) throw new PluginError('Plugin panel not found')
+      const filename = await safePath(plugin.directory, validatePath(panel.page))
+      if (!filename.endsWith('.html') || !(await lstat(filename)).isFile()) throw new PluginError('Invalid plugin panel')
+      return filename
     })
   }
 

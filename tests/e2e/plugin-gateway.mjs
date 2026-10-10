@@ -44,7 +44,7 @@ export async function createPluginGateway() {
     for (let attempt = 0; attempt < 120; attempt++) {
       assert.equal(child.exitCode, null, `Isolated gateway exited: ${output}`)
       try {
-        if ((await request('')).ok) return { request, directory, close }
+        if ((await request('')).ok) return { request, directory, close, gateway, session }
       } catch {}
       await new Promise(resolve => setTimeout(resolve, 250))
     }

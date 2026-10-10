@@ -116,6 +116,8 @@ For example:
   `llmhub.name` is the display name, defaulting to npm `name`.
 - `llmhub.configSchema`, `llmhub.ui`, `llmhub.dependencies`, and
   `llmhub.optionalDependencies` correspond to the legacy top-level fields.
+  `llmhub.contributes` likewise maps to legacy top-level `contributes` (see runtime
+  dashboard contributions below).
   `configSchema` and UI path validation are unchanged.
 - Top-level npm `dependencies`/`peerDependencies` name **packages**. When an
   installed package has `llmhub` metadata, it is also inferred as a plugin-ID
@@ -204,6 +206,10 @@ type Cleanup = () => Awaitable<void>
 
 interface PluginAPI {
   readonly config: Readonly<Record<string, unknown>>
+  getRecordValues(location: PluginRecordLocation, recordId: string): Promise<PluginRecordValues>
+  getAllRecordValues(location: PluginRecordLocation): Promise<Record<string, PluginRecordValues>>
+  onRecordValuesChange(listener: (change: PluginRecordValuesChange) => Awaitable<void>): void
+  registerMetric(key: string, getter: PluginMetricGetter): void
   registerProvider(definition: ProviderDefinition): void
   registerProtocol(definition: ProtocolDefinition): void
   registerIngress(definition: IngressDefinition): void
@@ -533,7 +539,8 @@ SVG, PNG, JPG, JSON, and WOFF2 only, and disallows source/config files outside t
 page's asset subtree. The iframe and response CSP permit scripts but not
 same-origin privileges, networking, forms, or top-level navigation. Consequently
 custom pages cannot directly call authenticated management APIs; use the standard
-schema form for gateway configuration. No privileged postMessage bridge exists.
+schema form for gateway configuration. Legacy `ui.page` has no privileged
+postMessage bridge; new contribution panels use the restricted bridge below.
 
 ## Lifecycle and limits
 
@@ -557,6 +564,167 @@ Timeout bounds asynchronous waits, not CPU execution: a synchronous infinite loo
 promises cannot be cancelled; late API registration/storage access is rejected,
 but arbitrary external side effects are not reversible. These are consequences
 of the trusted, in-process design, not security isolation guarantees.
+
+## Runtime dashboard contributions (API 1.1.0)
+
+Runtime contributions require no Nuxt layer, rebuild, or core-page imports.
+Declare `llmhub.contributes` in `package.json`, or top-level `contributes` in
+legacy `plugin.json`. New consumers should use `engines.llmhub: "^1.1.0"`;
+plugins using only the 1.0 API remain compatible. See the runnable
+`examples/plugins/dashboard-contributions/` package.
+
+All contribution properties are optional; the complete shape is:
+
+```ts
+interface PluginContributionField extends PluginField {
+  showInList?: boolean
+}
+interface PluginContributions {
+  models?: PluginContributionField[]
+  apiKeys?: PluginContributionField[]
+  providers?: PluginContributionField[]
+  metrics?: { key: string; label: string; icon?: string }[]
+  panels?: {
+    id: string
+    title: string
+    location: 'home' | 'detail' | 'page'
+    page: string
+  }[]
+  navigation?: { panel: string; label: string; icon?: string }[]
+}
+```
+
+- Record fields support every `PluginField` property documented above: `key`,
+  `label`, `type`, `required`, `default`, and `options` (`label`, `value`). Their
+  validation and secret-update semantics are the same as configuration fields.
+  `showInList` is accepted only for API-key fields; secrets cannot be listed.
+  Models use namespaced model IDs, API keys use record IDs (not credentials),
+  and providers use their stored names. Values belong to the plugin, not to the
+  core provider/key/model payload or `connection.extra`.
+- Metrics declare display metadata; register their getters during setup. Keys
+  must match declarations and cannot be registered twice. Values are strings,
+  finite numbers, or `null`, synchronously or asynchronously. Getter failure or
+  timeout yields `value: null` and `error: "Metric unavailable"`, without leaking
+  exceptions or breaking other metrics.
+- Panels declare an HTML file relative to the plugin directory. `home` is a
+  home-dashboard panel, `detail` a plugin-detail panel, and `page` a standalone
+  panel at `/plugin-panels/<pluginId>/<panelId>`. Navigation entries must reference
+  a declared `page` panel; labels/icons are data, never executable templates.
+  Panel paths obey plugin safe-path rules and must end in `.html`.
+- Arrays are bounded to 100 entries. Metric keys, panel IDs and navigation panel
+  references match `[a-zA-Z][a-zA-Z0-9_-]{0,63}` and are unique within their array;
+  prototype-related identifiers are forbidden. Labels/titles and optional icons
+  must be nonempty strings of at most 2000 characters. Unknown contribution
+  locations are rejected before any plugin code executes.
+
+The injected record API is scoped to the calling plugin:
+
+```ts
+type PluginRecordLocation = 'models' | 'apiKeys' | 'providers'
+type PluginRecordValues = Record<string, unknown>
+interface PluginRecordValuesChange {
+  location: PluginRecordLocation
+  recordId: string
+  values: Readonly<PluginRecordValues>
+}
+type PluginMetricGetter = () => string | number | null
+  | Promise<string | number | null>
+
+// During setup:
+api.onRecordValuesChange(({ location, recordId, values }) => {
+  // Refresh plugin-owned state; values may contain secrets.
+})
+api.registerMetric('requests', () => requestCount)
+// During setup or later while active:
+const values = await api.getRecordValues('models', 'provider/model')
+const allValues = await api.getAllRecordValues('models')
+```
+
+Reads validate that the location was declared and apply schema defaults; a
+nonexistent record returns defaults without resurrecting stale stored values.
+Writes require an existing record. Removed schema keys are excluded. Bulk reads return an object
+keyed by current record IDs. Server-side plugin reads and change listeners
+receive their own secret values; dashboard reads and writes omit secrets in
+responses. Never echo these snapshots through routes, metrics, logs, or panels.
+Secrets remain plaintext in local storage, not encrypted by this feature.
+
+Record writes merge validated values and persist before invoking bounded change
+listeners. A listener failure reports that the save succeeded but notification
+failed; it does not roll back the stored values. Listeners and metric getters
+register only during setup and are generation-owned. Disable, failed setup,
+reload and shutdown revoke them; stopped generations cannot read record values.
+Only enabled, active runtimes publish contributions. Disable/reload retains
+record values; uninstall removes plugin-owned values. Provider/API-key deletion
+also removes associated contributions. Storage uses
+`plugin-record-values:<pluginId>`, separately from core records and
+private `api.storage` data.
+
+### Management API
+
+These endpoints require dashboard session authentication, not client API keys:
+
+| Method | Path | Response / input |
+| --- | --- | --- |
+| GET | `/api/hub/plugin-contributions` | Active `{ id, name, contributes }[]` |
+| GET | `/api/hub/plugin-contributions/metrics` | `{ pluginId, key, label, icon?, value, error? }[]` |
+| GET / PUT | `/api/hub/plugin-contributions/<pluginId>/<location>/<recordId>` | Sanitized field-value object; PUT accepts a field-value object, not core-record data |
+| GET | `/api/hub/plugins/<pluginId>/panels/<panelId>` | Declared HTML with injected client helper |
+| GET | `/api/hub/plugins/panel-client` | Client helper JavaScript |
+
+URL-encode each path parameter separately, especially a model ID containing `/`.
+Unknown/inactive contributions and missing records cannot be edited. Contribution
+saves are separate operations from core record saves; do not assume a combined
+transaction or resend already-created core records after a contribution failure.
+
+### Panel client and security
+
+Panel HTML is self-contained: inline JavaScript/CSS and data-URL images/fonts.
+The host injects a dependency-free helper before plugin scripts:
+
+```html
+<script>
+  window.llmhub.fetch('status').then(status => {
+    document.body.textContent = String(status.requests)
+  })
+  // JSON mutations: llmhub.fetch('settings', { method: 'PUT', body: { enabled: true } })
+  // Optional explicit sizing (the helper also uses ResizeObserver):
+  window.llmhub.setHeight(320)
+  addEventListener('llmhub:theme', event => console.log(event.detail))
+</script>
+```
+
+`fetch` resolves to JSON response data, not a browser `Response`. The helper
+exposes `theme` (`light`/`dark`), updates `documentElement.dataset.theme` and
+`colorScheme`, and dispatches `llmhub:theme`. Requests time out; pending requests
+are capped at 32. Render returned text with text APIs, not unsanitized HTML.
+
+The versioned postMessage channel is `llmhub:panel:v1`. Child messages are
+`ready`, `height` (integer 120–1200), and `fetch` (`requestId`, `path`, `method`,
+optional JSON `body`). Host replies are `theme` or `response` (`requestId`, `ok`,
+`data` on success / generic `error` on failure). The host requires both the exact
+iframe `contentWindow` as `event.source` and opaque origin `null`; origin alone
+is not authorization. Unexpected message keys are rejected. Request IDs match
+`[a-zA-Z0-9_-]{1,64}`; allowed methods are GET/POST/PUT/PATCH/DELETE. GET bodies
+are forbidden; JSON bodies are bounded to 64 KiB and depth 20.
+
+Only relative routes or exact `/api/hub/plugins/<ownId>/api/` URLs are allowed.
+Cross-plugin/core routes, traversal, percent encodings, backslashes, fragments,
+absolute external URLs and ambiguous paths are rejected. Query syntax is limited
+to `[a-zA-Z0-9_=&.,~+-]*`. The host supplies authenticated requests and JSON headers;
+plugins cannot supply credentials, headers, redirects, or arbitrary fetch options.
+Redirects are refused and stale replies are discarded on frame replacement.
+The bridge intentionally grants access to the plugin's own routes, not to all
+management APIs. Route handlers still must sanitize their own responses.
+
+The host retrieves HTML with its session and passes it as `srcdoc` to a
+credentialless iframe with `sandbox="allow-scripts"`, without same-origin
+privileges. Resource CSP is injected before plugin markup because `srcdoc` does
+not inherit response headers; direct HTML responses also carry sandbox CSP.
+The resource policy denies fetch/network resources, frames, workers, objects,
+forms, base URLs and external scripts/styles. Sandbox disallows top-level
+navigation; it is not a claim that all iframe self-navigation is blocked. Host cookies and session tokens are never sent through postMessage.
+This isolates panel UI, not server plugin code: installation remains a full
+in-process trust decision. Legacy `ui.page` remains separate and unchanged.
 
 ## Built-in dashboard contributions
 
@@ -701,7 +869,7 @@ fixtures. Run the normal acceptance sequence: `npx vue-tsc --noEmit`, `npm test`
 
 ## Plugin API versions, dependencies and upgrades
 
-The kernel exports `PLUGIN_API_VERSION = '1.0.0'` from
+The kernel exports `PLUGIN_API_VERSION = '1.1.0'` from
 `server/core/plugin-version.ts`. This is **not** the application version. Adding
 hooks or optional API fields increments its minor version; changing signatures
 or removing functionality increments its major version; compatible fixes increment

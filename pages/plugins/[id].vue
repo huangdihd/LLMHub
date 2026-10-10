@@ -81,8 +81,13 @@
 
         <UCard v-if="pageURL && plugin.enabled" :ui="{ body: { padding: '' } }">
           <template #header><h3 class="font-medium text-gray-900 dark:text-white">Plugin page</h3></template>
-          <!-- Scripts may run, but the plugin cannot access the dashboard's origin or parent DOM. -->
+          <!-- Legacy pages retain their asset endpoint; contribution panels use the restricted bridge. -->
           <iframe :src="pageURL" :title="`${plugin.manifest?.name || plugin.id} plugin page`" sandbox="allow-scripts" referrerpolicy="no-referrer" class="w-full min-h-[32rem] rounded-b-lg" />
+        </UCard>
+
+        <UCard v-for="panel in detailPanels" :key="panel.id" :ui="{ body: { padding: '' } }">
+          <template #header><h3 class="font-medium text-gray-900 dark:text-white">{{ panel.title }}</h3></template>
+          <RuntimePluginPanel :plugin-id="plugin.id" :panel="panel" />
         </UCard>
       </div>
     </template>
@@ -91,6 +96,9 @@
 
 <script setup lang="ts">
 import type { PluginRecord } from '~/shared/types/plugin'
+import type { RuntimePanel } from '~/shared/dashboard/plugin-panel'
+import { useRuntimePluginContributions } from '~/composables/useRuntimePluginContributions'
+const runtime = useRuntimePluginContributions()
 const route = useRoute()
 const toast = useToast()
 type DashboardPlugin = PluginRecord & { apiVersion?: string }
@@ -104,6 +112,11 @@ const errorMessage = ref('')
 const schemaForm = ref<{ validate: () => boolean } | null>(null)
 const fields = computed(() => plugin.value?.manifest?.configSchema || [])
 const endpoint = computed(() => `/api/hub/plugins/${encodeURIComponent(String(route.params.id))}`)
+const detailPanels = computed<RuntimePanel[]>(() => {
+  const record = plugin.value
+  if (!record?.enabled || record.error) return []
+  return (record.manifest.contributes?.panels || []).filter(panel => panel.location === 'detail')
+})
 const pageURL = computed(() => {
   const page = plugin.value?.manifest?.ui?.page
   if (!page) return ''
@@ -188,7 +201,7 @@ async function toggle() {
   try {
     await $fetch<unknown>(`${endpoint.value}/${record.enabled ? 'disable' : 'enable'}`, { method: 'POST' })
     toast.add({ title: `${record.manifest?.name || record.id} ${record.enabled ? 'disabled' : 'enabled'}`, color: 'green', icon: 'i-heroicons-check-circle' })
-    await load()
+    await Promise.all([load(), runtime.refresh()])
   } catch (error) {
     errorMessage.value = message(error, 'Plugin operation failed')
   } finally { toggling.value = false }

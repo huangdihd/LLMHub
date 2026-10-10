@@ -30,20 +30,21 @@
           <li
             v-for="model in group.models"
             :key="model.id"
-            class="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+            class="flex flex-col gap-x-4 gap-y-2 px-4 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
           >
-            <div class="min-w-0">
+            <div class="min-w-0 sm:min-w-[14rem] sm:flex-1">
               <p class="font-mono text-sm text-gray-900 dark:text-white break-all">{{ model.id }}</p>
               <p v-if="model.display_name && model.display_name !== model.id" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">{{ model.display_name }}</p>
             </div>
 
-            <div class="flex items-center gap-3 flex-wrap flex-shrink-0">
+            <div class="flex items-center gap-x-3 gap-y-2 flex-wrap sm:justify-end">
               <div class="flex items-center gap-1.5 text-gray-400 dark:text-gray-500">
                 <UTooltip v-if="model.capabilities?.tools" text="Tool calling"><UIcon name="i-heroicons-wrench-screwdriver" class="w-4 h-4" /></UTooltip>
                 <UTooltip v-if="model.capabilities?.vision" text="Vision"><UIcon name="i-heroicons-photo" class="w-4 h-4" /></UTooltip>
                 <UTooltip v-if="model.capabilities?.streaming !== false" text="Streaming"><UIcon name="i-heroicons-bolt" class="w-4 h-4" /></UTooltip>
               </div>
               <component v-for="section in dashboard.sections('model-actions')" :key="section.id" :is="section.component" v-bind="section.props(model)" />
+              <RuntimeModelFields :record-id="model.id" />
               <UTooltip text="Copy model ID">
                 <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-clipboard-document" aria-label="Copy model ID" @click="copyModelId(model.id)" />
               </UTooltip>
@@ -59,6 +60,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import RuntimeModelFields from '~/components/RuntimeModelFields.vue'
 
 const toast = useToast()
 const models = ref<any[]>([])

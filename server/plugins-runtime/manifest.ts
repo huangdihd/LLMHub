@@ -2,7 +2,7 @@
 import { valid, validRange } from 'semver'
 import { lstat, realpath } from 'node:fs/promises'
 import { resolve, relative, isAbsolute, sep, parse } from 'node:path'
-import type { PluginField, PluginManifest } from '../../shared/types/plugin'
+import type { PluginContributions, PluginField, PluginManifest } from '../../shared/types/plugin'
 
 /** Gateway-authored failure whose message is safe to show to dashboard administrators. */
 export class PluginError extends Error {}
@@ -48,11 +48,49 @@ export function validateFields(input: unknown): PluginField[] {
     seen.add(field.key)
     if (field.type === 'select' && (!Array.isArray(field.options) || !field.options.length
       || field.options.some((option: { label: unknown; value: unknown }) => !option || typeof option.label !== 'string'
-        || !['string', 'number', 'boolean'].includes(typeof option.value)))) throw new PluginError('Invalid plugin options')
+        || !['string', 'number', 'boolean'].includes(typeof option.value) || (typeof option.value === 'number' && !Number.isFinite(option.value))))) throw new PluginError('Invalid plugin options')
     if (field.type === 'secret' && field.default !== undefined) throw new PluginError('Secret defaults are not allowed')
     if (field.default !== undefined) validateConfiguration([{ ...field, required: false }], { [field.key]: field.default })
   }
   return structuredClone(input)
+}
+
+export function validateContributions(input: unknown): PluginContributions | undefined {
+  if (input === undefined) return undefined
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new PluginError('Invalid plugin contributions')
+  const value = input as PluginContributions
+  if (Object.keys(value).some(key => !['models', 'apiKeys', 'providers', 'metrics', 'panels', 'navigation'].includes(key))) throw new PluginError('Unknown contribution location')
+  for (const location of ['models', 'apiKeys', 'providers'] as const) {
+    validateFields(value[location])
+    for (const field of value[location] ?? []) {
+      if (field.showInList !== undefined && (typeof field.showInList !== 'boolean' || location !== 'apiKeys' || (field.showInList && field.type === 'secret'))) throw new PluginError('Invalid contribution list field')
+    }
+  }
+  const text = (input: unknown) => typeof input === 'string' && !!input.trim() && input.length <= 2000
+  for (const kind of ['metrics', 'panels', 'navigation'] as const) {
+    const entries = value[kind]
+    if (entries === undefined) continue
+    if (!Array.isArray(entries) || entries.length > 100) throw new PluginError('Invalid plugin contributions')
+    const seen = new Set<string>()
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new PluginError('Invalid plugin contribution')
+      const item = entry as unknown as Record<string, unknown>
+      const allowed = kind === 'metrics' ? ['key', 'label', 'icon'] : kind === 'panels' ? ['id', 'title', 'location', 'page'] : ['panel', 'label', 'icon']
+      if (Object.keys(item).some(key => !allowed.includes(key))) throw new PluginError('Unknown contribution field')
+      const key = item[kind === 'metrics' ? 'key' : kind === 'panels' ? 'id' : 'panel']
+      if (typeof key !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(key) || ['__proto__', 'constructor', 'prototype'].includes(key) || seen.has(key)) throw new PluginError('Invalid or duplicate contribution identifier')
+      seen.add(key)
+      if (!text(item[kind === 'panels' ? 'title' : 'label']) || (item.icon !== undefined && !text(item.icon))) throw new PluginError('Invalid contribution label')
+      if (kind === 'panels') {
+        if (!['home', 'detail', 'page'].includes(item.location as string)) throw new PluginError('Unknown panel location')
+        if (!validatePath(item.page as string).endsWith('.html')) throw new PluginError('Panel page must be HTML')
+      }
+    }
+  }
+  for (const navigation of value.navigation ?? []) {
+    if (!value.panels?.some(panel => panel.id === navigation.panel && panel.location === 'page')) throw new PluginError('Navigation must reference a page panel')
+  }
+  return structuredClone(value)
 }
 
 export function validateManifest(input: unknown, strictVersion = false): PluginManifest {
@@ -82,7 +120,7 @@ export function validateManifest(input: unknown, strictVersion = false): PluginM
     engines: value.engines ? { llmhub: value.engines.llmhub } : undefined,
     dependencies: value.dependencies ? { ...value.dependencies } : undefined,
     optionalDependencies: value.optionalDependencies ? { ...value.optionalDependencies } : undefined,
-    entry: value.entry, configSchema: validateFields(value.configSchema), ui: value.ui ? { page: value.ui.page } : undefined }
+    contributes: validateContributions(value.contributes), entry: value.entry, configSchema: validateFields(value.configSchema), ui: value.ui ? { page: value.ui.page } : undefined }
 }
 
 /** Resolve the package root for the ESM runtime, never browser/require branches. */
@@ -130,7 +168,7 @@ export function validatePackageManifest(input: unknown): PluginManifest {
   return validateManifest({
     id, name: metadata.name === undefined ? value.name : metadata.name,
     version: value.version, description: value.description, engines: value.engines,
-    entry, configSchema: metadata.configSchema, ui: metadata.ui,
+    entry, configSchema: metadata.configSchema, ui: metadata.ui, contributes: metadata.contributes,
     dependencies: metadata.dependencies, optionalDependencies: metadata.optionalDependencies
   }, true)
 }

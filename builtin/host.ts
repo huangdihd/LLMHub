@@ -82,6 +82,11 @@ export class BuiltinPluginHost {
       return `builtin-plugins:${id}:storage:${key}`
     }
     const api: PluginAPI = {
+      // Dashboard contributions belong to installable runtime plugins, not policy built-ins.
+      getRecordValues: async () => { assertActive(); throw new PluginError('Builtin dashboard contributions are not supported') },
+      getAllRecordValues: async () => { assertActive(); throw new PluginError('Builtin dashboard contributions are not supported') },
+      onRecordValuesChange: () => { assertRegistration(); throw new PluginError('Builtin dashboard contributions are not supported') },
+      registerMetric: () => { assertRegistration(); throw new PluginError('Builtin dashboard contributions are not supported') },
       config: Object.freeze({}),
       provide: value => {
         assertRegistration()

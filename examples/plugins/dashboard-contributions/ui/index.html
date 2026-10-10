@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Example status</title>
+  <style>
+    :root { color-scheme: light; font: 14px system-ui, sans-serif; }
+    :root[data-theme="dark"] { color-scheme: dark; }
+    body { margin: 16px; }
+    button { font: inherit; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <p id="status">Loading example status…</p>
+  <button id="refresh" type="button">Refresh</button>
+  <script src="/api/hub/plugins/panel-client"></script>
+  <script>
+    async function refresh() {
+      try {
+        const status = await llmhub.fetch('status')
+        document.getElementById('status').textContent = `Requests: ${status.requests}; fields changed: ${status.changed}`
+      } catch (error) {
+        document.getElementById('status').textContent = error.message
+      }
+    }
+    document.getElementById('refresh').addEventListener('click', refresh)
+    refresh()
+  </script>
+</body>
+</html>

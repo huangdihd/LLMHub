@@ -70,7 +70,12 @@ function harness(fetch) {
       models: 'models, loading, loadAll, refreshModels',
       security: 'config, loadConfig, saveConfig'
     }[name]
-    return execute(`${script}\nexport { ${exports} }`, resolve(root, filename))
+    // The script-only harness has no renderer to mount the runtime field editor.
+    // Supply the empty-contribution component contract; existing payload assertions stay unchanged.
+    const mountFields = !baseline && name === 'api-keys'
+      ? '\ncontributionFields.value = { validate: () => true, save: async () => {} }'
+      : ''
+    return execute(`${script}${mountFields}\nexport { ${exports} }`, resolve(root, filename))
   }
   return { load, page, mounted, notifications, navigations }
 }

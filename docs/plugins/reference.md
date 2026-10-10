@@ -201,7 +201,6 @@ interface RequestHook {
   onModelsRefreshed?(validModelIds: ReadonlySet<string>): Awaitable<void>
 
   // Generation
-  onNormalize?(request: LLMRequest, context: HookContext): Awaitable<LLMRequest | void>
   onRequest?(request: LLMRequest, context: HookContext): Awaitable<LLMRequest | void>
   onResponse?(response: LLMResponse, context: HookContext): Awaitable<LLMResponse | void>
   onStreamChunk?(chunk: LLMStreamChunk, context: HookContext):
@@ -271,8 +270,9 @@ interface HookContext {
 }
 ```
 
-`onNormalize` is a narrower stage that currently runs only for Claude
-`messages` requests, after `onRequest`. Prefer `onRequest`.
+`context.incomingProtocol` identifies the client wire format (for example
+`claude-messages` or `openai-chat`), so a hook that applies to only one of them
+can check it and return early.
 
 The unified request, response, chunk, message, tool-call and usage types are
 declared in `llmhub-plugin.d.ts`.
@@ -294,7 +294,7 @@ bookkeeping in `onAccountingComplete` or in `onComplete`, not both.
 
 | Stage | An exception... |
 | --- | --- |
-| Admission, `onModels`, `onNormalize`, `onRequest` | fails the request |
+| Admission, `onModels`, `onRequest` | fails the request |
 | `onAccountingComplete` with `attempt` | fails the request |
 | `onAccountingComplete` with `usage` | is logged; the request continues |
 | `onResponse`, `onStreamChunk`, `onError`, `onComplete` | is logged; the request continues |

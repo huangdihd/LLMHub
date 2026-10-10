@@ -597,7 +597,6 @@ export interface RequestHook {
   onModels?: (models: ModelInfo[], context: HookContext) => Awaitable<ModelInfo[] | void>
   onModelsRefreshed?: (validModelIds: ReadonlySet<string>) => Awaitable<void>
   onAccountingComplete?: (completion: AccountingCompletion, context: HookContext) => Awaitable<void>
-  onNormalize?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
   onRequest?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
   onResponse?: (response: LLMResponse, context: HookContext) => Awaitable<LLMResponse | void>
   /** undefined preserves the chunk, null or [] drops it. */

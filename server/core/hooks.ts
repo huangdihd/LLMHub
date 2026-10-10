@@ -46,7 +46,6 @@ export interface RequestHook {
   onModels?: (models: ModelInfo[], context: HookContext) => Awaitable<ModelInfo[] | void>
   onModelsRefreshed?: (validModelIds: ReadonlySet<string>) => Awaitable<void>
   onAccountingComplete?: (completion: AccountingCompletion, context: HookContext) => Awaitable<void>
-  onNormalize?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
   onRequest?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
   onResponse?: (response: LLMResponse, context: HookContext) => Awaitable<LLMResponse | void>
   /** undefined preserves the chunk, null or [] drops it. */
@@ -94,14 +93,6 @@ export class HookRegistry {
     for (const hook of this.ordered()) {
       await hook.onAccountingComplete?.(completion, context)
     }
-  }
-
-  async normalize(request: LLMRequest, context: HookContext): Promise<LLMRequest> {
-    for (const hook of this.ordered()) {
-      const result = await hook.onNormalize?.(request, context)
-      if (result) request = result
-    }
-    return request
   }
 
   async request(request: LLMRequest, context: HookContext): Promise<LLMRequest> {

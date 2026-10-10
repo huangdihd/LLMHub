@@ -46,14 +46,6 @@ export class RequestPipeline {
     return { request, resolved }
   }
 
-  async normalizeRequest(request: LLMRequest): Promise<LLMRequest> {
-    try {
-      return await this.hooks.normalize(request, this.context)
-    } catch (error) {
-      throw this.manager.buildGatewayError(error instanceof Error ? error.message : String(error), 500)
-    }
-  }
-
   accountingComplete(completion: AccountingCompletion): Promise<void> {
     if (completion.kind === 'usage' && typeof completion.usage !== 'number') this.usage = completion.usage
     return completeAccounting(completion, this.context, this.hooks)

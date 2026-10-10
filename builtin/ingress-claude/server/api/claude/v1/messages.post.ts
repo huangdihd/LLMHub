@@ -36,9 +36,6 @@ export default defineEventHandler(async (event) => {
 
       console.log(`[LLMHub] ${new Date().toISOString()} key=${event.context._apiKeyRecord?.name || 'unknown'} model=${request.model} provider=${resolved.providerName}(${adapter.name}) stream=${request.stream ?? false}`)
 
-      // Apply CCH normalization before adapter formats the request
-      Object.assign(request, await pipeline.normalizeRequest(request))
-
       if (request.stream && adapter) {
         const stream = await pipeline.openStream(request, adapter)
 

@@ -35,16 +35,16 @@ for (const stage of ['onBeforeIdentity', 'onAfterIdentity', 'onModelResolved'] a
   })
 }
 
-test('normalize chains replacements and void observers in priority order', async () => {
+test('request chains replacements and void observers in priority order', async () => {
   const hooks = new HookRegistry()
   const original = { model: 'first/model', messages: [], config: {} }
   const replacement = { ...original, model: 'second/model' }
-  hooks.register({ id: 'observer', priority: 10, onNormalize: (value, metadata) => {
+  hooks.register({ id: 'observer', priority: 10, onRequest: (value, metadata) => {
     assert.equal(value, replacement)
     assert.equal(metadata, context)
   } })
-  hooks.register({ id: 'replace', priority: -10, onNormalize: () => replacement })
-  assert.equal(await hooks.normalize(original, context), replacement)
+  hooks.register({ id: 'replace', priority: -10, onRequest: () => replacement })
+  assert.equal(await hooks.request(original, context), replacement)
   assert.equal(original.model, 'first/model')
 })
 
@@ -73,15 +73,15 @@ test('accounting awaits ordered hooks for both attempt and usage boundaries', as
   assert.deepEqual(calls, ['first:attempt', 'last:attempt', 'first:usage', 'last:usage'])
 })
 
-test('normalize, models and accounting failures reject and stop subsequent hooks', async () => {
-  for (const stage of ['onNormalize', 'onModels', 'onAccountingComplete'] as const) {
+test('request, models and accounting failures reject and stop subsequent hooks', async () => {
+  for (const stage of ['onRequest', 'onModels', 'onAccountingComplete'] as const) {
     const hooks = new HookRegistry()
     const failure = new Error(stage)
     let reached = false
     hooks.register({ id: 'failure', [stage]: async () => { throw failure } } as RequestHook)
     hooks.register({ id: 'later', [stage]: () => { reached = true } } as RequestHook)
-    const pending = stage === 'onNormalize'
-      ? hooks.normalize({ model: 'provider/model', messages: [], config: {} }, context)
+    const pending = stage === 'onRequest'
+      ? hooks.request({ model: 'provider/model', messages: [], config: {} }, context)
       : stage === 'onModels' ? hooks.models([], context) : hooks.accountingComplete({ kind: 'attempt' }, context)
     await assert.rejects(pending, error => error === failure)
     assert.equal(reached, false)

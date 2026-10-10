@@ -101,6 +101,19 @@ plugins use this for the client endpoints and register an `IngressDefinition`
 so that the shared admission middleware (`server/middleware/ingress-auth.ts`)
 knows how to authenticate requests under their path prefix.
 
+### Subscription usage and provider panels
+
+The host owns `SubscriptionUsagePanel` and the shared subscription dashboard
+state. Every type declaring `subscriptionUsage` gets the same Usage action and
+panel, regardless of where it was registered. Reset controls depend on
+`resetSubscriptionUsage`; only boolean capabilities reach the type API.
+Upstream-specific controls stay in provider layers through the dashboard usage
+controls slot, rather than teaching the host about particular provider IDs.
+Runtime providers can additionally declare sandboxed `provider` panels with
+`providerType`, identifier-only context and confirmed external HTTPS links; see
+[Panels](reference.md#panels). They appear after the shared usage panel and
+provider-specific details, in declaration order.
+
 ### Dashboard components
 
 Built-ins contribute real Vue components. Each page asks for contributions
@@ -187,9 +200,10 @@ Things specific to plugin work:
   something clients can observe.
 - **`tests/plugin-api.type-test.ts` fails if `llmhub-plugin.d.ts` drifts** from
   the real types. Update the declarations when you change the plugin API.
-- **Dashboard markup has no automated check.** `tests/dashboard-behavior.test.mjs`
-  covers page logic only. Look at UI changes in a browser, in both themes and
-  at phone width.
+- **Dashboard tests complement visual checks.** `tests/dashboard-behavior.test.mjs`
+  covers page logic and `tests/subscription-usage.test.mjs` covers shared usage
+  state and rendering. Look at UI changes in a browser, in both themes and at
+  phone width.
 
 ## Changing the plugin API
 

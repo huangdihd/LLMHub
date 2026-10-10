@@ -1,2 +1,2 @@
 /** Version of the injected plugin contract, independent of the application release. */
-export const PLUGIN_API_VERSION = '1.2.0'
+export const PLUGIN_API_VERSION = '1.3.0'

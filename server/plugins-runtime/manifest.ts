@@ -75,14 +75,17 @@ export function validateContributions(input: unknown): PluginContributions | und
     for (const entry of entries) {
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new PluginError('Invalid plugin contribution')
       const item = entry as unknown as Record<string, unknown>
-      const allowed = kind === 'metrics' ? ['key', 'label', 'icon'] : kind === 'panels' ? ['id', 'title', 'location', 'page'] : ['panel', 'label', 'icon']
+      const allowed = kind === 'metrics' ? ['key', 'label', 'icon'] : kind === 'panels' ? ['id', 'title', 'location', 'page', 'providerType'] : ['panel', 'label', 'icon']
       if (Object.keys(item).some(key => !allowed.includes(key))) throw new PluginError('Unknown contribution field')
       const key = item[kind === 'metrics' ? 'key' : kind === 'panels' ? 'id' : 'panel']
       if (typeof key !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(key) || ['__proto__', 'constructor', 'prototype'].includes(key) || seen.has(key)) throw new PluginError('Invalid or duplicate contribution identifier')
       seen.add(key)
       if (!text(item[kind === 'panels' ? 'title' : 'label']) || (item.icon !== undefined && !text(item.icon))) throw new PluginError('Invalid contribution label')
       if (kind === 'panels') {
-        if (!['home', 'detail', 'page'].includes(item.location as string)) throw new PluginError('Unknown panel location')
+        if (!['home', 'detail', 'page', 'provider'].includes(item.location as string)) throw new PluginError('Unknown panel location')
+        if (item.location === 'provider') {
+          if (typeof item.providerType !== 'string' || !/^[a-z0-9][a-z0-9-]{1,40}:[a-z0-9][a-z0-9-]{0,63}$/.test(item.providerType)) throw new PluginError('Provider panel requires a providerType')
+        } else if ('providerType' in item) throw new PluginError('providerType is only valid for provider panels')
         if (!validatePath(item.page as string).endsWith('.html')) throw new PluginError('Panel page must be HTML')
       }
     }
@@ -116,11 +119,15 @@ export function validateManifest(input: unknown, strictVersion = false): PluginM
     if (!value.ui || typeof value.ui !== 'object' || Array.isArray(value.ui)) throw new PluginError('Invalid plugin UI')
     validatePath(value.ui.page)
   }
+  const contributes = validateContributions(value.contributes)
+  for (const panel of contributes?.panels ?? []) {
+    if (panel.location === 'provider' && !panel.providerType!.startsWith(`${value.id}:`)) throw new PluginError('Provider panel must belong to its own plugin')
+  }
   return { id: value.id, name: value.name, version: value.version, description: value.description,
     engines: value.engines ? { llmhub: value.engines.llmhub } : undefined,
     dependencies: value.dependencies ? { ...value.dependencies } : undefined,
     optionalDependencies: value.optionalDependencies ? { ...value.optionalDependencies } : undefined,
-    contributes: validateContributions(value.contributes), entry: value.entry, configSchema: validateFields(value.configSchema), ui: value.ui ? { page: value.ui.page } : undefined }
+    contributes, entry: value.entry, configSchema: validateFields(value.configSchema), ui: value.ui ? { page: value.ui.page } : undefined }
 }
 
 /** Resolve the package root for the ESM runtime, never browser/require branches. */

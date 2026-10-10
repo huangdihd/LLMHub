@@ -168,3 +168,50 @@ test('management endpoints decode model IDs once, enforce verbs and map safe err
     await assert.rejects(recordEndpoint(event('route-plugin/models/provider%2Fmodel')), { statusCode: 404 })
   } finally { runtime.getPluginManager = previous; await fixture.close() }
 })
+
+test('provider panel manifests require an own namespaced provider type only at provider location', () => {
+  const { validateManifest } = require(`${build}/plugins-runtime/manifest.js`)
+  const panel = { id: 'account', title: 'Account', location: 'provider', providerType: 'custom-plugin:custom', page: 'account.html' }
+  const manifest = { id: 'custom-plugin', name: 'Custom', version: '1.0.0', contributes: { panels: [panel] } }
+  assert.deepEqual(validateManifest(manifest).contributes.panels, [panel])
+  for (const providerType of [undefined, '', 'custom', 'builtin', 'other-plugin:custom', 'custom-plugin:', 'custom-plugin:../custom', 42]) {
+    assert.throws(() => validateManifest({ ...manifest, contributes: { panels: [{ ...panel, providerType }] } }))
+  }
+  for (const location of ['home', 'detail', 'page']) assert.throws(() => validateContributions({ panels: [{ ...panel, location }] }))
+  assert.throws(() => validateContributions({ panels: [panel], navigation: [{ panel: 'account', label: 'Account' }] }))
+  assert.throws(() => validateContributions({ panels: [{ ...panel, page: '../account.html' }] }))
+})
+
+test('provider panel activation verifies actual registration ownership and rolls back on missing providers', async () => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), 'provider-panel-test-'))
+  const registry = new ProviderRegistry()
+  const manager = new PluginManager({ directory: root, storage: memoryStorage(), providerRegistry: registry, hookRegistry: new HookRegistry() })
+  const directory = join(root, 'custom-plugin')
+  const manifest = (providerType: string) => ({ id: 'custom-plugin', name: 'Custom', version: '1.0.0', entry: 'index.mjs', contributes: { panels: [{ id: 'account', title: 'Account', location: 'provider', providerType, page: 'account.html' }] } })
+  try {
+    await mkdir(directory)
+    await writeFile(join(directory, 'plugin.json'), JSON.stringify(manifest('custom-plugin:missing')))
+    await writeFile(join(directory, 'account.html'), '<!doctype html><p>Account</p>')
+    await writeFile(join(directory, 'index.mjs'), `export default { setup(api) {
+      api.registerProvider({ id: 'custom', createAdapter() { return {} }, async fetchModels() { return [] } });
+      api.registerRoute('GET', 'status', () => 'healthy');
+    } }`)
+    await manager.scan()
+    await assert.rejects(manager.enable('custom-plugin'), /registered by this plugin/)
+    assert.equal(manager.listContributions().length, 0)
+    await assert.rejects(manager.resolvePanel('custom-plugin', 'account'), /not found/)
+    await writeFile(join(directory, 'plugin.json'), JSON.stringify(manifest('custom-plugin:custom')))
+    await manager.reload('custom-plugin')
+    await manager.enable('custom-plugin')
+    assert.equal(manager.listContributions()[0].contributes.panels[0].providerType, 'custom-plugin:custom')
+    assert.equal(await manager.resolvePanel('custom-plugin', 'account'), join(directory, 'account.html'))
+    await manager.reload('custom-plugin')
+    assert.equal(await manager.resolvePanel('custom-plugin', 'account'), join(directory, 'account.html'))
+    await manager.disable('custom-plugin')
+    assert.equal(manager.listContributions().length, 0)
+    await assert.rejects(manager.resolvePanel('custom-plugin', 'account'), /not found/)
+  } finally {
+    await manager.shutdown()
+    await rm(root, { recursive: true, force: true })
+  }
+})

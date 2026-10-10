@@ -1,3 +1,4 @@
+import { useSubscriptionUsage } from './useSubscriptionUsage'
 import type { DashboardProviderContext, DashboardProviderExtension, DashboardProviderSection, DashboardProviderRecord } from '~/shared/dashboard/providers'
 
 const modules = import.meta.glob<{ default: DashboardProviderExtension }>('../builtin/*/dashboard-provider.ts', { eager: true })
@@ -9,8 +10,10 @@ const sections = Object.values(sectionModules).map(module => module.default)
   .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
 
 export function useProviderDashboard(context: DashboardProviderContext) {
+  const usage = useSubscriptionUsage(context.showError)
   const sessions = new Map(extensions.map(extension => [extension.id, extension.create?.(context)]))
   return {
+    usage,
     extensions,
     sections,
     defaults: Object.assign({}, ...extensions.map(extension => extension.defaults), ...sections.map(section => section.defaults)),
@@ -28,6 +31,6 @@ export function useProviderDashboard(context: DashboardProviderContext) {
     pending: () => sessions.get(context.form.protocol)?.pending?.() || false,
     cancel: async () => { await sessions.get(context.form.protocol)?.cancel?.() },
     reset: () => { sessions.forEach(session => session?.reset?.()) },
-    remove: (name: string) => { sessions.forEach(session => session?.remove?.(name)) }
+    remove: (name: string) => { usage.remove(name); sessions.forEach(session => session?.remove?.(name)) }
   }
 }

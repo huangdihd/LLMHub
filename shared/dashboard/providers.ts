@@ -62,6 +62,7 @@ export interface DashboardProviderExtension {
   advanced?: Component
   badge?: Component
   actions?: Component
+  usageControls?: Component
   details?: Component
   edit: (form: DashboardProviderForm, provider: DashboardProviderRecord) => void
   payload: (form: DashboardProviderForm) => Record<string, unknown>
@@ -77,4 +78,12 @@ export interface DashboardProviderSection {
   defaults: Record<string, unknown>
   edit: (form: DashboardProviderForm, provider: DashboardProviderRecord) => void
   payload: (form: DashboardProviderForm) => Record<string, unknown>
+}
+
+export interface DashboardProviderType {
+  id: string
+  displayName: string
+  connectionSchema?: import('../types/plugin').PluginField[]
+  supportsSubscriptionUsage: boolean
+  supportsSubscriptionReset: boolean
 }

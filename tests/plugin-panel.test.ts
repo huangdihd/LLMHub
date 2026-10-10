@@ -7,7 +7,7 @@ import { createEvent } from 'h3'
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { Socket } from 'node:net'
 import ts from 'typescript'
-import { PANEL_CHANNEL, PANEL_MAX_BODY_BYTES, panelAPIPath, validatePanelMessage } from '../shared/dashboard/plugin-panel.ts'
+import { PANEL_CHANNEL, PANEL_MAX_BODY_BYTES, acquireExternalLink, releaseExternalLink, panelAPIPath, panelContext, panelExternalURL, validatePanelMessage } from '../shared/dashboard/plugin-panel.ts'
 
 const frame = {}
 const request = { channel: PANEL_CHANNEL, type: 'fetch', requestId: '1', path: 'status', method: 'GET' }
@@ -182,4 +182,117 @@ test('field editor strips secret reads, blocks unresolved catalogs and saves val
   assert.equal(context.editor.validate(), true)
   await context.editor.save('key-1')
   assert.equal(writes.length, 1, 'no contributions must not write extra record values')
+})
+
+test('external links reject unsafe URLs and extra fields while preserving full destinations', () => {
+  const url = 'https://example.org/login?client=panel&state=abc#finish'
+  const message = { channel: PANEL_CHANNEL, type: 'openExternal', requestId: 'link', url }
+  assert.deepEqual(validate(message), { type: 'openExternal', requestId: 'link', url })
+  for (const url of ['http://example.org', 'javascript:alert(1)', 'data:text/html,x', '//example.org', 'https://user:password@example.org', 'https://example.org\\evil', 'https://example.org\n', ' https://example.org', 'https://', 'https://example.org/' + 'x'.repeat(8192), null]) {
+    assert.equal(panelExternalURL(url), null, String(url))
+    assert.equal(validate({ ...message, url }), null)
+  }
+  for (const extra of [{ target: '_self' }, { features: 'opener' }, { requestId: '' }, { requestId: 'a'.repeat(65) }]) assert.equal(validate({ ...message, ...extra }), null)
+  assert.equal(validate(message, {}, 'null'), null)
+  assert.equal(validate(message, frame, 'https://example.org'), null)
+  assert.equal(validate({ channel: PANEL_CHANNEL, type: 'context', requestId: 'context', provider: {} }), null)
+})
+
+test('host allows only one external link confirmation across different panels', () => {
+  const first = {}, second = {}
+  assert.equal(acquireExternalLink(first), true)
+  assert.equal(acquireExternalLink(second), false)
+  releaseExternalLink(second)
+  assert.equal(acquireExternalLink(second), false)
+  releaseExternalLink(first)
+  assert.equal(acquireExternalLink(second), true)
+  releaseExternalLink(second)
+})
+
+test('provider context includes only immutable identifiers for the matching panel', () => {
+  const panel = { id: 'status', title: 'Status', location: 'provider' as const, page: 'status.html', providerType: 'example:custom' }
+  const provider = { name: 'account', type: 'example:custom', connection: { apiKey: 'private' }, enabled: true }
+  const context = panelContext(panel, provider)
+  assert.deepEqual(context, { provider: { name: 'account', type: 'example:custom' } })
+  assert.ok(Object.isFrozen(context) && Object.isFrozen(context.provider))
+  assert.deepEqual(panelContext(panel, { ...provider, type: 'other:custom' }), { provider: null })
+  assert.deepEqual(panelContext({ ...panel, location: 'detail' }, provider), { provider: null })
+  assert.deepEqual(panelContext(panel), { provider: null })
+})
+
+test('host external link flow requires explicit confirmation, limits pending requests and invalidates stale approvals', async () => {
+  const component = readFileSync(new URL('../components/RuntimePluginPanel.vue', import.meta.url), 'utf8')
+  const script = component.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]!.replace(/^import .*$/gm, '')
+  const sent: any[] = [], opened: any[] = []
+  const target = { postMessage: (message: unknown) => sent.push(message) }
+  const properties = { pluginId: 'example', panel: { id: 'status', title: 'Status', location: 'provider', providerType: 'example:custom' }, provider: { name: 'account', type: 'example:custom', secret: 'private' } }
+  let timeout: () => void = () => {}
+  const context: any = {
+    PANEL_CHANNEL, acquireExternalLink, releaseExternalLink, panelContext, panelExternalURL, validatePanelMessage, AbortController,
+    setTimeout: (callback: () => void) => { timeout = callback; return 1 }, clearTimeout: () => {},
+    window: { open: (...arguments_: unknown[]) => opened.push(arguments_) },
+    defineProps: () => properties,
+    ref: (value: unknown) => ({ value }), computed: (getter: () => unknown) => ({ get value() { return getter() } }),
+    useColorMode: () => ({ value: 'dark' }), watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {},
+    $fetch: () => { throw new Error('External URLs must never be fetched by host') }
+  }
+  vm.runInNewContext(ts.transpileModule(`${script}\nglobalThis.host = { frame, receive, finishExternal, externalRequest, reset, loaded };`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+  }).outputText, context)
+  const host = context.host
+  host.frame.value = { contentWindow: target }
+  const send = (type: string, requestId: string, extra = {}) => host.receive({ source: target, origin: 'null', data: { channel: PANEL_CHANNEL, type, requestId, ...extra } })
+  await send('context', 'context')
+  assert.deepEqual(sent.at(-1).data, { provider: { name: 'account', type: 'example:custom' } })
+  const url = 'https://example.org/login?state=complete#fragment'
+  await send('openExternal', 'first', { url })
+  assert.equal(opened.length, 0)
+  assert.equal(host.externalRequest.value.url, url)
+  await send('openExternal', 'second', { url: 'https://other.org' })
+  assert.equal(sent.at(-1).ok, false)
+  assert.equal(host.externalRequest.value.url, url)
+  host.finishExternal(true)
+  assert.deepEqual(opened, [[url, '_blank', 'noopener,noreferrer']])
+  host.finishExternal(true)
+  assert.equal(opened.length, 1)
+  await send('openExternal', 'cancel', { url })
+  host.finishExternal(false)
+  assert.equal(sent.at(-1).data, false)
+  await send('openExternal', 'timeout', { url })
+  timeout()
+  host.finishExternal(true)
+  assert.equal(opened.length, 1)
+  await send('openExternal', 'reset', { url })
+  host.reset()
+  host.finishExternal(true)
+  assert.equal(opened.length, 1)
+  await send('openExternal', 'navigation', { url })
+  host.loaded()
+  host.finishExternal(true)
+  assert.equal(opened.length, 1)
+  await send('openExternal', 'stale', { url })
+  host.frame.value = { contentWindow: {} }
+  host.finishExternal(true)
+  assert.equal(opened.length, 1)
+  assert.ok(component.includes('{{ externalRequest.url }}'))
+  assert.ok(!component.includes('v-html'))
+})
+
+test('injected context helper freezes identifier-only data and external helper awaits host', async () => {
+  const source = readFileSync(new URL('../server/utils/plugin-panel.ts', import.meta.url), 'utf8')
+  const script = source.match(/String.raw`([\s\S]*?)`/)![1]!
+  const listeners = new Map<string, (event: any) => void>(), sent: any[] = []
+  const parent = { postMessage: (message: unknown) => sent.push(message) }, window: any = {}
+  vm.runInNewContext(script, { window, parent, setTimeout, clearTimeout, addEventListener: (name: string, callback: any) => listeners.set(name, callback) })
+  const result = window.llmhub.getContext()
+  const answer = (data: unknown) => listeners.get('message')!({ source: parent, data: { channel: PANEL_CHANNEL, type: 'response', requestId: sent.at(-1).requestId, ok: true, data } })
+  assert.equal(sent.at(-1).type, 'context')
+  answer({ provider: { name: 'account', type: 'example:custom', secret: 'private' }, configuration: 'private' })
+  const context = await result
+  assert.equal(JSON.stringify(context), '{"provider":{"name":"account","type":"example:custom"}}')
+  assert.ok(Object.isFrozen(context) && Object.isFrozen(context.provider))
+  const external = window.llmhub.openExternal('https://example.org')
+  assert.equal(sent.at(-1).type, 'openExternal')
+  answer(false)
+  assert.equal(await external, false)
 })

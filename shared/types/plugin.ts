@@ -25,7 +25,7 @@ export interface PluginContributions {
   apiKeys?: PluginContributionField[]
   providers?: PluginContributionField[]
   metrics?: { key: string; label: string; icon?: string }[]
-  panels?: { id: string; title: string; location: 'home' | 'detail' | 'page'; page: string }[]
+  panels?: { id: string; title: string; location: 'home' | 'detail' | 'page' | 'provider'; page: string; providerType?: string }[]
   navigation?: { panel: string; label: string; icon?: string }[]
 }
 export interface PluginContributionRecord {

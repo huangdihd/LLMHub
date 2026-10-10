@@ -390,8 +390,12 @@ type:
 | `createConnectionDefaults` | Values for connection fields still unset after creation. |
 | `flatCreateCredentials` | Read credentials from the flat request body on creation. |
 
-**`subscriptionUsage` and `resetSubscriptionUsage`** power the usage panel and
-reset action for subscription-style providers.
+**`subscriptionUsage` and `resetSubscriptionUsage`** power the host's generic
+usage panel and reset action. Every registered type with `subscriptionUsage`,
+including runtime types, automatically gets a Usage entry on each provider card.
+The panel renders plans, windows, balances and reset credits from `SubscriptionUsage`.
+`GET /api/hub/provider-types` exposes boolean `supportsSubscriptionUsage` and
+`supportsSubscriptionReset` capabilities, never the callback functions.
 
 **`refreshAccessToken` and `login.path` are declarations only.** LLMHub does
 not call them for runtime plugins. Refresh tokens from your adapter, and
@@ -555,8 +559,16 @@ A panel is an HTML file from your plugin shown inside the dashboard.
 | `home` | As a card on the home page |
 | `detail` | On the plugin's own page under Plugins |
 | `page` | As a full page at `/plugin-panels/<pluginId>/<panelId>`, linkable from `navigation` |
+| `provider` | An expandable panel on every card of the declared `providerType`; requires API 1.3.0 |
 
 `page` is a path to an `.html` file inside the plugin folder.
+
+A provider panel additionally declares `providerType`, the full registered ID
+owned by this plugin (for example `example-echo:echo`).
+It cannot target another plugin's provider. The type must be registered during
+setup. Other panel locations must not declare `providerType`. Multiple panels
+retain declaration order; custom panels follow the generic usage panel and
+built-in details, and can coexist with them.
 
 ### What a panel can do
 
@@ -577,6 +589,8 @@ plugin's management routes** on the panel's behalf:
 | Helper | Does |
 | --- | --- |
 | `llmhub.fetch(path, { method?, body? })` | Calls `/api/hub/plugins/<yourId>/api/<path>` and resolves with the parsed JSON. `body` is a JSON value. |
+| `llmhub.getContext()` | Resolves to a deeply frozen `{ provider: { name, type } \| null }`. Provider panels receive only identifiers (the full registered type ID), never connection settings or credentials. Other locations receive `null`. |
+| `llmhub.openExternal(url)` | Requests a host confirmation outside the frame showing the complete HTTPS URL. The user must click to open a new tab with `noopener noreferrer`; resolves to `true` on approval and `false` on cancellation or confirmation timeout. Only one confirmation is pending across all mounted panels. |
 | `llmhub.theme` | `'light'` or `'dark'` |
 | `llmhub:theme` event on `window` | Fires when the theme changes; `event.detail` is the new theme. `document.documentElement.dataset.theme` is kept up to date for CSS. |
 | `llmhub.setHeight(pixels)` | Sets the frame's height (120–1200). The helper also resizes automatically as content changes. |
@@ -584,6 +598,18 @@ plugin's management routes** on the panel's behalf:
 A panel must be self-contained: inline its CSS and JavaScript, and embed
 images and fonts as data URLs. External scripts, stylesheets and requests are
 blocked.
+
+### Provider login flows
+
+Create a provider using its connection fields, then offer a login button inside
+its card panel. Use the identifier-only context to call your own management
+routes to start and finish authorization. Validate the provider and authorization
+state server-side; context is not an authorization token. Store tokens in
+`api.storage`, keyed by provider name, and read them from the adapter when making
+requests. Never send credentials to the panel. Use the external-link helper for
+the authorization URL, and a plugin route for polling or submitting an
+out-of-band code. `refreshAccessToken` and `login.path` remain declarations only
+for runtime plugins; they do not install a login or refresh implementation.
 
 ### Limits
 
@@ -593,6 +619,9 @@ blocked.
 - Methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. No body on `GET`. Bodies
   are JSON, at most 64 KiB and 20 levels deep. You cannot set headers.
 - At most 32 requests may be pending at once, and each times out.
+- External links must be absolute `https://` URLs without credentials, whitespace,
+  control characters or backslashes, at most 8192 characters. Invalid requests
+  never open a confirmation or a tab. A second pending request is refused.
 - Insert returned text with `textContent`, not `innerHTML`.
 
 The sandbox protects the dashboard from mistakes in a panel. It is not a
@@ -607,7 +636,8 @@ The helper wraps a `postMessage` channel named `llmhub:panel:v1`. You only need
 this if you are not using the helper.
 
 Panel to host: `ready`; `height` (integer 120–1200); `fetch` with `requestId`
-(`[a-zA-Z0-9_-]{1,64}`), `path`, `method` and optional `body`.
+(`[a-zA-Z0-9_-]{1,64}`), `path`, `method` and optional `body`; `context`
+with `requestId`; `openExternal` with `requestId` and `url`.
 
 Host to panel: `theme`; `response` with `requestId`, `ok`, and `data` or a
 generic `error`.

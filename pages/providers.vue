@@ -36,6 +36,7 @@
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
+            <SubscriptionUsageActions v-if="supportsUsage(provider)" :provider="provider" :state="dashboard.usage" />
             <component :is="dashboard.extension(provider.protocol)?.actions" v-if="dashboard.extension(provider.protocol)?.actions" :provider="provider" :state="dashboard.state(provider.protocol)" />
             <UButton
               color="gray"
@@ -48,7 +49,13 @@
           </div>
         </div>
 
+        <SubscriptionUsagePanel v-if="supportsUsage(provider)" :provider="provider" :state="dashboard.usage" :supports-reset="providerTypes.find(type => type.id === provider.protocol)?.supportsSubscriptionReset === true">
+          <template v-if="dashboard.extension(provider.protocol)?.usageControls" #controls>
+            <component :is="dashboard.extension(provider.protocol)?.usageControls" :provider="provider" :state="dashboard.state(provider.protocol)" />
+          </template>
+        </SubscriptionUsagePanel>
         <component :is="dashboard.extension(provider.protocol)?.details" v-if="dashboard.extension(provider.protocol)?.details" :provider="provider" :state="dashboard.state(provider.protocol)" />
+        <ProviderPluginPanels :provider="provider" />
       </UCard>
     </div>
 
@@ -174,10 +181,9 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import RuntimeContributionFields from '~/components/RuntimeContributionFields.vue'
 import { useProviderDashboard } from '~/composables/useProviderDashboard'
-import type { PluginField } from '~/shared/types/plugin'
-import type { DashboardProviderForm, DashboardProviderRecord } from '~/shared/dashboard/providers'
+import type { DashboardProviderForm, DashboardProviderRecord, DashboardProviderType } from '~/shared/dashboard/providers'
 type Protocol = string
-type ProviderType = { id: string; displayName: string; connectionSchema?: PluginField[] }
+type ProviderType = DashboardProviderType
 const toast = useToast()
 const providers = ref<DashboardProviderRecord[]>([])
 const loading = ref(true)
@@ -375,6 +381,10 @@ function clearErrors() {
   errors.display_name = ''
   errors.base_url = ''
   errors.api_key = ''
+}
+
+function supportsUsage(provider: DashboardProviderRecord): boolean {
+  return provider.available !== false && providerTypes.value.find(type => type.id === provider.protocol)?.supportsSubscriptionUsage === true
 }
 
 function isSubscriptionProtocol(protocol: Protocol): boolean {

@@ -8,23 +8,33 @@ export const PANEL_CLIENT_SCRIPT = String.raw`(() => {
   const pending = new Map();
   let sequence = 0;
   const send = message => parent.postMessage({ channel, ...message }, '*');
+  const request = message => {
+    if (pending.size >= 32) return Promise.reject(new Error('Too many panel requests'));
+    const requestId = String(++sequence);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { pending.delete(requestId); reject(new Error('Panel request timed out')); }, 30000);
+      pending.set(requestId, { resolve, reject, timer });
+      try {
+        send({ ...message, requestId });
+      } catch (error) {
+        pending.delete(requestId);
+        clearTimeout(timer);
+        reject(error);
+      }
+    });
+  };
   const api = {
     theme: 'light',
     fetch(path, options = {}) {
-      if (pending.size >= 32) return Promise.reject(new Error('Too many panel requests'));
-      const requestId = String(++sequence);
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => { pending.delete(requestId); reject(new Error('Panel request timed out')); }, 30000);
-        pending.set(requestId, { resolve, reject, timer });
-        try {
-          send({ type: 'fetch', requestId, path, method: options.method || 'GET', ...('body' in options ? { body: options.body } : {}) });
-        } catch (error) {
-          pending.delete(requestId);
-          clearTimeout(timer);
-          reject(error);
-        }
-      });
+      return request({ type: 'fetch', path, method: options.method || 'GET', ...('body' in options ? { body: options.body } : {}) });
     },
+    async getContext() {
+      const context = await request({ type: 'context' });
+      const provider = context && context.provider;
+      return Object.freeze({ provider: provider && typeof provider.name === 'string' && typeof provider.type === 'string'
+        ? Object.freeze({ name: provider.name, type: provider.type }) : null });
+    },
+    openExternal(url) { return request({ type: 'openExternal', url }); },
     setHeight(height) { send({ type: 'height', height }); }
   };
   Object.defineProperty(window, 'llmhub', { value: api });

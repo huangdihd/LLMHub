@@ -23,6 +23,8 @@
             >Refresh</UButton>
           </div>
 
+          <slot name="controls" />
+
           <div v-if="usageState(provider.name).loading && !usageState(provider.name).data" class="flex items-center gap-2 py-5 text-sm text-gray-500 dark:text-gray-400">
             <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin" />
             Loading quota details…
@@ -65,13 +67,61 @@
               </p>
             </div>
 
+            <div
+              v-if="supportsReset && usageState(provider.name).data!.reset_credits"
+              class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Banked resets</p>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ usageState(provider.name).data!.reset_credits!.available_count }} available
+                  </p>
+                </div>
+              </div>
+
+              <div v-if="usageState(provider.name).data!.reset_credits!.credits?.length" class="mt-3 space-y-2">
+                <div
+                  v-for="credit in usageState(provider.name).data!.reset_credits!.credits"
+                  :key="credit.id"
+                  class="flex flex-col gap-2 rounded-md bg-gray-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between dark:bg-gray-800/60"
+                >
+                  <div class="min-w-0">
+                    <p class="text-sm text-gray-800 dark:text-gray-200">{{ credit.title || 'Usage limit reset' }}</p>
+                    <p v-if="credit.description" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ credit.description }}</p>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ credit.expires_at ? `Expires ${formatResetTime(credit.expires_at)}` : 'Does not expire' }}
+                    </p>
+                  </div>
+                  <UButton
+                    color="primary"
+                    variant="soft"
+                    size="xs"
+                    class="self-start sm:self-auto"
+                    :loading="usageState(provider.name).resettingCreditId === credit.id"
+                    :disabled="Boolean(usageState(provider.name).resettingCreditId)"
+                    @click="useSubscriptionReset(provider.name, credit)"
+                  >Use reset</UButton>
+                </div>
+              </div>
+              <UButton
+                v-else-if="usageState(provider.name).data!.reset_credits!.available_count > 0"
+                class="mt-3"
+                color="primary"
+                variant="soft"
+                size="xs"
+                :loading="usageState(provider.name).resettingCreditId === '__next__'"
+                :disabled="Boolean(usageState(provider.name).resettingCreditId)"
+                @click="useSubscriptionReset(provider.name)"
+              >Use reset</UButton>
+            </div>
           </template>
         </div>
 </template>
 <script setup lang="ts">
 import { toRefs } from 'vue'
-import type { DashboardProviderContext, DashboardProviderRecord } from '~/shared/dashboard/providers'
-import type { DashboardState } from '../dashboard-state'
-const props = defineProps<{ state: DashboardState; provider: DashboardProviderRecord }>()
-const { usageState, titleCase, fetchSubscriptionUsage, formatPercent, clampPercent, formatResetTime, formatCredits } = toRefs(props.state)
+import type { DashboardProviderRecord } from '~/shared/dashboard/providers'
+import type { SubscriptionUsageDashboard } from '~/composables/useSubscriptionUsage'
+const props = defineProps<{ state: SubscriptionUsageDashboard; provider: DashboardProviderRecord; supportsReset: boolean }>()
+const { usageState, titleCase, fetchSubscriptionUsage, formatPercent, clampPercent, formatResetTime, formatCredits, useSubscriptionReset } = toRefs(props.state)
 </script>

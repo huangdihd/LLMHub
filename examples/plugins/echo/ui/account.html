@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Example account</title>
+<style>
+  body { margin: 16px; font: 14px system-ui, sans-serif; }
+  button { font: inherit; padding: 6px 12px; cursor: pointer; }
+</style>
+<p id="provider">Loading provider…</p>
+<p id="status"></p>
+<button id="authorize" type="button" disabled>Open example authorization page</button>
+<script>
+  const status = document.getElementById('status');
+  const button = document.getElementById('authorize');
+  async function initialize() {
+    const { provider } = await llmhub.getContext();
+    if (!provider) throw new Error('This panel needs a provider card');
+    document.getElementById('provider').textContent = `${provider.name} (${provider.type})`;
+    const result = await llmhub.fetch('status');
+    status.textContent = result.ready ? 'Local example is ready. No real authorization is performed.' : 'Unavailable';
+    button.disabled = false;
+    button.onclick = async () => {
+      try {
+        await llmhub.openExternal('https://example.com/authorize');
+        status.textContent = 'External-link request completed.';
+      } catch (error) { status.textContent = error.message; }
+    };
+  }
+  initialize().catch(error => { status.textContent = error.message; });
+</script>
+</html>

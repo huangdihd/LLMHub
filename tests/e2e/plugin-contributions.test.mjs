@@ -21,6 +21,9 @@ try {
   await management('plugins/scan', { method: 'POST' })
   await management('plugins/example-echo/enable', { method: 'POST' })
   await management('plugins/example-dashboard/enable', { method: 'POST' })
+  const echoType = (await management('provider-types')).find(type => type.id === 'example-echo:echo')
+  assert.equal(echoType?.supportsSubscriptionUsage, true)
+  assert.equal(echoType?.supportsSubscriptionReset, false)
   const contributions = await management('plugin-contributions')
   const example = contributions.find(plugin => plugin.id === 'example-dashboard')
   assert.ok(example)
@@ -28,6 +31,13 @@ try {
   const unauthorized = await fetch(`${fixture.gateway}/api/hub/plugin-contributions`)
   assert.equal(unauthorized.status, 401)
   await management('providers', json('POST', { name: 'dashboard-echo', protocol: 'example-echo:echo' }))
+  const usage = await management('providers/dashboard-echo/subscription-usage')
+  assert.equal(usage.provider, 'dashboard-echo')
+  assert.equal(usage.protocol, 'example-echo:echo')
+  assert.deepEqual(usage.windows, [{ id: 'daily', label: 'Daily', used_percent: 25, detail: 'Fixed example data' }])
+  const echoPanel = contributions.find(plugin => plugin.id === 'example-echo')?.contributes.panels[0]
+  assert.equal(echoPanel.location, 'provider')
+  assert.equal(echoPanel.providerType, 'example-echo:echo')
   const { key } = await management('keys', json('POST', { name: 'Dashboard fixture' }))
   const model = 'dashboard-echo/echo'
   // Discover the real model before attaching values; no orphan records are invented.
@@ -102,6 +112,8 @@ try {
   await management('providers/dashboard-echo', { method: 'DELETE' })
   await management('plugins/example-dashboard', { method: 'DELETE' })
   await management('plugins/example-echo', { method: 'DELETE' })
+  assert.equal((await management('provider-types')).some(type => type.id === 'example-echo:echo'), false)
+  assert.equal((await management('plugin-contributions')).some(plugin => plugin.id === 'example-echo'), false)
   console.log('  ok - runtime dashboard contributions, hook values, metrics, sandbox, lifecycle and clean reinstall')
 } finally {
   await fixture.close()

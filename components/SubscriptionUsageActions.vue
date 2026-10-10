@@ -10,8 +10,8 @@
 </template>
 <script setup lang="ts">
 import { toRefs } from 'vue'
-import type { DashboardProviderContext, DashboardProviderRecord } from '~/shared/dashboard/providers'
-import type { DashboardState } from '../dashboard-state'
-const props = defineProps<{ state: DashboardState; provider: DashboardProviderRecord }>()
+import type { DashboardProviderRecord } from '~/shared/dashboard/providers'
+import type { SubscriptionUsageDashboard } from '~/composables/useSubscriptionUsage'
+const props = defineProps<{ state: SubscriptionUsageDashboard; provider: DashboardProviderRecord }>()
 const { usageState, toggleUsageDetails } = toRefs(props.state)
 </script>

@@ -3,17 +3,55 @@ export const PANEL_MIN_HEIGHT = 120
 export const PANEL_MAX_HEIGHT = 1200
 export const PANEL_MAX_BODY_BYTES = 64 * 1024
 
+let externalLinkOwner: object | undefined
+
+/** One host confirmation across all mounted panels, not one per iframe. */
+export function acquireExternalLink(owner: object): boolean {
+  if (externalLinkOwner) return false
+  externalLinkOwner = owner
+  return true
+}
+
+export function releaseExternalLink(owner: object): void {
+  if (externalLinkOwner === owner) externalLinkOwner = undefined
+}
+
 export interface RuntimePanel {
   id: string
   title: string
-  location: 'home' | 'detail' | 'page'
+  location: 'home' | 'detail' | 'page' | 'provider'
   page: string
+  providerType?: string
+}
+
+export interface PanelProviderContext {
+  readonly name: string
+  readonly type: string
+}
+
+/** Construct identifier-only context; never spread a provider configuration into a frame. */
+export function panelContext(panel: RuntimePanel, provider?: PanelProviderContext) {
+  const identifier = panel.location === 'provider' && provider && provider.type === panel.providerType
+    ? Object.freeze({ name: provider.name, type: provider.type }) : null
+  return Object.freeze({ provider: identifier })
+}
+
+/** Reject ambiguous URLs rather than letting the browser silently repair them. */
+export function panelExternalURL(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 8192 || !value.startsWith('https://') || /[\\\\\s\u0000-\u001f\u007f]/u.test(value)) return null
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return null
+    return url.href
+  } catch { return null }
 }
 
 type JSONValue = null | boolean | number | string | JSONValue[] | { [key: string]: JSONValue }
 export type PanelRequest =
   | { type: 'ready' }
   | { type: 'height'; height: number }
+  | { type: 'context'; requestId: string }
+  | { type: 'openExternal'; requestId: string; url: string }
   | { type: 'fetch'; requestId: string; path: string; method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: JSONValue }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -57,6 +95,13 @@ export function validatePanelMessage(event: { source: unknown; origin: string; d
     if (!keys.every(key => ['channel', 'type', 'height'].includes(key))) return null
     const height = message.height
     return typeof height === 'number' && Number.isInteger(height) && height >= PANEL_MIN_HEIGHT && height <= PANEL_MAX_HEIGHT ? { type: 'height', height } : null
+  }
+  if (message.type === 'context' || message.type === 'openExternal') {
+    if (typeof message.requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(message.requestId)) return null
+    if (message.type === 'context') return keys.every(key => ['channel', 'type', 'requestId'].includes(key)) ? { type: 'context', requestId: message.requestId } : null
+    if (!keys.every(key => ['channel', 'type', 'requestId', 'url'].includes(key))) return null
+    const url = panelExternalURL(message.url)
+    return url ? { type: 'openExternal', requestId: message.requestId, url } : null
   }
   if (message.type !== 'fetch' || !keys.every(key => ['channel', 'type', 'requestId', 'path', 'method', 'body'].includes(key))) return null
   if (typeof message.requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(message.requestId)) return null

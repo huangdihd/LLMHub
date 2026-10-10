@@ -9,6 +9,14 @@ export default {
       connectionSchema: [{ key: 'prefix', label: 'Response prefix', type: 'text', default: '' }],
       secretConnectionFields: [],
       async fetchModels(configuration) { return models(configuration) },
+      async subscriptionUsage(configuration) {
+        return {
+          provider: configuration.name, protocol: configuration.protocol, plan: 'demo',
+          windows: [{ id: 'daily', label: 'Daily', used_percent: 25, detail: 'Fixed example data' }],
+          credits: { balance: 100, detail: 'Example credits' },
+          fetched_at: new Date().toISOString()
+        }
+      },
       createAdapter(configuration) {
         const response = request => ({
           content: `${configuration.connection.extra?.prefix || ''}${request.config.systemPrompt || ''}|${request.messages.map(message => typeof message.content === 'string' ? message.content : message.content.map(block => block.text || '').join('')).join('|')}`,

@@ -735,6 +735,9 @@ export class PluginManager {
       })().finally(async () => {
         if (!runtime.active) await runtime.moduleGeneration?.dispose()
       }))
+      for (const panel of plugin.manifest.contributes?.panels ?? []) {
+        if (panel.location === 'provider' && !runtime.providers.includes(panel.providerType!)) throw new PluginError('Provider panel must reference a provider registered by this plugin')
+      }
       runtime.accepting = false
       plugin.enabled = true
       plugin.error = undefined
@@ -947,6 +950,7 @@ export class PluginManager {
       const plugin = this.enabledContributionPlugin(id)
       const panel = plugin.manifest.contributes?.panels?.find(panel => panel.id === panelId)
       if (!panel) throw new PluginError('Plugin panel not found')
+      if (panel.location === 'provider' && !plugin.runtime!.providers.includes(panel.providerType!)) throw new PluginError('Provider panel ownership mismatch')
       const filename = await safePath(plugin.directory, validatePath(panel.page))
       if (!filename.endsWith('.html') || !(await lstat(filename)).isFile()) throw new PluginError('Invalid plugin panel')
       return filename

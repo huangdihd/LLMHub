@@ -4,6 +4,24 @@ Changes to the API that plugins are written against. This version is separate
 from LLMHub's own: a plugin declares the range it supports in
 `engines.llmhub`. See [Versioning](reference.md#versioning).
 
+## 1.3.0
+
+**Added**
+
+- Automatic generic subscription usage panels for every provider type declaring
+  `subscriptionUsage`, including runtime providers; provider type responses expose
+  boolean usage and reset capabilities.
+- `provider` panels with `providerType` targeting the declaring plugin's own
+  provider type, shown on each provider card alongside the generic usage panel.
+- Read-only provider identifiers in the panel client context and requests to open
+  HTTPS links through a host-rendered confirmation. No credentials enter context
+  and no external link opens without a user click.
+
+**Compatibility**
+
+Plugins written for 1.0–1.2 work unchanged. Declare `"llmhub": "^1.3.0"` when
+using provider panels, context or external-link requests.
+
 ## 1.2.0
 
 `onComplete` is now the one place to learn that a request finished.

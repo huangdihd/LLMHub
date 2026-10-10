@@ -206,10 +206,7 @@ interface RequestHook {
   onStreamChunk?(chunk: LLMStreamChunk, context: HookContext):
     Awaitable<LLMStreamChunk | LLMStreamChunk[] | null | void>
   onError?(error: unknown, context: HookContext): Awaitable<void>
-  onComplete?(completion: { usage?: Usage; error?: unknown }, context: HookContext): Awaitable<void>
-
-  // Accounting
-  onAccountingComplete?(completion: AccountingCompletion, context: HookContext): Awaitable<void>
+  onComplete?(completion: CompletionInfo, context: HookContext): Awaitable<void>
 }
 ```
 
@@ -277,26 +274,48 @@ can check it and return early.
 The unified request, response, chunk, message, tool-call and usage types are
 declared in `llmhub-plugin.d.ts`.
 
-### Accounting
+### Completion
 
 ```ts
-type AccountingCompletion =
-  | { kind: 'attempt' }
-  | { kind: 'usage'; usage: number | Usage; model?: string; tokens?: number }
+interface CompletionInfo {
+  model?: string
+  usage?: Usage
+  error?: unknown
+}
 ```
 
-`attempt` fires once per call. `usage` fires when token usage is known, and
-can fire more than once for a streamed response as usage is updated; it is not
-deduplicated. Built-in token billing runs at −200 and quota at −100. Do
-bookkeeping in `onAccountingComplete` or in `onComplete`, not both.
+`onComplete` runs exactly once for each admitted generation or embedding
+request, including route parsing failures and upstream failures. Admission
+rejections do not reach the route and do not emit completion. Model-list and
+unsupported endpoints are not generation or embedding requests.
+
+`model` is the final selected model, including request-hook rewrites; embeddings
+use the returned model when supplied, qualified with the provider name.
+It can be absent when the request fails before a model is selected.
+`usage` is the last observed cumulative usage snapshot, not the sum of stream
+updates. No reported usage means `undefined`. Embeddings expose their total
+reported tokens as `promptTokens`, with `completionTokens: 0`.
+`error` is the last observed failure. A client disconnect records an error but
+does not stop upstream consumption: completion waits for upstream EOF or failure
+so it includes the final available usage.
+
+Completion work is retained by a process-owned promise set and runs without
+waiting for persistence before returning the HTTP response. Exceptions are
+logged independently for each hook. A process crash can lose pending work;
+completion is not a durable job queue. Core callers and tests can await
+`drainCompletions()` to wait for pending work.
+
+Stats counts one call at completion. Quota counts one call for a persisted API
+key, even without usage, and records tokens only when usage is available.
+Quota declares a required dependency on token billing and calls its
+`api.provide` / `api.require` conversion interface; embedding usage also uses
+model token ratios.
 
 ### Errors in hooks
 
 | Stage | An exception... |
 | --- | --- |
 | Admission, `onModels`, `onRequest` | fails the request |
-| `onAccountingComplete` with `attempt` | fails the request |
-| `onAccountingComplete` with `usage` | is logged; the request continues |
 | `onResponse`, `onStreamChunk`, `onError`, `onComplete` | is logged; the request continues |
 
 Return a replacement rather than mutating the value you were given, so that a
@@ -673,7 +692,7 @@ and are not present in a deployed build.
 ## Versioning
 
 The plugin API has its own version, separate from LLMHub's, currently
-**1.1.0**. See the [changelog](changelog.md).
+**1.2.0**. See the [changelog](changelog.md).
 
 | Change | Version bump |
 | --- | --- |

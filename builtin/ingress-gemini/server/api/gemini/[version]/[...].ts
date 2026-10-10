@@ -1,5 +1,4 @@
 import { geminiContentToText } from '../../../../embedding'
-import { completeIngressAccounting } from '../../../../../../server/core/accounting'
 import { ProviderManager } from '../../../../../../server/providers/manager'
 import { RequestPipeline } from '../../../../../../server/core/pipeline'
 
@@ -39,62 +38,63 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
-  const model = decodeURIComponent(modelEncoded)
-
   const manager = new ProviderManager()
-  await manager.loadProviders()
+  const pipeline = new RequestPipeline(manager, event,
+    action === 'embedContent' || action === 'batchEmbedContents' ? 'gemini-embedding' : 'gemini-generate')
+  try {
+    const model = decodeURIComponent(modelEncoded)
 
-  const resolvedModel = (event as any).context?._resolvedModel
-  const fullModel = resolvedModel || model
+    await manager.loadProviders()
 
-  // ===== Embeddings: embedContent / batchEmbedContents =====
-  if (action === 'embedContent' || action === 'batchEmbedContents') {
-    let body: any
-    try {
-      body = await readBody(event)
-    } catch (e: any) {
-      throwFormattedError(manager.buildGatewayError(`Parse error: ${e.message}`, 400))
-    }
+    const resolvedModel = (event as any).context?._resolvedModel
+    const fullModel = resolvedModel || model
 
-    let input: Array<string | number[]>
-    let dimensions: number | undefined
-    let taskType: string | undefined
-    let title: string | undefined
+    // ===== Embeddings: embedContent / batchEmbedContents =====
+    if (action === 'embedContent' || action === 'batchEmbedContents') {
+      let body: any
+      try {
+        body = await readBody(event)
+      } catch (e: any) {
+        await pipeline.error(e)
+        throwFormattedError(manager.buildGatewayError(`Parse error: ${e.message}`, 400))
+      }
 
-    if (action === 'embedContent') {
-      input = [geminiContentToText(body?.content)]
-      dimensions = typeof body?.outputDimensionality === 'number' ? body.outputDimensionality : undefined
-      taskType = body?.taskType
-      title = body?.title
-    } else {
-      const requests = Array.isArray(body?.requests) ? body.requests : []
-      input = requests.map((r: any) => geminiContentToText(r?.content))
-      const first = requests[0] || {}
-      dimensions = typeof first.outputDimensionality === 'number' ? first.outputDimensionality : undefined
-      taskType = first.taskType
-      title = first.title
-    }
-
-    if (input.length === 0) {
-      throwFormattedError(manager.buildGatewayError('No content provided to embed', 400))
-    }
-
-    try {
-      completeIngressAccounting(event, 'gemini-embedding', { kind: 'attempt' }).catch(() => {})
-      const result = await manager.embed({ model: fullModel, input, dimensions, taskType, title })
-      completeIngressAccounting(event, 'gemini-embedding', { kind: 'usage', usage: result.usage.totalTokens || 0, model: fullModel })
+      let input: Array<string | number[]>
+      let dimensions: number | undefined
+      let taskType: string | undefined
+      let title: string | undefined
 
       if (action === 'embedContent') {
-        return { embedding: { values: result.embeddings[0] || [] } }
+        input = [geminiContentToText(body?.content)]
+        dimensions = typeof body?.outputDimensionality === 'number' ? body.outputDimensionality : undefined
+        taskType = body?.taskType
+        title = body?.title
+      } else {
+        const requests = Array.isArray(body?.requests) ? body.requests : []
+        input = requests.map((r: any) => geminiContentToText(r?.content))
+        const first = requests[0] || {}
+        dimensions = typeof first.outputDimensionality === 'number' ? first.outputDimensionality : undefined
+        taskType = first.taskType
+        title = first.title
       }
-      return { embeddings: result.embeddings.map(values => ({ values })) }
-    } catch (e: any) {
-      throwFormattedError(e)
-    }
-  }
 
-  const pipeline = new RequestPipeline(manager, event, 'gemini-generate')
-  try {
+      if (input.length === 0) {
+        throwFormattedError(manager.buildGatewayError('No content provided to embed', 400))
+      }
+
+      try {
+        const result = await pipeline.embed({ model: fullModel, input, dimensions, taskType, title })
+
+        if (action === 'embedContent') {
+          return { embedding: { values: result.embeddings[0] || [] } }
+        }
+        return { embeddings: result.embeddings.map(values => ({ values })) }
+      } catch (e: any) {
+        await pipeline.error(e)
+        throwFormattedError(e)
+      }
+    }
+
     let request
     try {
       const parser = manager.getParser(`/models/X:${action}`, 'POST', {})
@@ -111,12 +111,9 @@ export default defineEventHandler(async (event) => {
 
     if (action === 'generateContent') {
       try {
-        pipeline.accountingComplete({ kind: 'attempt' }).catch(() => {})
         const response = await pipeline.call(request)
         const serializer = manager.getSerializer('gemini-generate')
         if (!serializer) throwFormattedError(manager.buildGatewayError('Serializer not found', 500))
-        const u = response.usage
-        pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
         return serializer.serializeResponse(response)
       } catch (e: any) {
         await pipeline.error(e)
@@ -130,7 +127,6 @@ export default defineEventHandler(async (event) => {
     request.stream = true
     const useSSE = getQuery(event).alt === 'sse'
     try {
-      pipeline.accountingComplete({ kind: 'attempt' }).catch(() => {})
       const resolved = pipeline.resolve(request)
       if (!resolved) throwFormattedError(manager.buildGatewayError(`No adapter found for model: ${request.model}`, 404))
 
@@ -168,9 +164,8 @@ export default defineEventHandler(async (event) => {
           onChunks: (unifiedChunks) => {
             for (const uc of unifiedChunks) {
               if (uc.type === 'done') {
-                if (doneSent) { const u = (uc as any).usage; if (u) pipeline.accountingComplete({ kind: 'usage', usage: u, model: request.model }); return }
+                if (doneSent) return
                 doneSent = true
-                const u = (uc as any).usage; if (u) pipeline.accountingComplete({ kind: 'usage', usage: u, model: request.model })
                 emit(serializer!.serializeStreamChunk(uc))
               } else {
                 // Serializer buffers partial tool-call args and returns null for them

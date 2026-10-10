@@ -1,8 +1,14 @@
 import type { H3Event } from 'h3'
 import type { ProviderManager } from '../providers/manager'
-import type { LLMRequest, LLMResponse, LLMStreamChunk, ProviderAdapter, Usage } from './types'
-import { HookRegistry, requestHooks, type AccountingCompletion, type HookContext } from './hooks'
-import { completeAccounting } from './accounting'
+import type { EmbeddingRequest, EmbeddingResponse, LLMRequest, LLMResponse, LLMStreamChunk, ProviderAdapter, Usage } from './types'
+import { HookRegistry, requestHooks, type HookContext } from './hooks'
+
+// Keep completion work owned by the process rather than the HTTP response lifetime.
+const pendingCompletions = new Set<Promise<void>>()
+
+export async function drainCompletions(): Promise<void> {
+  while (pendingCompletions.size) await Promise.all([...pendingCompletions])
+}
 
 export interface StreamConsumer {
   onChunks(chunks: LLMStreamChunk[]): void | Promise<void>
@@ -12,6 +18,7 @@ export interface StreamConsumer {
 
 export class RequestPipeline {
   readonly context: HookContext
+  private model?: string
   private usage?: Usage
   private failure?: unknown
   private completed = false
@@ -24,9 +31,18 @@ export class RequestPipeline {
     private hooks: HookRegistry = requestHooks
   ) {
     this.context = { incomingProtocol, apiKeyRecord: event.context?._apiKeyRecord }
+    event.node?.res.once?.('close', this.onClose)
+  }
+
+  private onClose = () => {
+    if (!this.event.node.res.writableEnded && !this.completed) {
+      // Continue observing upstream usage; closing the client is not upstream EOF.
+      this.failure = new Error('Client disconnected')
+    }
   }
 
   resolve(request: LLMRequest) {
+    this.model = request.model
     const resolved = this.manager.resolveAdapter(request.model || '', this.context.incomingProtocol, request.stream)
     this.context.providerName = resolved?.providerName
     this.context.providerConfig = resolved ? this.manager.getProviderConfig(resolved.providerName) : undefined
@@ -46,13 +62,22 @@ export class RequestPipeline {
     return { request, resolved }
   }
 
-  accountingComplete(completion: AccountingCompletion): Promise<void> {
-    if (completion.kind === 'usage' && typeof completion.usage !== 'number') this.usage = completion.usage
-    return completeAccounting(completion, this.context, this.hooks)
+  async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    this.resolve({ model: request.model, messages: [], config: {} })
+    const response = await this.manager.embed(request)
+    if (response.model) {
+      this.model = response.model.includes('/') || !this.context.providerName
+        ? response.model : `${this.context.providerName}/${response.model}`
+    }
+    this.usage = { promptTokens: response.usage.totalTokens, completionTokens: 0 }
+    return response
   }
 
   async call(request: LLMRequest): Promise<LLMResponse> {
-    const response = await this.hooks.response(await this.manager.callLLM(request), this.context)
+    this.model = request.model
+    const upstream = await this.manager.callLLM(request)
+    if (upstream.usage) this.usage = upstream.usage
+    const response = await this.hooks.response(upstream, this.context)
     if (response.usage) this.usage = response.usage
     return response
   }
@@ -111,6 +136,12 @@ export class RequestPipeline {
   async complete(): Promise<void> {
     if (this.completed) return
     this.completed = true
-    await this.hooks.complete({ usage: this.usage, error: this.failure }, this.context)
+    this.event.node?.res.removeListener?.('close', this.onClose)
+    const completion = { model: this.model, usage: this.usage, error: this.failure }
+    const pending = this.hooks.complete(completion, this.context).catch(error => {
+      console.error('[LLMHub] Completion failed:', error)
+    })
+    pendingCompletions.add(pending)
+    void pending.then(() => pendingCompletions.delete(pending))
   }
 }

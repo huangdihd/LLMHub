@@ -37,8 +37,8 @@ type HarnessOptions = {
 
 function harness(protocol: Protocol, options: HarnessOptions = {}) {
   const writes: string[] = []
-  const accounting: any[] = []
   const completions: any[] = []
+  const completionProtocols: string[] = []
   const errors: unknown[] = []
   const requests: any[] = []
   const timers = new Set<() => void>()
@@ -118,12 +118,6 @@ function harness(protocol: Protocol, options: HarnessOptions = {}) {
   function load(path: string): any {
     const filename = resolve(root, path)
     if (filename === resolve(root, 'server/providers/manager.ts')) return { ProviderManager }
-    if (filename === resolve(root, 'server/core/accounting.ts')) return {
-      completeAccounting: async (completion: unknown) => { accounting.push(plain(completion)) },
-      completeIngressAccounting: async (_event: unknown, incomingProtocol: string, completion: unknown) => {
-        accounting.push({ incomingProtocol, ...plain(completion) })
-      }
-    }
     if (cache.has(filename)) return cache.get(filename)
     assert.ok(filename.startsWith(resolve(root, 'server') + '/') || filename.startsWith(resolve(root, 'builtin') + '/'), filename)
     const module = { exports: {} }
@@ -143,7 +137,10 @@ function harness(protocol: Protocol, options: HarnessOptions = {}) {
   load('server/core/hooks.ts').requestHooks.register({
     id: 'characterization',
     onError: (error: unknown) => { errors.push(error) },
-    onComplete: (completion: unknown) => { completions.push(completion) }
+    onComplete: (completion: unknown, context: { incomingProtocol: string }) => {
+      completions.push(completion)
+      completionProtocols.push(context.incomingProtocol)
+    }
   })
   const handler = load(options.embedding === 'openai' ? 'builtin/ingress-openai/server/api/openai/embeddings.post.ts' : definitions[protocol][0]).default
   const event = {
@@ -157,7 +154,7 @@ function harness(protocol: Protocol, options: HarnessOptions = {}) {
   if (options.method !== undefined) event.method = options.method
   if (options.resolvedModel !== undefined) Object.assign(event.context, { _resolvedModel: options.resolvedModel })
   if (Object.hasOwn(options, 'body')) Object.assign(event, { body: options.body })
-  return { invoke: () => handler(event), writes, accounting, completions, errors, requests, timers, response, failure,
+  return { invoke: () => handler(event), writes, completions, completionProtocols, errors, requests, timers, response, failure,
     get headers() { return headers }, get endCount() { return endCount },
     tickAfterEnd() { for (const callback of callbacks) callback() } }
 }
@@ -176,7 +173,7 @@ for (const protocol of Object.keys(definitions) as Protocol[]) {
     }
     assert.equal(texts[protocol](), 'Hello')
     assert.equal(h.requests[0].model, 'offline/model')
-    assert.deepEqual(h.accounting, [{ kind: 'attempt' }, { kind: 'usage', usage, model: 'offline/model' }])
+    assert.deepEqual(plain(h.completions), [{ usage, model: 'offline/model' }])
     assert.equal(h.completions.length, 1)
     assert.equal(h.errors.length, 0)
     assert.equal(h.response.headersSent, false)
@@ -205,7 +202,7 @@ for (const protocol of Object.keys(definitions) as Protocol[]) {
     const count = h.writes.length
     h.tickAfterEnd()
     assert.equal(h.writes.length, count)
-    assert.ok(h.accounting.some(completion => completion.kind === 'usage' && completion.usage.totalTokens === 10))
+    assert.deepEqual(plain(h.completions), [{ usage, model: 'offline/model' }])
   })
 
   for (const failure of ['call', 'open'] as const) {
@@ -218,6 +215,8 @@ for (const protocol of Object.keys(definitions) as Protocol[]) {
       assert.deepEqual(h.errors, [h.failure])
       assert.equal(h.completions.length, 1)
       assert.equal(h.completions[0].error, h.failure)
+      assert.equal(h.completions[0].model, 'offline/model')
+      assert.equal(h.completions[0].usage, undefined)
     })
   }
 
@@ -231,6 +230,9 @@ for (const protocol of Object.keys(definitions) as Protocol[]) {
     assert.equal(h.timers.size, 0)
     assert.deepEqual(h.errors, [h.failure])
     assert.equal(h.completions.length, 1)
+    assert.equal(h.completions[0].model, 'offline/model')
+    assert.equal(h.completions[0].usage, undefined)
+    assert.equal(h.completions[0].error, h.failure)
   })
 
   test(`${protocol} entry: malformed upstream frame is dropped, later content survives`, async () => {
@@ -266,10 +268,10 @@ for (const input of ['hello', ['hello', 'world'], [1, 2], [[1, 2], [3]]]) {
       data: normalized.map((_, index) => ({ object: 'embedding', index, embedding: [0.5, -0.25] })),
       usage: { prompt_tokens: 7, total_tokens: 10 }
     })
-    assert.deepEqual(h.accounting, [
-      { incomingProtocol: 'openai-embedding', kind: 'attempt' },
-      { incomingProtocol: 'openai-embedding', kind: 'usage', usage: 10, model: 'offline/model' }
+    assert.deepEqual(plain(h.completions), [
+      { usage: { promptTokens: 10, completionTokens: 0 }, model: 'offline/returned-model' }
     ])
+    assert.deepEqual(h.completionProtocols, ['openai-embedding'])
     assert.deepEqual(h.writes, [])
     assert.equal(h.timers.size, 0)
   })
@@ -289,7 +291,10 @@ for (const body of [undefined, {}, { input: null }, { input: [] }]) {
     const h = harness('openai-chat', { embedding: 'openai', body })
     await assert.rejects(h.invoke(), (error: any) => error.statusCode === 400)
     assert.deepEqual(h.requests, [])
-    assert.deepEqual(h.accounting, [])
+    assert.equal(h.completions.length, 1)
+    assert.equal(h.completions[0].usage, undefined)
+    assert.equal(h.completions[0].model, undefined)
+    assert.equal(h.completions[0].error.statusCode, 400)
   })
 }
 
@@ -306,39 +311,47 @@ for (const action of ['embedContent', 'batchEmbedContents'] as const) {
         dimensions: 2, taskType: 'RETRIEVAL_DOCUMENT', title: 'Document' }])
       assert.deepEqual(result, action === 'embedContent' ? { embedding: { values: [0.5, -0.25] } } :
         { embeddings: [{ values: [0.5, -0.25] }, { values: [0.5, -0.25] }] })
-      assert.deepEqual(h.accounting, [
-        { incomingProtocol: 'gemini-embedding', kind: 'attempt' },
-        { incomingProtocol: 'gemini-embedding', kind: 'usage', usage: 10, model: 'fallback/chosen' }
+      assert.deepEqual(plain(h.completions), [
+        { usage: { promptTokens: 10, completionTokens: 0 }, model: 'offline/returned-model' }
       ])
+      assert.deepEqual(h.completionProtocols, ['gemini-embedding'])
     })
   }
 }
 
 for (const embedding of ['openai', 'embedContent', 'batchEmbedContents'] as const) {
-  test(`${embedding} embeddings entry: provider failure keeps attempt but emits no usage`, async () => {
+  test(`${embedding} embeddings entry: provider failure completes once without usage`, async () => {
     const h = harness('gemini-generate', { embedding, failure: 'call', body: {
       model: 'offline/model', input: 'hello', content: 'hello', requests: [{ content: 'hello' }]
     } })
     await assert.rejects(h.invoke(), error => error === h.failure)
-    assert.equal(h.accounting.length, 1)
-    assert.equal(h.accounting[0].kind, 'attempt')
+    assert.equal(h.completions.length, 1)
+    assert.equal(h.completions[0].model, 'offline/model')
+    assert.equal(h.completions[0].usage, undefined)
+    assert.equal(h.completions[0].error, h.failure)
     assert.equal(h.response.headersSent, false)
     assert.deepEqual(h.writes, [])
   })
 }
 
-test('Gemini embeddings entry: empty batch fails before provider or accounting', async () => {
+test('Gemini embeddings entry: empty batch completes without provider usage', async () => {
   const h = harness('gemini-generate', { embedding: 'batchEmbedContents', body: { requests: [] } })
   await assert.rejects(h.invoke(), (error: any) => error.statusCode === 400 && error.message === 'No content provided to embed')
   assert.deepEqual(h.requests, [])
-  assert.deepEqual(h.accounting, [])
+  assert.equal(h.completions.length, 1)
+  assert.equal(h.completions[0].usage, undefined)
+  assert.equal(h.completions[0].model, undefined)
+  assert.equal(h.completions[0].error.statusCode, 400)
 })
 
 test('Gemini embeddings entry: malformed JSON becomes a 400 parse error', async () => {
   const h = harness('gemini-generate', { embedding: 'embedContent', parseFailure: true })
   await assert.rejects(h.invoke(), (error: any) => error.statusCode === 400 && error.message === 'Parse error: invalid JSON')
   assert.deepEqual(h.requests, [])
-  assert.deepEqual(h.accounting, [])
+  assert.equal(h.completions.length, 1)
+  assert.equal(h.completions[0].usage, undefined)
+  assert.equal(h.completions[0].model, undefined)
+  assert.equal(h.completions[0].error.statusCode, 400)
 })
 
 for (const options of [{ method: 'GET' }, { rawPath: 'models/offline%2Fmodel:countTokens' }, { rawPath: 'models/:generateContent' }]) {
@@ -346,7 +359,7 @@ for (const options of [{ method: 'GET' }, { rawPath: 'models/offline%2Fmodel:cou
     const h = harness('gemini-generate', options)
     await assert.rejects(h.invoke(), (error: any) => error.statusCode === 404)
     assert.deepEqual(h.requests, [])
-    assert.deepEqual(h.accounting, [])
+    assert.deepEqual(h.completions, [])
     assert.deepEqual(h.writes, [])
   })
 }

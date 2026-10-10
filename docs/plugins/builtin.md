@@ -145,6 +145,19 @@ Pages use `<UContainer class="py-8 max-w-5xl">`.
 | `EndpointRow` | A client endpoint on the home page |
 | `PluginSchemaForm` | A form rendered from [field](reference.md#fields) declarations |
 
+## Request completion
+
+`stats` and `quota` register the public `onComplete` hook. Each admitted
+generation or embedding request produces one completion, with the final model,
+last reported usage and any error. Completion persistence runs in the background;
+errors are logged without changing the response. Missing usage still counts one
+call but does not add tokens.
+
+`token-billing` provides its token conversion function through `api.provide`.
+`quota` declares it as a required dependency and obtains the interface through
+`api.require`; setup fails if the service is unavailable. No hook priority or
+shared event mutation is used to transfer billed tokens.
+
 ## Testing
 
 Run all four before committing, in this order:

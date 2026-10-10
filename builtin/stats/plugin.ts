@@ -5,8 +5,8 @@ export default {
   setup(api: PluginAPI) {
     api.registerHook({
       id: 'calls',
-      onAccountingComplete(completion) {
-        if (completion.kind === 'attempt') return incrementCalls()
+      onComplete() {
+        return incrementCalls()
       }
     })
   }

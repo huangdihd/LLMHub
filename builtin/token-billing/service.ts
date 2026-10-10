@@ -2,6 +2,11 @@ import type { Usage } from '../../server/core/types'
 import type { ModelTokenRatios } from './store'
 import { getModelTokenRatios } from './store'
 
+/** Public plugin service consumed through PluginAPI.require('token-billing'). */
+export interface TokenBillingService {
+  getBillableTokens(usage: Usage, model?: string): Promise<number>
+}
+
 export function calculateBillableTokens(usage: Usage, ratios: ModelTokenRatios): number {
   const promptTokens = Math.max(0, Number(usage.promptTokens) || 0)
   const completionTokens = Math.max(0, Number(usage.completionTokens) || 0)

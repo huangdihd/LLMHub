@@ -125,7 +125,7 @@ test('trackUsage writes billed rather than raw tokens to all three usage counter
   assert.deepEqual(writes.map(write => write.key), [keysKey])
 })
 
-test('numeric embedding usage bypasses model ratios', async () => {
+test('legacy numeric usage remains pre-billed and bypasses model ratios', async () => {
   values.set(ratiosKey, { ratios: { [model]: { input: 100, cached: 100, output: 100 } } })
   await trackUsage(eventFor(keyRecord()), 12, model)
   assert.equal(savedKey().tokens_used, 22)
@@ -162,7 +162,7 @@ test('missing record is an early no-op; admin without id and revoked ids read bu
   assert.deepEqual(savedKey(), keyRecord())
 })
 
-test('global calls are independent of key usage and include attempts without a usage report', async () => {
+test('global calls are independent of key usage and include completions without a usage report', async () => {
   assert.deepEqual(await getStats(), { totalCalls: 0 })
   await incrementCalls()
   assert.deepEqual(savedKey(), keyRecord())
@@ -230,4 +230,30 @@ test('trackUsage logs and swallows storage failure while incrementCalls rejects'
   assert.deepEqual(logged.mock.calls[0].arguments, ['[LLMHub] Failed to track usage:', failure])
   await assert.rejects(incrementCalls(), error => error === failure)
   assert.deepEqual(writes, [])
+})
+
+
+test('unified embedding usage uses billing ratios rather than legacy numeric bypass', async () => {
+  values.set(ratiosKey, { ratios: { [model]: { input: 2, cached: 1, output: 3 } } })
+  await trackUsage(eventFor(keyRecord()), { promptTokens: 12, completionTokens: 0 }, model)
+  assert.equal(savedKey().tokens_used, 34)
+  assert.equal(savedKey().call_count, 8)
+})
+
+test('concurrent usage transactions preserve updates across different keys', async () => {
+  const first = keyRecord()
+  const second = keyRecord({ id: 'key-2' })
+  values.set(keysKey, [first, second])
+  await Promise.all(Array.from({ length: 30 }, async (_, index) => {
+    await Promise.all([
+      addUsage(index % 2 ? first : second, 2, model, 'provider'),
+      incrementCalls()
+    ])
+  }))
+  for (const record of values.get(keysKey) as ApiKeyRecord[]) {
+    assert.equal(record.call_count, 22)
+    assert.equal(record.tokens_used, 40)
+    assert.equal(record.model_usage[model], 34)
+  }
+  assert.deepEqual(await getStats(), { totalCalls: 30 })
 })

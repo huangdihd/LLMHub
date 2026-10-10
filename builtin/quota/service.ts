@@ -4,7 +4,20 @@ import type { ApiKeyRecord, ApiKeyPublic } from '../../server/stores/auth.store'
 import { readApiKeys, writeApiKeys, monthKey } from '../../server/stores/api-key-storage'
 import { getBillableTokens } from '../token-billing/service'
 
-export async function listKeys(): Promise<ApiKeyPublic[]> {
+// All quota mutations rewrite the same array, so lock the whole transaction,
+// not individual reads/writes (including updates for different API keys).
+let pendingMutation: Promise<unknown> = Promise.resolve()
+function withQuotaMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const result = pendingMutation.then(operation)
+  pendingMutation = result.catch(() => {})
+  return result
+}
+
+export function listKeys(): Promise<ApiKeyPublic[]> {
+  return withQuotaMutation(readAndResetKeys)
+}
+
+async function readAndResetKeys(): Promise<ApiKeyPublic[]> {
   const keys = await readApiKeys()
   // Auto-reset monthly counters if month changed
   const month = monthKey()
@@ -38,7 +51,11 @@ export async function listKeys(): Promise<ApiKeyPublic[]> {
 }
 
 /** Increment usage for a key record. Must pass the record (already looked up). */
-export async function addUsage(record: ApiKeyRecord, tokens: number, model?: string, provider?: string): Promise<void> {
+export function addUsage(record: ApiKeyRecord, tokens: number, model?: string, provider?: string): Promise<void> {
+  return withQuotaMutation(() => persistUsage(record, tokens, model, provider))
+}
+
+async function persistUsage(record: ApiKeyRecord, tokens: number, model?: string, provider?: string): Promise<void> {
   const keys = await readApiKeys()
   const target = keys.find(k => k.id === record.id)
   if (!target) return
@@ -66,7 +83,11 @@ export async function addUsage(record: ApiKeyRecord, tokens: number, model?: str
 }
 
 /** Remove stale model references from all keys after provider model list changes. */
-export async function cleanupStaleModels(validModelIds: ReadonlySet<string>): Promise<void> {
+export function cleanupStaleModels(validModelIds: ReadonlySet<string>): Promise<void> {
+  return withQuotaMutation(() => persistModelCleanup(validModelIds))
+}
+
+async function persistModelCleanup(validModelIds: ReadonlySet<string>): Promise<void> {
   const keys = await readApiKeys()
   let changed = false
   for (const k of keys) {
@@ -101,7 +122,7 @@ export async function cleanupStaleModels(validModelIds: ReadonlySet<string>): Pr
 /**
  * Track API key usage after an LLM call.
  * Pass unified usage when available so per-model billing ratios are applied.
- * Pass a numeric count for embeddings, or 0 when only the call should be counted.
+ * Numeric counts remain supported for legacy callers; new completions use unified Usage.
  */
 export async function trackUsage(event: H3Event, usage: number | Usage, model?: string): Promise<void> {
   const record = (event as any).context?._apiKeyRecord

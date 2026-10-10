@@ -26,12 +26,8 @@ export interface AdmissionContext {
 
 export type AdmissionStage = 'onBeforeIdentity' | 'onAfterIdentity' | 'onModelResolved'
 
-/** Accounting boundaries are emitted where the legacy routes observed them. */
-export type AccountingCompletion =
-  | { kind: 'attempt' }
-  | { kind: 'usage'; usage: number | Usage; model?: string; tokens?: number }
-
 export interface CompletionInfo {
+  model?: string
   usage?: Usage
   error?: unknown
 }
@@ -45,7 +41,6 @@ export interface RequestHook {
   onModelResolved?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
   onModels?: (models: ModelInfo[], context: HookContext) => Awaitable<ModelInfo[] | void>
   onModelsRefreshed?: (validModelIds: ReadonlySet<string>) => Awaitable<void>
-  onAccountingComplete?: (completion: AccountingCompletion, context: HookContext) => Awaitable<void>
   onRequest?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
   onResponse?: (response: LLMResponse, context: HookContext) => Awaitable<LLMResponse | void>
   /** undefined preserves the chunk, null or [] drops it. */
@@ -86,12 +81,6 @@ export class HookRegistry {
   async modelsRefreshed(validModelIds: ReadonlySet<string>): Promise<void> {
     for (const hook of this.ordered()) {
       await hook.onModelsRefreshed?.(validModelIds)
-    }
-  }
-
-  async accountingComplete(completion: AccountingCompletion, context: HookContext): Promise<void> {
-    for (const hook of this.ordered()) {
-      await hook.onAccountingComplete?.(completion, context)
     }
   }
 

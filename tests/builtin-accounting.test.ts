@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { test } from 'node:test'
-import type { AccountingCompletion } from '../server/core/hooks.ts'
+import type { CompletionInfo } from '../server/core/hooks.ts'
 
 const require = createRequire(import.meta.url)
 const build = process.env.ADAPTER_BUILD
@@ -10,9 +10,12 @@ const { HookRegistry } = require(`${build}/core/hooks.js`) as typeof import('../
 
 function fixture() {
   const hooks = new HookRegistry()
-  // Register in reverse billing order: priorities, not setup order, own the contract.
-  for (const name of ['quota', 'stats', 'token-billing']) {
+  const services = new Map<string, object>()
+  // Billing provides a service, not a completion hook or priority-dependent mutation.
+  for (const name of ['token-billing', 'quota', 'stats']) {
     require(`${build}/../builtin/${name}/plugin.js`).default.setup({
+      provide: (service: object) => services.set(name, service),
+      require: (id: string) => services.get(id),
       registerHook: (hook: any) => hooks.register({ ...hook, id: `${name}:${hook.id}` })
     })
   }
@@ -46,50 +49,103 @@ async function withStorage(run: (state: ReturnType<typeof fixture>) => Promise<v
   }
 }
 
-test('builtin accounting separates attempts, bills usage before quota, and attributes provider buckets', async () => {
-  await withStorage(async ({ hooks, context, values, writes }) => {
-    await hooks.accountingComplete({ kind: 'attempt' }, context)
-    assert.equal(values.get('stats:totalCalls'), 1)
-    assert.deepEqual(writes, ['stats:totalCalls'])
-    const completion: AccountingCompletion = {
-      kind: 'usage', model: 'provider/model',
+test('completion bills unified usage without mutating its payload and counts once', async () => {
+  await withStorage(async ({ hooks, context, values }) => {
+    const completion: CompletionInfo = Object.freeze({
+      model: 'provider/model',
       usage: { promptTokens: 100, cachedTokens: 40, completionTokens: 3 }
-    }
-    await hooks.accountingComplete(completion, context)
-    assert.equal(completion.tokens, 40)
+    })
+    await hooks.complete(completion, context)
+    assert.equal(values.get('stats:totalCalls'), 1)
+    assert.equal('tokens' in completion, false)
     const saved = (values.get('auth:api-keys') as any[])[0]
     assert.equal(saved.tokens_used, 50)
     assert.equal(saved.call_count, 8)
     assert.deepEqual(saved.model_usage, { 'provider/model': 40 })
     assert.deepEqual(saved.provider_usage, { provider: 40 })
-    assert.deepEqual(writes, ['stats:totalCalls', 'auth:api-keys'])
   })
 })
 
-test('builtin numeric accounting bypasses billing settings and counts zero usage', async () => {
+test('embedding unified usage applies input ratios', async () => {
   await withStorage(async ({ hooks, context, reads, values }) => {
-    await hooks.accountingComplete({ kind: 'usage', usage: 0, model: 'provider/model' }, context)
+    await hooks.complete({ model: 'provider/model', usage: { promptTokens: 12, completionTokens: 0 } }, context)
+    assert.equal(reads.includes('settings:model-token-ratios'), true)
+    const saved = (values.get('auth:api-keys') as any[])[0]
+    assert.equal(saved.tokens_used, 16)
+    assert.equal(saved.call_count, 8)
+    assert.deepEqual(saved.model_usage, { 'provider/model': 6 })
+  })
+})
+
+test('missing usage, including failed calls, increments calls without token buckets', async () => {
+  await withStorage(async ({ hooks, context, reads, values }) => {
+    await hooks.complete({ model: 'provider/model' }, context)
+    await hooks.complete({ error: new Error('upstream failed') }, context)
     assert.equal(reads.includes('settings:model-token-ratios'), false)
+    const saved = (values.get('auth:api-keys') as any[])[0]
+    assert.equal(saved.tokens_used, 10)
+    assert.equal(saved.call_count, 9)
+    assert.deepEqual(saved.model_usage, {})
+    assert.deepEqual(saved.provider_usage, {})
+    assert.equal(values.get('stats:totalCalls'), 2)
+  })
+})
+
+test('zero usage still counts once and produces zero-valued token buckets', async () => {
+  await withStorage(async ({ hooks, context, values }) => {
+    await hooks.complete({ model: 'provider/model', usage: { promptTokens: 0, completionTokens: 0 } }, context)
     const saved = (values.get('auth:api-keys') as any[])[0]
     assert.equal(saved.tokens_used, 10)
     assert.equal(saved.call_count, 8)
     assert.deepEqual(saved.model_usage, { 'provider/model': 0 })
-    assert.equal(values.has('stats:totalCalls'), false)
+    assert.equal(values.get('stats:totalCalls'), 1)
   })
 })
 
-test('builtin accounting without identity performs no usage storage access', async () => {
+test('completion without identity counts globally but does not access key usage', async () => {
   await withStorage(async ({ hooks, reads, writes }) => {
-    await hooks.accountingComplete({ kind: 'usage', usage: 7 }, { incomingProtocol: 'openai-chat' })
-    assert.deepEqual(reads, [])
-    assert.deepEqual(writes, [])
+    await hooks.complete({}, { incomingProtocol: 'openai-chat' })
+    assert.deepEqual(reads, ['stats:totalCalls'])
+    assert.deepEqual(writes, ['stats:totalCalls'])
   })
 })
 
-test('builtin quota persistence failure rejects at the accounting boundary', async () => {
-  await withStorage(async ({ hooks, context, storage }) => {
+test('concurrent completions do not lose global or per-key counts', async () => {
+  await withStorage(async ({ hooks, context, values }) => {
+    await Promise.all(Array.from({ length: 40 }, () => hooks.complete({
+      model: 'provider/model', usage: { promptTokens: 2, completionTokens: 0 }
+    }, context)))
+    const saved = (values.get('auth:api-keys') as any[])[0]
+    assert.equal(saved.call_count, 47)
+    assert.equal(saved.tokens_used, 50)
+    assert.deepEqual(saved.model_usage, { 'provider/model': 40 })
+    assert.deepEqual(saved.provider_usage, { provider: 40 })
+    assert.equal(values.get('stats:totalCalls'), 40)
+  })
+})
+
+test('quota refuses setup without its billing service', () => {
+  const quota = require(`${build}/../builtin/quota/plugin.js`).default
+  for (const service of [undefined, {}]) {
+    assert.throws(() => quota.setup({
+      require: () => service,
+      registerHook: () => assert.fail('must fail before registering hooks')
+    }), /requires the token-billing service/)
+  }
+})
+
+test('completion storage failures are logged and subsequent completions recover', async testContext => {
+  await withStorage(async ({ hooks, context, storage, values }) => {
     const failure = new Error('quota write failed')
+    const setItem = storage.setItem
     storage.setItem = async () => { throw failure }
-    await assert.rejects(hooks.accountingComplete({ kind: 'usage', usage: 2 }, context), error => error === failure)
+    const logged = testContext.mock.method(console, 'error', () => {})
+    await assert.doesNotReject(hooks.complete({}, context))
+    assert.equal(logged.mock.calls.length, 2)
+    for (const call of logged.mock.calls) assert.equal(call.arguments[1], failure)
+    storage.setItem = setItem
+    await hooks.complete({}, context)
+    assert.equal((values.get('auth:api-keys') as any[])[0].call_count, 8)
+    assert.equal(values.get('stats:totalCalls'), 1)
   })
 })

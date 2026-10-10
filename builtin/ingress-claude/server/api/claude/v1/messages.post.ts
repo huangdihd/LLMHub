@@ -3,12 +3,12 @@ import { RequestPipeline } from '../../../../../../server/core/pipeline'
 import type { LLMRequest } from '../../../../../../server/core/types'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
   const manager = new ProviderManager()
-  await manager.loadProviders()
-
   const pipeline = new RequestPipeline(manager, event, 'claude-messages')
   try {
+    const body = await readBody(event)
+    await manager.loadProviders()
+
     const parser = manager.getParser('/v1/messages', 'POST', body)
     if (!parser) {
       throw createError({ statusCode: 400, message: 'Invalid request' })
@@ -24,7 +24,6 @@ export default defineEventHandler(async (event) => {
     }
 
     try {
-      await pipeline.accountingComplete({ kind: 'attempt' })
       const prepared = await pipeline.prepare(request)
       request = prepared.request
       const resolved = prepared.resolved
@@ -210,17 +209,8 @@ export default defineEventHandler(async (event) => {
                 })
               }
             } else if (unifiedChunk.type === 'done') {
-              if (streamDone) {
-                // Some providers split usage into a separate chunk — capture if available
-                const u = (unifiedChunk as any).usage
-                if (u) pipeline.accountingComplete({ kind: 'usage', usage: u, model: request.model })
-                return
-              }
+              if (streamDone) return
               streamDone = true
-
-              // Track token usage from the final chunk
-              const u = (unifiedChunk as any).usage
-              if (u) pipeline.accountingComplete({ kind: 'usage', usage: u, model: request.model })
 
               // Flush any remaining buffered thinking
               if (thinkingBuffer.length > 0 && !thinkingFlushed) {
@@ -282,8 +272,6 @@ export default defineEventHandler(async (event) => {
       if (!serializer) {
         throw new Error('Serializer not found')
       }
-      const u = response.usage
-      pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
       return serializer.serializeResponse(response)
     } catch (error: any) {
       await pipeline.error(error)

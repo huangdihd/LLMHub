@@ -2,12 +2,12 @@ import { ProviderManager } from '../../../../../../server/providers/manager'
 import { RequestPipeline } from '../../../../../../server/core/pipeline'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
   const manager = new ProviderManager()
-  await manager.loadProviders()
-
   const pipeline = new RequestPipeline(manager, event, 'claude-completion')
   try {
+    const body = await readBody(event)
+    await manager.loadProviders()
+
     const parser = manager.getParser('/v1/complete', 'POST', body)
     if (!parser) {
       throwFormattedError(manager.buildGatewayError('Invalid request', 400))
@@ -16,7 +16,6 @@ export default defineEventHandler(async (event) => {
     let request = parser.parseRequest(body)
 
     try {
-      pipeline.accountingComplete({ kind: 'attempt' }).catch(() => {})
       const prepared = await pipeline.prepare(request)
       request = prepared.request
       const resolved = prepared.resolved
@@ -53,8 +52,6 @@ export default defineEventHandler(async (event) => {
             onChunks: (unifiedChunks) => {
               for (const unifiedChunk of unifiedChunks) {
                 if (unifiedChunk.type === 'done') {
-                  const u = unifiedChunk.usage
-                  if (u) pipeline.accountingComplete({ kind: 'usage', usage: u, model: request.model })
                   if (doneSent) continue
                   doneSent = true
                   writeCompletion(serializer!.serializeStreamChunk(unifiedChunk))
@@ -98,8 +95,6 @@ export default defineEventHandler(async (event) => {
         throw manager.buildGatewayError('Serializer not found', 500)
       }
 
-      const u = response.usage
-      pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
       return serializer.serializeResponse(response)
     } catch (error: any) {
       await pipeline.error(error)

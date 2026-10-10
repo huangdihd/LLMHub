@@ -126,9 +126,18 @@ test('builtin ordering rejects cycles and preserves parser and equal-priority ho
   assert.throws(() => orderBuiltinPlugins([plugin('first'), plugin('first')]), /Duplicate/)
   const hookOrder = async (plugins: readonly BuiltinPlugin[]) => {
     const hooks: Array<{ id: string; priority?: number }> = []
-    const api = { registerHook: (hook: { id: string; priority?: number }) => hooks.push(hook),
-      registerProvider() {}, registerProtocol() {}, registerIngress() {} } as unknown as PluginAPI
-    for (const entry of plugins) await entry.setup!(api)
+    const services = new Map<string, object>([
+      ['token-billing', { getBillableTokens() { throw new Error('Ordering fixture must not bill usage') } }]
+    ])
+    for (const entry of plugins) {
+      const api = {
+        registerHook: (hook: { id: string; priority?: number }) => hooks.push(hook),
+        provide: (service: object) => services.set(entry.manifest.id, service),
+        require: (id: string) => services.get(id),
+        registerProvider() {}, registerProtocol() {}, registerIngress() {}
+      } as unknown as PluginAPI
+      await entry.setup!(api)
+    }
     return hooks.sort((left, right) => (left.priority ?? 0) - (right.priority ?? 0)).map(hook => hook.id)
   }
   assert.deepEqual(await hookOrder(ordered), await hookOrder(builtinCatalog))

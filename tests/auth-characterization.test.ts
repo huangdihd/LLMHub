@@ -110,6 +110,7 @@ async function invoke(protocol: Protocol, options: Options = {}) {
   ] as const
   for (const [name, imports] of plugins) {
     execute(`builtin/${name}/plugin.ts`, imports).default.setup({
+      require: () => ({ getBillableTokens() { throw new Error('Admission must not bill usage') } }),
       registerHook: (hook: any) => hooks.requestHooks.register({ ...hook, id: `${name}:${hook.id}` })
     })
   }

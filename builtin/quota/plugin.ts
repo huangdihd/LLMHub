@@ -1,8 +1,13 @@
 import type { PluginAPI } from '../../server/plugins-runtime/manager'
+import type { TokenBillingService } from '../token-billing/service'
 import { addUsage, cleanupStaleModels } from './service'
 
 export default {
   setup(api: PluginAPI) {
+    const billing = api.require<TokenBillingService>('token-billing')
+    if (typeof billing?.getBillableTokens !== 'function') {
+      throw new Error('quota requires the token-billing service')
+    }
     api.registerHook({
       id: 'quota', priority: -100,
       onModelsRefreshed: cleanupStaleModels,
@@ -26,10 +31,21 @@ export default {
           return { status: 429, message: `Provider "${provider}" quota (${providerQuota}) exceeded.`, code: 'provider_quota_exceeded' }
         }
       },
-      async onAccountingComplete(completion, context) {
-        if (completion.kind !== 'usage' || !context.apiKeyRecord) return
+      async onComplete(completion, context) {
+        const record = context.apiKeyRecord
+        if (!record) return
+        if (!completion.usage) return addUsage(record, 0)
+
+        let tokens: number
+        try {
+          tokens = await billing.getBillableTokens(completion.usage, completion.model)
+        } catch (error) {
+          // A failed conversion must not erase the completed call or invent token usage.
+          await addUsage(record, 0)
+          throw error
+        }
         const provider = completion.model?.includes('/') ? completion.model.split('/')[0] : undefined
-        await addUsage(context.apiKeyRecord, completion.tokens!, completion.model, provider)
+        await addUsage(record, tokens, completion.model, provider)
       }
     })
   }

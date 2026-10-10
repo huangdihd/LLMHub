@@ -89,7 +89,6 @@ export type HookContextContract = Assert<ContractMatches<Author.HookContext, Hoo
 export type AdmissionContract = Assert<ContractMatches<Author.AdmissionContext, Hooks.AdmissionContext>>
 export type RejectionContract = Assert<ContractMatches<Author.AdmissionRejection, Hooks.AdmissionRejection>>
 export type CompletionContract = Assert<ContractMatches<Author.CompletionInfo, Hooks.CompletionInfo>>
-export type AccountingContract = Assert<Equal<Author.AccountingCompletion, Hooks.AccountingCompletion>>
 export type AdmissionStageContract = Assert<Equal<Author.AdmissionStage, Hooks.AdmissionStage>>
 export type ProtocolContract = Assert<ContractMatches<Author.ProtocolDefinition, Protocols.ProtocolDefinition>>
 export type IngressContract = Assert<ContractMatches<Author.IngressDefinition, Ingresses.IngressDefinition>>

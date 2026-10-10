@@ -4,12 +4,12 @@ import { OpenAIResponsesSerializer } from '../../../openai-responses-serializer'
 import type { ResponsesStreamEvent } from '../../../openai-responses-serializer'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
   const manager = new ProviderManager()
-  await manager.loadProviders()
-
   const pipeline = new RequestPipeline(manager, event, 'openai-responses')
   try {
+    const body = await readBody(event)
+    await manager.loadProviders()
+
     const parser = manager.getParser('/v1/responses', 'POST', body)
     if (!parser) {
       throwFormattedError(manager.buildGatewayError('Invalid request', 400))
@@ -17,7 +17,6 @@ export default defineEventHandler(async (event) => {
 
     try {
       let request = parser.parseRequest(body)
-      pipeline.accountingComplete({ kind: 'attempt' }).catch(() => {})
       const prepared = await pipeline.prepare(request)
       request = prepared.request
       const resolved = prepared.resolved
@@ -59,8 +58,6 @@ export default defineEventHandler(async (event) => {
           const emitDone = (chunk: any) => {
             if (doneSent) return
             doneSent = true
-            const u = chunk.usage
-            pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
             writeEvents(serializer.serializeStreamChunk(chunk))
           }
 
@@ -69,7 +66,6 @@ export default defineEventHandler(async (event) => {
               for (const unifiedChunk of unifiedChunks) {
                 if (unifiedChunk.type === 'done') {
                   if (doneSent) {
-                    if (unifiedChunk.usage) pipeline.accountingComplete({ kind: 'usage', usage: unifiedChunk.usage, model: request.model })
                     continue
                   }
                   if (!unifiedChunk.usage) {
@@ -111,8 +107,6 @@ export default defineEventHandler(async (event) => {
 
       const serializer = new OpenAIResponsesSerializer(request.config?.outputFormat)
 
-      const u = response.usage
-      pipeline.accountingComplete({ kind: 'usage', usage: u || 0, model: request.model })
       return serializer.serializeResponse(response)
     } catch (error: any) {
       await pipeline.error(error)

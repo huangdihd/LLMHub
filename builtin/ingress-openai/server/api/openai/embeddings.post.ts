@@ -1,54 +1,58 @@
 import { normalizeOpenAIInput, encodeEmbeddingBase64 } from '../../../embedding'
-import { completeIngressAccounting } from '../../../../../server/core/accounting'
+import { RequestPipeline } from '../../../../../server/core/pipeline'
 import { ProviderManager } from '../../../../../server/providers/manager'
 import type { EmbeddingRequest } from '../../../../../server/core/types'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-
-  if (!body || body.input == null) {
-    const manager = new ProviderManager()
-    throwFormattedError(manager.buildGatewayError('Missing required field: input', 400))
-  }
-
-  const model: string = body.model || ''
-  const input = normalizeOpenAIInput(body.input)
-  if (input.length === 0) {
-    const manager = new ProviderManager()
-    throwFormattedError(manager.buildGatewayError('input must not be empty', 400))
-  }
-
   const manager = new ProviderManager()
-  await manager.loadProviders()
-
-  const request: EmbeddingRequest = {
-    model,
-    input,
-    dimensions: typeof body.dimensions === 'number' ? body.dimensions : undefined,
-    encodingFormat: body.encoding_format === 'base64' ? 'base64' : 'float'
-  }
-
+  const pipeline = new RequestPipeline(manager, event, 'openai-embedding')
   try {
-    completeIngressAccounting(event, 'openai-embedding', { kind: 'attempt' }).catch(() => {})
-    const result = await manager.embed(request)
+    const body = await readBody(event)
 
-    completeIngressAccounting(event, 'openai-embedding', { kind: 'usage', usage: result.usage.totalTokens || 0, model })
-
-    const useBase64 = request.encodingFormat === 'base64'
-    return {
-      object: 'list',
-      data: result.embeddings.map((emb, index) => ({
-        object: 'embedding',
-        index,
-        embedding: useBase64 ? encodeEmbeddingBase64(emb) : emb
-      })),
-      model: result.model || model,
-      usage: {
-        prompt_tokens: result.usage.promptTokens,
-        total_tokens: result.usage.totalTokens
-      }
+    if (!body || body.input == null) {
+      throwFormattedError(manager.buildGatewayError('Missing required field: input', 400))
     }
-  } catch (error: any) {
-    throwFormattedError(error)
+
+    const model: string = body.model || ''
+    const input = normalizeOpenAIInput(body.input)
+    if (input.length === 0) {
+      throwFormattedError(manager.buildGatewayError('input must not be empty', 400))
+    }
+
+    await manager.loadProviders()
+
+    const request: EmbeddingRequest = {
+      model,
+      input,
+      dimensions: typeof body.dimensions === 'number' ? body.dimensions : undefined,
+      encodingFormat: body.encoding_format === 'base64' ? 'base64' : 'float'
+    }
+
+    try {
+      const result = await pipeline.embed(request)
+
+      const useBase64 = request.encodingFormat === 'base64'
+      return {
+        object: 'list',
+        data: result.embeddings.map((emb, index) => ({
+          object: 'embedding',
+          index,
+          embedding: useBase64 ? encodeEmbeddingBase64(emb) : emb
+        })),
+        model: result.model || model,
+        usage: {
+          prompt_tokens: result.usage.promptTokens,
+          total_tokens: result.usage.totalTokens
+        }
+      }
+    } catch (error: any) {
+      await pipeline.error(error)
+      throwFormattedError(error)
+    }
+  } catch (error) {
+    await pipeline.error(error)
+    throw error
+  } finally {
+    await pipeline.complete()
   }
 })

@@ -59,22 +59,43 @@ test('models chains empty replacements rather than restoring the original list',
   assert.equal(await hooks.models([], context), replacement)
 })
 
-test('accounting awaits ordered hooks for both attempt and usage boundaries', async () => {
+test('completion awaits ordered hooks once with final usage and model', async () => {
   const hooks = new HookRegistry()
   const calls: string[] = []
-  hooks.register({ id: 'last', priority: 10, onAccountingComplete: completion => { calls.push(`last:${completion.kind}`) } })
-  hooks.register({ id: 'first', priority: -10, onAccountingComplete: async (completion, metadata) => {
+  const completion = { usage: { promptTokens: 7, completionTokens: 3 }, model: 'provider/model' }
+  hooks.register({ id: 'last', priority: 10, onComplete: value => {
+    assert.equal(value, completion)
+    calls.push('last')
+  } })
+  hooks.register({ id: 'first', priority: -10, onComplete: async (value, metadata) => {
     await Promise.resolve()
     assert.equal(metadata, context)
-    calls.push(`first:${completion.kind}`)
+    assert.equal(value, completion)
+    calls.push('first')
   } })
-  await hooks.accountingComplete({ kind: 'attempt' }, context)
-  await hooks.accountingComplete({ kind: 'usage', usage: 0, model: 'provider/model' }, context)
-  assert.deepEqual(calls, ['first:attempt', 'last:attempt', 'first:usage', 'last:usage'])
+  await hooks.complete(completion, context)
+  assert.deepEqual(calls, ['first', 'last'])
 })
 
-test('request, models and accounting failures reject and stop subsequent hooks', async () => {
-  for (const stage of ['onRequest', 'onModels', 'onAccountingComplete'] as const) {
+test('completion failures are logged and do not stop subsequent hooks', async (testContext) => {
+  const hooks = new HookRegistry()
+  const failure = new Error('completion failed')
+  const completion = { model: 'provider/model', usage: { promptTokens: 7, completionTokens: 3 } }
+  const log = testContext.mock.method(console, 'error', () => {})
+  const received: unknown[] = []
+  hooks.register({ id: 'failure', onComplete: async () => { throw failure } })
+  hooks.register({ id: 'later', onComplete: (value, metadata) => {
+    assert.equal(metadata, context)
+    received.push(value)
+  } })
+  await assert.doesNotReject(hooks.complete(completion, context))
+  assert.deepEqual(received, [completion])
+  assert.equal(log.mock.callCount(), 1)
+  assert.deepEqual(log.mock.calls[0].arguments, ['[LLMHub] hook failure onComplete failed:', failure])
+})
+
+test('request and models failures reject and stop subsequent hooks', async () => {
+  for (const stage of ['onRequest', 'onModels'] as const) {
     const hooks = new HookRegistry()
     const failure = new Error(stage)
     let reached = false
@@ -82,7 +103,7 @@ test('request, models and accounting failures reject and stop subsequent hooks',
     hooks.register({ id: 'later', [stage]: () => { reached = true } } as RequestHook)
     const pending = stage === 'onRequest'
       ? hooks.request({ model: 'provider/model', messages: [], config: {} }, context)
-      : stage === 'onModels' ? hooks.models([], context) : hooks.accountingComplete({ kind: 'attempt' }, context)
+      : hooks.models([], context)
     await assert.rejects(pending, error => error === failure)
     assert.equal(reached, false)
   }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { PLUGIN_API_VERSION } from '../../server/core/plugin-version.ts'
 import { createRegistry } from './npm-registry.mjs'
 import { createPluginGateway } from './plugin-gateway.mjs'
 
@@ -43,7 +44,7 @@ try {
   } }`)
   gateway = await createPluginGateway()
   const before = await list()
-  for (const plugin of before) assert.equal(plugin.apiVersion, '1.1.0')
+  for (const plugin of before) assert.equal(plugin.apiVersion, PLUGIN_API_VERSION)
   assert.equal((await gateway.request('/registry', json('PUT', { registry: fixture.registry }))).status, 200)
   assert.equal((await install(provider, '1.0.0')).status, 200)
   assert.equal((await gateway.request(`/${provider}/enable`, { method: 'POST' })).status, 200)

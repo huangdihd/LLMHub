@@ -52,11 +52,6 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
         }
       }
     },
-    'server/core/accounting.ts': {
-      completeAccounting: async (completion: any) => {
-        if (completion.kind === 'usage') usage.push(plain(completion.usage))
-      }
-    },
     'server/stores/provider.store.ts': { getProviderStore: forbidden },
     'server/utils/fetch.ts': { fetchWithRetry: forbidden },
     'builtin/provider-codex/codex-auth.ts': { extractChatGptAccountId: forbidden },
@@ -107,6 +102,12 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
     }, { filename })
     return module.exports
   }
+  load(resolve(root, 'server/core/hooks.ts')).requestHooks.register({
+    id: 'usage-observer',
+    onComplete: (completion: any) => {
+      if (completion.usage) usage.push(plain(completion.usage))
+    }
+  })
   const className = { codex: 'CodexAdapter', claude: 'ClaudeAdapter', openai: 'OpenAIAdapter', 'openai-responses': 'OpenAIResponsesAdapter' }[provider]
   const Adapter = load(resolve(root, `builtin/provider-${provider === 'openai-responses' ? 'openai' : provider}/${provider}.ts`))[className]
   adapter = new Adapter({ name: 'offline', models: [{ id: 'test-model' }], connection: {} })

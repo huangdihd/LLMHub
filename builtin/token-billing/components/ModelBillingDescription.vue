@@ -1,3 +1,3 @@
 <template>
-        <p class="text-xs text-gray-400 mt-1">Input, output, and cached percentages control API key token quota billing.</p>
+  <span>The in, out and cached percentages set how much of each token type counts against API key limits.</span>
 </template>

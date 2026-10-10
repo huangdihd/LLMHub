@@ -1,12 +1,12 @@
 <template>
-  <UContainer class="py-16 max-w-md">
+  <UContainer class="py-16 sm:py-24 max-w-sm">
     <div class="text-center mb-8">
-      <UIcon name="i-heroicons-shield-check" class="w-12 h-12 text-primary mx-auto mb-4" />
+      <img src="/logo.svg" alt="" class="w-12 h-12 mx-auto mb-5" />
       <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-        {{ isSetup ? 'Log In' : 'Set Up Admin Password' }}
+        {{ isSetup ? 'Log in to LLMHub' : 'Set an admin password' }}
       </h2>
-      <p class="text-gray-500 dark:text-gray-400 mt-2">
-        {{ isSetup ? 'Enter your password to access the dashboard.' : 'Create an admin password to secure LLMHub.' }}
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">
+        {{ isSetup ? 'Enter the admin password to manage this gateway.' : 'Choose a password to protect this gateway.' }}
       </p>
     </div>
 
@@ -16,27 +16,29 @@
           <UInput
             v-model="password"
             type="password"
-            placeholder="Enter password"
+            size="lg"
             autofocus
             autocomplete="new-password"
           />
         </UFormGroup>
 
-        <UFormGroup v-if="isSetup && totpEnabled" label="Two-Factor Code">
+        <UFormGroup v-if="isSetup && totpEnabled" label="Two-factor code">
           <UInput
             v-model="totpCode"
             placeholder="000000"
+            size="lg"
             autocomplete="one-time-code"
             inputmode="numeric"
             maxlength="6"
+            :ui="{ base: 'font-mono tracking-widest' }"
           />
         </UFormGroup>
 
-        <UButton type="submit" color="primary" block :loading="loading">
-          {{ isSetup ? 'Log In' : 'Set Password' }}
-        </UButton>
+        <UAlert v-if="error" color="red" variant="subtle" icon="i-heroicons-x-circle" :title="error" />
 
-        <p v-if="error" class="text-sm text-red-500 text-center">{{ error }}</p>
+        <UButton type="submit" size="lg" block :loading="loading">
+          {{ isSetup ? 'Log in' : 'Set password' }}
+        </UButton>
       </form>
     </UCard>
   </UContainer>

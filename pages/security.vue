@@ -1,148 +1,102 @@
 <template>
-  <UContainer class="py-8 max-w-4xl">
-    <div class="mb-6">
-      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Security Settings</h2>
-      <component v-for="section in dashboard.sections('description')" :key="section.id" :is="section.component" v-bind="section.props()" />
-    </div>
+  <UContainer class="py-8 max-w-5xl">
+    <PageHeader title="Security">
+      <template #description>
+        <component v-for="section in dashboard.sections('description')" :key="section.id" :is="section.component" v-bind="section.props()" />
+      </template>
+    </PageHeader>
 
-    <div v-if="loading" class="flex justify-center py-12">
-      <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-gray-500" />
-    </div>
+    <PageLoading v-if="loading" />
 
-    <template v-else>
-      <UCard class="mb-6">
-        <template #header>
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-              <UIcon name="i-heroicons-shield-check" class="w-5 h-5 text-primary" />
-              Brute-Force Protection
-            </h3>
-            <UToggle v-model="config.enabled" />
-          </div>
-        </template>
+    <div v-else class="space-y-6">
+      <SettingsCard title="Login protection" description="Temporarily lock out an IP address after too many failed admin logins.">
+        <template #control><UToggle v-model="config.enabled" aria-label="Login protection" /></template>
 
-        <div class="space-y-4">
-          <p class="text-sm text-gray-500 dark:text-gray-400">
-            Protect admin login from brute-force attacks by temporarily locking out IPs after too many failed attempts.
-          </p>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <UFormGroup label="Max Attempts" help="Number of failed attempts before lockout">
+        <div class="space-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <UFormGroup label="Failed attempts allowed" help="The IP is locked out after this many failures.">
               <UInput v-model.number="config.max_attempts" type="number" min="1" max="100" :disabled="!config.enabled" />
             </UFormGroup>
 
-            <UFormGroup label="Lockout Duration (minutes)" help="How long to lock out after max attempts">
+            <UFormGroup label="Lockout time (minutes)" help="How long the IP stays locked out.">
               <UInput v-model.number="config.lockout_minutes" type="number" min="1" max="1440" :disabled="!config.enabled" />
             </UFormGroup>
           </div>
 
-          <UFormGroup label="IP Header" help="Leave empty to use direct connection IP. Set if behind a proxy (e.g. X-Forwarded-For)">
-            <UInput v-model="config.ip_header" placeholder="e.g. X-Forwarded-For" :disabled="!config.enabled" />
+          <UFormGroup label="Client IP header" help="Set this when LLMHub runs behind a proxy, for example X-Forwarded-For. Leave empty to use the connection's IP.">
+            <UInput v-model="config.ip_header" placeholder="X-Forwarded-For" :disabled="!config.enabled" />
           </UFormGroup>
 
           <component v-for="section in dashboard.sections('login-settings')" :key="section.id" :is="section.component" v-bind="section.props()" />
-
-          <div class="flex justify-end">
-            <UButton color="primary" @click="saveConfig" :loading="saving">
-              Save Configuration
-            </UButton>
-          </div>
         </div>
-      </UCard>
+
+        <template #footer>
+          <UButton :loading="saving" @click="saveConfig">Save</UButton>
+        </template>
+      </SettingsCard>
 
       <component v-for="section in dashboard.sections('after-login')" :key="section.id" :is="section.component" v-bind="section.props()" />
 
-      <UCard class="mb-6">
-        <template #header>
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-              <UIcon name="i-heroicons-device-phone-mobile" class="w-5 h-5 text-primary" />
-              Two-Factor Authentication (TOTP)
-            </h3>
-            <UBadge :color="totpEnabled ? 'green' : 'gray'" variant="soft">
-              {{ totpEnabled ? 'Enabled' : 'Disabled' }}
-            </UBadge>
-          </div>
+      <SettingsCard title="Two-factor authentication" description="Ask for a 6-digit code from an authenticator app, in addition to the admin password.">
+        <template #control>
+          <UBadge :color="totpEnabled ? 'green' : 'gray'" variant="subtle" size="sm">{{ totpEnabled ? 'On' : 'Off' }}</UBadge>
         </template>
 
-        <div class="space-y-4">
-          <p class="text-sm text-gray-500 dark:text-gray-400">
-            Require a 6-digit code from an authenticator app (Google Authenticator, 1Password, etc.) in addition to the admin password when logging in.
-          </p>
+        <!-- Not enabled, not in setup -->
+        <UButton v-if="!totpEnabled && !totpSetup" :loading="totpLoading" @click="startTotpSetup">Set up two-factor authentication</UButton>
 
-          <!-- Not enabled, not in setup -->
-          <div v-if="!totpEnabled && !totpSetup">
-            <UButton color="primary" :loading="totpLoading" @click="startTotpSetup">
-              Enable Two-Factor Auth
-            </UButton>
-          </div>
-
-          <!-- Setup flow -->
-          <div v-else-if="totpSetup" class="space-y-4">
-            <div class="flex flex-col sm:flex-row gap-4 items-start">
-              <div class="bg-white p-2 rounded-lg w-40 h-40 flex-shrink-0 mx-auto sm:mx-0" v-html="totpSetup.qrSvg" />
-              <div class="space-y-2 text-sm min-w-0">
-                <p class="text-gray-700 dark:text-gray-300">1. Scan the QR code with your authenticator app, or enter the secret manually:</p>
-                <code class="block text-xs font-mono bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded select-all break-all">{{ totpSetup.secret }}</code>
-                <p class="text-gray-700 dark:text-gray-300">2. Enter the 6-digit code shown in the app to confirm:</p>
-                <div class="flex flex-wrap items-center gap-2">
-                  <UInput v-model="totpCode" placeholder="000000" inputmode="numeric" maxlength="6" class="w-28" />
-                  <UButton color="primary" :loading="totpLoading" @click="confirmTotpSetup">Confirm</UButton>
-                  <UButton color="gray" variant="ghost" @click="cancelTotpSetup">Cancel</UButton>
-                </div>
+        <!-- Setup flow -->
+        <div v-else-if="totpSetup" class="flex flex-col sm:flex-row gap-6 items-start">
+          <div class="bg-white p-2 rounded-lg w-40 h-40 flex-shrink-0 mx-auto sm:mx-0" v-html="totpSetup.qrSvg" />
+          <ol class="space-y-4 text-sm min-w-0 flex-1">
+            <li>
+              <p class="text-gray-700 dark:text-gray-300">1. Scan the QR code with your authenticator app, or enter this secret by hand.</p>
+              <code class="mt-2 block text-xs font-mono bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-md select-all break-all">{{ totpSetup.secret }}</code>
+            </li>
+            <li>
+              <p class="text-gray-700 dark:text-gray-300">2. Enter the 6-digit code the app shows.</p>
+              <div class="mt-2 flex flex-wrap items-center gap-2">
+                <UInput v-model="totpCode" placeholder="000000" inputmode="numeric" maxlength="6" class="w-28" :ui="{ base: 'font-mono tracking-widest' }" />
+                <UButton :loading="totpLoading" @click="confirmTotpSetup">Turn on</UButton>
+                <UButton color="gray" variant="ghost" @click="cancelTotpSetup">Cancel</UButton>
               </div>
-            </div>
-          </div>
+            </li>
+          </ol>
+        </div>
 
-          <!-- Enabled -->
-          <div v-else class="space-y-2">
-            <p class="text-sm text-gray-700 dark:text-gray-300">To disable, enter a current code from your authenticator app:</p>
-            <div class="flex flex-wrap items-center gap-2">
-              <UInput v-model="totpCode" placeholder="000000" inputmode="numeric" maxlength="6" class="w-28" />
-              <UButton color="red" variant="soft" :loading="totpLoading" @click="disableTotp">Disable Two-Factor Auth</UButton>
-            </div>
+        <!-- Enabled -->
+        <div v-else>
+          <p class="text-sm text-gray-700 dark:text-gray-300">To turn it off, enter a current code from your authenticator app.</p>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <UInput v-model="totpCode" placeholder="000000" inputmode="numeric" maxlength="6" class="w-28" :ui="{ base: 'font-mono tracking-widest' }" />
+            <UButton color="red" variant="soft" :loading="totpLoading" @click="disableTotp">Turn off</UButton>
           </div>
         </div>
-      </UCard>
+      </SettingsCard>
 
-      <UCard v-if="locked.length > 0" class="mb-6">
+      <UCard :ui="{ body: { padding: '' } }">
         <template #header>
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-              <UIcon name="i-heroicons-lock-closed" class="w-5 h-5 text-red-500" />
-              Currently Locked IPs
-            </h3>
-            <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-arrow-path" :loading="refreshing" @click="loadConfig" />
-          </div>
-        </template>
-
-        <div class="space-y-3">
-          <div v-for="entry in locked" :key="entry.ip" class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-800">
+          <div class="flex items-center justify-between gap-4">
             <div>
-              <code class="text-sm font-mono text-gray-900 dark:text-white break-all">{{ entry.ip }}</code>
-              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {{ entry.failures }} / {{ config.max_attempts }} failed attempts
-              </div>
+              <h3 class="font-medium text-gray-900 dark:text-white">Locked-out IP addresses</h3>
+              <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Addresses currently blocked from logging in.</p>
             </div>
-            <div class="flex items-center gap-3 flex-shrink-0">
-              <span class="text-sm text-gray-500 dark:text-gray-400">
-                Unlocks in {{ formatLockout(entry.locked_until) }}
-              </span>
-              <UButton color="red" variant="ghost" size="xs" @click="unlockIp(entry.ip)">
-                Unlock
-              </UButton>
-            </div>
+            <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-arrow-path" aria-label="Refresh" :loading="refreshing" @click="loadConfig" />
           </div>
-        </div>
-      </UCard>
+        </template>
 
-      <UCard v-else class="mt-6">
-        <div class="text-center py-6 text-gray-500 dark:text-gray-400">
-          <UIcon name="i-heroicons-lock-open" class="w-8 h-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-          <p class="text-sm">No IPs are currently locked out.</p>
-        </div>
+        <ul v-if="locked.length > 0" class="divide-y divide-gray-100 dark:divide-gray-800">
+          <li v-for="entry in locked" :key="entry.ip" class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div class="min-w-0">
+              <p class="font-mono text-sm text-gray-900 dark:text-white break-all">{{ entry.ip }}</p>
+              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ entry.failures }} of {{ config.max_attempts }} failed attempts · unlocks in {{ formatLockout(entry.locked_until) }}</p>
+            </div>
+            <UButton color="gray" variant="soft" size="xs" class="self-start sm:self-auto dark:!bg-gray-800 dark:!text-gray-100 dark:hover:!bg-gray-700" @click="unlockIp(entry.ip)">Unlock now</UButton>
+          </li>
+        </ul>
+        <EmptyState v-else compact icon="i-heroicons-lock-open" title="No addresses are locked out" />
       </UCard>
-    </template>
+    </div>
   </UContainer>
 </template>
 

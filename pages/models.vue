@@ -1,95 +1,55 @@
 <template>
   <UContainer class="py-8 max-w-5xl">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-      <div>
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Model List</h2>
-        <p class="text-gray-500 dark:text-gray-400 mt-1">{{ totalModels }} models across {{ providerGroups.length }} providers</p>
+    <PageHeader title="Models">
+      <template #description>
+        {{ totalModels }} model{{ totalModels !== 1 ? 's' : '' }} across {{ providerGroups.length }} provider{{ providerGroups.length !== 1 ? 's' : '' }}.
         <component v-for="section in dashboard.sections('description')" :key="section.id" :is="section.component" v-bind="section.props()" />
-      </div>
-      <div class="flex items-center gap-2">
-        <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-arrow-path" :loading="refreshing" @click="refreshModels" />
-        <UInput
-          v-model="search"
-          icon="i-heroicons-magnifying-glass-20-solid"
-          placeholder="Search models..."
-          class="flex-1 sm:flex-none sm:w-64"
-        />
-      </div>
-    </div>
+      </template>
+      <UTooltip text="Refresh from providers">
+        <UButton color="gray" variant="ghost" icon="i-heroicons-arrow-path" aria-label="Refresh from providers" :loading="refreshing" @click="refreshModels" />
+      </UTooltip>
+      <UInput v-model="search" icon="i-heroicons-magnifying-glass-20-solid" placeholder="Search models" class="w-full sm:w-64" />
+    </PageHeader>
 
-    <div v-if="loading" class="flex justify-center py-12">
-      <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-gray-500" />
-    </div>
+    <PageLoading v-if="loading" />
 
-    <div v-else-if="filteredGroups.length === 0" class="text-center py-12">
-      <UIcon name="i-heroicons-cpu-chip" class="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-      <p class="text-gray-500 dark:text-gray-400">
-        {{ search ? 'No models matching your search.' : 'No models found.' }}
-      </p>
-    </div>
+    <UCard v-else-if="filteredGroups.length === 0">
+      <EmptyState icon="i-heroicons-cpu-chip" :title="search ? 'No models match your search' : 'No models found'" :description="search ? 'Try a different search term.' : 'Connect a provider to see its models here.'" />
+    </UCard>
 
     <div v-else class="space-y-4">
-      <UCard v-for="group in filteredGroups" :key="group.provider">
+      <UCard v-for="group in filteredGroups" :key="group.provider" :ui="{ body: { padding: '' }, header: { padding: 'px-4 py-3.5 sm:px-6' } }">
         <template #header>
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                <UIcon name="i-heroicons-server-stack" class="w-5 h-5" />
-              </div>
-              <div>
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ getProviderDisplayName(group.provider) }}</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{{ group.models.length }} model{{ group.models.length !== 1 ? 's' : '' }}</p>
-              </div>
-            </div>
-            <UBadge color="blue" variant="subtle">{{ group.models.length }}</UBadge>
+          <div class="flex items-center justify-between gap-4">
+            <h3 class="font-medium text-gray-900 dark:text-white truncate">{{ getProviderDisplayName(group.provider) }}</h3>
+            <span class="text-sm tabular-nums text-gray-500 dark:text-gray-400 flex-shrink-0">{{ group.models.length }} model{{ group.models.length !== 1 ? 's' : '' }}</span>
           </div>
         </template>
 
-        <div class="divide-y divide-gray-100 dark:divide-gray-800">
-          <div
+        <ul class="divide-y divide-gray-100 dark:divide-gray-800">
+          <li
             v-for="model in group.models"
             :key="model.id"
-            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 first:pt-0 last:pb-0 px-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded transition-colors"
+            class="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
           >
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <code class="text-sm font-mono font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded break-all">
-                  {{ model.id }}
-                </code>
-                <span class="text-sm text-gray-500 dark:text-gray-400">{{ model.display_name }}</span>
-              </div>
+            <div class="min-w-0">
+              <p class="font-mono text-sm text-gray-900 dark:text-white break-all">{{ model.id }}</p>
+              <p v-if="model.display_name && model.display_name !== model.id" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">{{ model.display_name }}</p>
             </div>
 
-            <div class="flex items-center gap-2 flex-wrap sm:ml-4 flex-shrink-0">
-              <UTooltip v-if="model.capabilities?.tools" text="Tool Calling">
-                <UBadge color="green" variant="soft" size="xs">
-                  <UIcon name="i-heroicons-wrench-screwdriver" class="w-3 h-3 mr-0.5" />
-                  Tools
-                </UBadge>
-              </UTooltip>
-              <UTooltip v-if="model.capabilities?.vision" text="Vision / Multimodal">
-                <UBadge color="purple" variant="soft" size="xs">
-                  <UIcon name="i-heroicons-photo" class="w-3 h-3 mr-0.5" />
-                  Vision
-                </UBadge>
-              </UTooltip>
-              <UTooltip v-if="model.capabilities?.streaming !== false" text="Streaming Support">
-                <UBadge color="cyan" variant="soft" size="xs">
-                  <UIcon name="i-heroicons-bolt" class="w-3 h-3 mr-0.5" />
-                  Stream
-                </UBadge>
-              </UTooltip>
+            <div class="flex items-center gap-3 flex-wrap flex-shrink-0">
+              <div class="flex items-center gap-1.5 text-gray-400 dark:text-gray-500">
+                <UTooltip v-if="model.capabilities?.tools" text="Tool calling"><UIcon name="i-heroicons-wrench-screwdriver" class="w-4 h-4" /></UTooltip>
+                <UTooltip v-if="model.capabilities?.vision" text="Vision"><UIcon name="i-heroicons-photo" class="w-4 h-4" /></UTooltip>
+                <UTooltip v-if="model.capabilities?.streaming !== false" text="Streaming"><UIcon name="i-heroicons-bolt" class="w-4 h-4" /></UTooltip>
+              </div>
               <component v-for="section in dashboard.sections('model-actions')" :key="section.id" :is="section.component" v-bind="section.props(model)" />
-              <UButton
-                color="gray"
-                variant="ghost"
-                size="xs"
-                icon="i-heroicons-clipboard-document"
-                @click="copyModelId(model.id)"
-              />
+              <UTooltip text="Copy model ID">
+                <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-clipboard-document" aria-label="Copy model ID" @click="copyModelId(model.id)" />
+              </UTooltip>
             </div>
-          </div>
-        </div>
+          </li>
+        </ul>
       </UCard>
     </div>
 

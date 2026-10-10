@@ -1,18 +1,12 @@
 <template>
   <UContainer class="py-8 max-w-5xl">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
-      <div>
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Providers</h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Connect the accounts LLMHub uses to run model requests.</p>
-      </div>
-      <UButton icon="i-heroicons-plus" class="self-start sm:self-auto" @click="openAddModal">Add provider</UButton>
-    </div>
+    <PageHeader title="Providers" description="Connect the accounts LLMHub uses to run model requests.">
+      <UButton icon="i-heroicons-plus" @click="openAddModal">Add provider</UButton>
+    </PageHeader>
 
     <UAlert v-if="providerTypesError" class="mb-4" color="amber" :title="providerTypesError" />
 
-    <div v-if="loading" class="flex justify-center py-16">
-      <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 animate-spin text-gray-400" />
-    </div>
+    <PageLoading v-if="loading" />
 
     <UCard v-else-if="providers.length === 0" class="text-center">
       <div class="py-10">

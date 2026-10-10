@@ -6,7 +6,7 @@
         <slot name="description">{{ description }}</slot>
       </p>
     </div>
-    <div v-if="$slots.default" class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+    <div v-if="$slots.default" class="flex flex-wrap items-center gap-2 self-start sm:self-auto sm:flex-nowrap sm:flex-shrink-0">
       <slot />
     </div>
   </div>

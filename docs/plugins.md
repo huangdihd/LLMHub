@@ -8,12 +8,12 @@ and optional dashboard pages without rebuilding or restarting LLMHub. Start with
 ## Trust model
 
 **Install only code you trust.** Plugins execute inside the gateway process with
-its full Node.js and filesystem permissions. This is not a sandbox. Even uploading
-a single-file plugin executes its top-level module code to read its manifest;
-installation is a code-execution trust decision, not merely a file upload.
-Plugins must not import gateway build internals. Use the injected API, Node built-in
-modules, and files shipped in the plugin directory. No package installation is
-performed. Dashboard authentication protects management endpoints, but does not
+its full Node.js and filesystem permissions. This is not a sandbox. Manifests are
+validated before execution; installation and activation remain code-execution
+trust decisions, not merely metadata operations. Plugins must not import gateway
+build internals. Use the injected API, Node built-ins, shipped files, and npm
+library dependencies. npm installation disables lifecycle scripts, but that does
+not make package code safe when imported. Dashboard authentication protects management endpoints, but does not
 make an untrusted plugin safe. Hook contexts and provider configurations contain
 credentials: do not log or return them.
 
@@ -47,7 +47,7 @@ matching Nitro's `data` storage at `./.data`:
 
 `id`, `name`, and `version` are required. IDs match
 `^[a-z0-9][a-z0-9-]{1,40}$` and must equal the directory name. `entry` defaults to
-`index.mjs` and must be an `.mjs` file. Paths are relative to the plugin directory;
+`index.mjs`; legacy entries remain `.mjs` files. Paths are relative to the plugin directory;
 absolute paths, traversal, encoded path components, backslashes, and symlinks are
 rejected. Place multi-file plugins there and use **Scan plugins**. Existing
 plugins are updated with **Reload**, not Scan.
@@ -80,6 +80,100 @@ before enabling a plugin. Configuration responses omit secrets. Omitted, empty,
 or masked (`********`) secret updates preserve the previous value; `null` clears
 an optional secret. Credentials remain plaintext in local Nitro storage: secure
 and back up `.data` accordingly.
+
+## npm package format and installation
+
+`package.json` is the preferred manifest. When both manifests exist it wins;
+`plugin.json` remains read-only compatible, with no migration of existing state.
+For example:
+
+```json
+{
+  "name": "@example/llmhub-plugin-text-service",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": { ".": { "import": "./index.js" } },
+  "description": "A text service",
+  "keywords": ["llmhub-plugin"],
+  "engines": { "llmhub": "^1.0.0" },
+  "dependencies": { "tiny-library": "^1.0.0" },
+  "llmhub": {
+    "id": "text-service",
+    "name": "Text service",
+    "configSchema": [],
+    "ui": { "page": "ui/index.html" },
+    "dependencies": { "provider-openai": "^1.0.0" },
+    "optionalDependencies": { "audit-service": "^1.0.0" }
+  }
+}
+```
+
+- npm `name` and valid semver `version` are required. `description` and
+  `engines.llmhub` retain their usual meanings; the latter targets the plugin API.
+- `exports` selects the package root's Node import/default target (including
+  conditional exports); otherwise `main`, then `index.mjs`, is used. Entry files
+  must be shipped JavaScript (`.mjs`, `.js`, or `.cjs`); `type` has Node's normal
+  ESM/CommonJS meaning. TypeScript/build sources alone are not loadable.
+- `llmhub` is required to identify a package as a plugin. `llmhub.id` defaults to
+  the unscoped package name with `llmhub-plugin-` removed. The result must satisfy
+  the existing ID rule and must not collide with built-ins or another plugin.
+  `llmhub.name` is the display name, defaulting to npm `name`.
+- `llmhub.configSchema`, `llmhub.ui`, `llmhub.dependencies`, and
+  `llmhub.optionalDependencies` correspond to the legacy top-level fields.
+  `configSchema` and UI path validation are unchanged.
+- Top-level npm `dependencies`/`peerDependencies` name **packages**. When an
+  installed package has `llmhub` metadata, it is also inferred as a plugin-ID
+  dependency using the npm range. Ordinary libraries never enter the plugin
+  lifecycle graph. Optional npm dependencies/optional peers remain optional.
+  Explicit plugin-ID declarations also allow depending on built-ins.
+- `keywords: ["llmhub-plugin"]` makes published packages discoverable in the
+  market. README, repository, homepage, author and other npm metadata remain npm
+  metadata, not executable dashboard content.
+
+Single-file literal `export const manifest` accepts both shapes. Its server
+upload endpoint remains compatible for scripts/tests; the new installation
+workflow is package/GitHub installation. No dashboard controls are changed in
+this release. `examples/plugins/package-service/` is a publishable directory
+example; offline tests provide a tiny library package with no transitive dependencies.
+
+`.data/plugins/` is a private npm project with its own `package.json`,
+`package-lock.json`, and `node_modules/`. Scan discovers `llmhub` packages,
+including nested transitive packages, as well as existing manual directories.
+Manual directory names still equal plugin IDs and can import libraries installed
+in this project. npm resolves libraries; the gateway resolves plugin lifecycle
+and exports. New installations remain disabled until configured and enabled.
+Invalid metadata/API compatibility is reported without importing the plugin.
+
+Install operations invoke system npm with argument arrays, never shell strings:
+`--ignore-scripts --omit=dev --no-audit --no-fund --package-lock=true`.
+Inputs are separate validated npm name/version fields or GitHub owner/repo/ref
+fields (or a parsed `https://github.com/owner/repo[.git][/tree/ref]` URL).
+Other hosts, arbitrary git URLs, local paths, tarballs, aliases, leading options,
+whitespace and executable punctuation are rejected. Versions accept semver
+ranges, not dist-tags such as `latest`; omission uses npm's default range.
+Package contents and their transitive dependencies are still trusted executable
+code: this validation is not a supply-chain sandbox or a substitute for review.
+
+Runtime deployment needs **npm on PATH** and registry access; GitHub installation
+also needs **git on PATH**. Missing tools/connectivity report operation-level
+errors and do not prevent gateway startup, local plugins, or uploads. GitHub
+`prepare`/build scripts do not run: the selected ref must contain a committed,
+loadable entry file. Private repositories have no dedicated support; operators
+may configure server-side git credentials. Registry defaults to
+`https://registry.npmjs.org/`, is persisted separately from plugin state, and can
+be set to a mirror/private registry. Configure authentication in server npm
+configuration; the API neither accepts nor exposes registry tokens.
+
+Mutations share the plugin manager queue. npm builds a replacement project in a
+system temporary directory before changing live files. Validation, activation,
+or persistence failure restores project/lock/library files and plugin state;
+incomplete rollback explicitly reports retained recovery files. Updates preserve
+configuration, storage and enabled state, and restart enabled package plugins
+and their consumers in dependency order. Unrelated local plugins stay live.
+Uninstall refuses enabled required consumers; transitive packages must be removed
+through their owning package. Successful removal clears plugin configuration and
+storage. npm sources retain name/range; GitHub sources retain owner/repo/ref and
+resolved commit. External side effects from trusted plugin code cannot be undone.
 
 ## Entry point and injected API
 
@@ -543,6 +637,71 @@ All paths below require the existing dashboard session:
 | Registered method | `/api/hub/plugins/<id>/api/<path>` | Plugin-owned handler |
 | GET | `/api/hub/provider-types` | Available built-in/plugin types and connection schemas |
 
+### Package and market API contracts
+
+All endpoints below use the same hub session authentication, not API keys.
+JSON mutations return the updated `PluginRecord[]` unless noted. List records add
+`source: { type: 'builtin' | 'npm' | 'github' | 'directory' | 'upload',
+packageName?, range?, owner?, repo?, ref?, commit?, specification?, direct? }`.
+`direct: false` package records cannot be individually upgraded/uninstalled.
+Records also expose `capabilities?: { update: boolean, uninstall: boolean }` for
+package-source actions. Existing list/enable/disable/config/upload response
+shapes remain compatible.
+
+| Method and path (under `/api/hub/plugins`) | Input | Response |
+| --- | --- | --- |
+| `POST /install-npm` | `{ name: string, version?: string, force?: boolean }` | Updated records; `version` is a semver version/range |
+| `POST /install-github` | `{ owner, repo, ref?, force? }` or `{ url, force? }` | Updated records with resolved commit |
+| `GET /sources` | None | Object keyed by direct package name, containing validated source/specification and npm range or GitHub owner/repo/ref/commit |
+| `GET /capabilities` | None | `{ npm: { available, version?, reason? }, git: { available, version?, reason? } }`; checks executable availability, not network access |
+| `GET /registry` | None | `{ registry: string }` |
+| `PUT /registry` | `{ registry: string }` | Normalized persisted `{ registry }`; HTTP(S), no credentials/query/fragment |
+| `GET /<id>/updates` | None | `{ available, currentVersion, latestVersion?, latestMatchingVersion?, updates: [{ version, ref?, commit? }], reason?, trackedRef?: { ref, currentCommit?, commit, changed } }`; unavailable queries return `available: false` with reason |
+| `POST /<id>/update` | `{ specification?: { name, version? } \| { owner, repo, ref? } \| { url }, force?: boolean }` | Updated records; omission re-resolves saved source, `force` permits downgrade but never bypasses validation |
+| `DELETE /<id>` | None | Updated records; npm/GitHub removal uses the project transaction, local/upload removal retains previous behavior |
+| `GET /market` | Query `query?`, `page?` (1–1000), `pageSize?` (1–100), `sort?` (`relevance`, `downloads`, `updated`, `name`) | `{ items, total, page, pageSize, sort, sortScope, registry, apiVersion }` |
+| `GET /market/detail` | Query `name` (URL-encoded npm package name) | Package summary plus `readme`, `readmeTruncated`, `versions`, `releases`, `registry`, `apiVersion` |
+| `DELETE /market/cache` | None | `{ cleared: number }` |
+
+Successful npm update queries include `latestVersion` from `dist-tags.latest` and
+`latestMatchingVersion` from published versions satisfying the saved range
+(`null` when none match). GitHub results include semver-named refs and tracked
+branch/HEAD commit changes; tags use their peeled commit when annotated.
+
+Market summaries contain npm `name`, `version`, optional `pluginId`, `displayName`,
+`description`, `publisher`, `date`, `score`, `author`, `license`, `keywords`,
+HTTP(S)-only `links`, `engines`, `compatibility`
+(`compatible`/`incompatible`/`unknown`), `compatibilityReason`, `installed`,
+`installedVersion`, `updateAvailable`, and optional `metadataUnavailable`.
+Details expose each release's `version`, `engines`, npm `dependencies` and
+`peerDependencies`, `pluginDependencies`, `optionalPluginDependencies`, and
+`dependencyStatus` entries with `id`, `range`, `optional`, `builtin`, `version`,
+`satisfied`, and a failure `reason`. Installed built-ins participate in those
+checks. Release lists are bounded to 1000 entries.
+
+Search uses the configured registry's `/-/v1/search` with
+`keywords:llmhub-plugin`, offset and size. npm ranking supports relevance and
+popularity; `downloads` requests popularity weighting, not an invented download
+count. `updated`/`name` sort the returned page only (`sortScope: 'page'`), while
+ranking sorts report `sortScope: 'registry'`. Registry text is returned as data,
+never rendered HTML. README is capped at 128 KiB; consumers must render Markdown
+with raw HTML disabled and escape other text. Metadata responses are capped at
+4 MiB and cached for 60 seconds (up to 100 entries), keyed by registry URL; local
+installation status is recomputed. Registry calls enforce outbound URL/SSRF
+policy and timeouts through the shared outbound wrapper; HTTP redirects are
+refused. The existing policy rejects private/loopback addresses even when domain
+allowlisting is disabled; private-network registry installation via npm can work
+while market requests are blocked. Public installation does not require market
+search to work.
+
+Market failures carry HTTP status plus `data.code` (for example
+`SEARCH_UNSUPPORTED` with HTTP 501 when the registry lacks search,
+`PACKAGE_NOT_FOUND`, `REGISTRY_BLOCKED`, or `REGISTRY_TIMEOUT`). Package mutation
+validation errors use the existing sanitized manager error response (HTTP 400,
+or 404 for not found). Subprocess stderr is not exposed because it can contain
+credentials. Remote update lookup failures use the explicit `available: false`
+response instead of implying there are no updates.
+
 Tests in `tests/plugins.test.ts` and `tests/plugin-provider.test.ts` cover runtime
 and credential boundaries. `tests/e2e/plugins.test.mjs` installs both examples,
 checks OpenAI/Claude/Gemini streaming and non-streaming calls, verifies hook
@@ -577,8 +736,7 @@ semver versions still load with a warning; they cannot satisfy a versioned
 dependency. New uploads and changed directory versions require valid semver.
 Existing state requires no migration.
 
-Uploads now extract the manifest **without executing JavaScript**, contrary to
-the historical trust-model description above. Use a literal
+Uploads extract the manifest **without executing JavaScript**. Use a literal
 `export const manifest = { ... }`, optionally preceded by comments and static ESM
 imports. Objects, arrays, quoted strings, finite decimal numbers, booleans/null,
 comments and trailing commas are supported. Computed values, spreads, getters,
@@ -587,11 +745,11 @@ are rejected; use a directory with `plugin.json` instead. After validation the
 module still executes with full process privileges: this is not a sandbox and
 installation still requires trust.
 
-Dependencies name **plugin IDs**, including built-ins, not npm packages. Runtime
-plugins may use Node built-ins and files shipped in their own directory only;
-bundle third-party libraries yourself. No npm dependency installation or resolver
-is provided. Built-in catalog dependencies describe existing direct imports;
-those imports remain unchanged.
+Legacy `plugin.json` dependencies name **plugin IDs**, including built-ins, not
+npm packages. In the package format described below, those declarations move to
+`llmhub.dependencies` and `llmhub.optionalDependencies`; top-level npm dependencies
+are libraries installed by npm. Built-in catalog dependencies describe existing
+direct imports; those imports remain unchanged.
 
 Startup discovers manifests before activation, orders runtime plugins by stable
 topological layers, and isolates dependency cycles. Cycle members fail with their
@@ -636,14 +794,23 @@ files yourself: the gateway cannot restore bytes overwritten externally.
 Disabled replacements run setup and cleanup transactionally for validation, but
 remain disabled afterward; initial fresh installation still waits for Enable.
 
-Initial enable and single-file validation retain their existing entry locations.
-After explicit Reload (or Scan detecting a changed version), activations use a
-private system-temporary snapshot of the whole plugin directory. This refreshes
-relative imports, including lazy imports, and keeps assets until stop. Symlinks
-and nonregular files are rejected. `import.meta.url` then points into the snapshot;
-writes there are ephemeral, so use plugin storage for durable state. Imports outside
-the plugin directory and ancestor-resolved bare packages are not preserved.
-Snapshots are removed on stop/failure and again after timed-out work settles.
+Initial local enable and single-file validation retain their existing entry locations.
+Npm-installed packages, and local plugins after explicit Reload (or Scan detecting
+a changed version), load from a private snapshot of the plugin's code and assets
+under `<plugins directory>/.generations/`. This refreshes relative imports,
+including lazy imports, and keeps assets until stop. Source symlinks and
+nonregular files are rejected. Library trees are never copied: `node_modules`
+directories inside the plugins directory (the plugin's own and the npm project's)
+are mirrored as hard links, so bare imports resolve in the same order as from the
+original location and both ESM and CommonJS libraries refresh on upgrade. Because
+snapshots live inside the plugins directory, the links never cross filesystems.
+Libraries above the plugins directory are not mirrored: they resolve in place and
+are not refreshed until the gateway restarts. Scoped npm packages are supported.
+`import.meta.url` points into the snapshot; writes there are ephemeral, so use
+plugin storage for durable state. Relative imports outside the plugin directory
+are not preserved. Do not mutate dependency files in place: managed npm upgrades
+replace whole trees. Snapshots are removed on stop or failure, again after
+timed-out work settles, and any left behind by a crash are removed at startup.
 
 `GET /api/hub/plugins` remains an array for compatibility. Each record includes
 `apiVersion`, `manifest.version`, `manifest.engines`, dependency declarations,

@@ -20,6 +20,34 @@ export interface PluginManifest {
   ui?: { page: string }
 }
 
+/** Gateway metadata inside package.json; npm dependencies remain separate. */
+export interface PluginPackageMetadata {
+  id?: string
+  name?: string
+  configSchema?: PluginField[]
+  ui?: { page: string }
+  dependencies?: Record<string, string>
+  optionalDependencies?: Record<string, string>
+}
+
+export type PluginPackageExport = string | null | { [condition: string]: PluginPackageExport }
+
+export interface PluginPackageManifest {
+  name: string
+  version: string
+  description?: string
+  type?: 'module' | 'commonjs'
+  main?: string
+  exports?: PluginPackageExport
+  engines?: { llmhub?: string; [engine: string]: string | undefined }
+  dependencies?: Record<string, string>
+  optionalDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>
+  keywords?: string[]
+  llmhub: PluginPackageMetadata
+}
+
 export interface PluginDependencyStatus {
   id: string
   range: string
@@ -29,7 +57,23 @@ export interface PluginDependencyStatus {
   reason?: string
 }
 
+export type PluginSource = {
+  [Type in 'builtin' | 'npm' | 'github' | 'directory' | 'upload']: {
+    type: Type
+    packageName?: string
+    specification?: string
+    direct?: boolean
+    owner?: string
+    repo?: string
+    ref?: string
+    commit?: string
+    range?: string
+  }
+}['builtin' | 'npm' | 'github' | 'directory' | 'upload']
+
 export interface PluginRecord {
+  capabilities?: { update: boolean; uninstall: boolean }
+  source?: PluginSource
   warnings?: string[]
   dependencies?: PluginDependencyStatus[]
   requiredBy?: string[]

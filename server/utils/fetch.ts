@@ -6,6 +6,8 @@ export interface FetchOptions extends RequestInit {
   maxRetries?: number
   retryDelay?: number
   retryOnRateLimit?: boolean
+  /** Override only the transport, retaining this wrapper's timeout and retry policy. */
+  transport?: (url: string, options: RequestInit) => Promise<Response>
 }
 
 /**
@@ -16,6 +18,7 @@ export async function fetchWithRetry(
   options: FetchOptions = {},
   config?: ProviderConfig['connection']
 ): Promise<Response> {
+  const { transport = fetch, ...requestOptions } = options
   const timeout = options.timeout ?? config?.timeout ?? 30000
   const enableTimeout = options.enable_timeout ?? config?.enable_timeout ?? true
   const maxRetries = options.maxRetries ?? config?.max_retries ?? 3
@@ -32,8 +35,8 @@ export async function fetchWithRetry(
     }
 
     try {
-      const response = await fetch(url, {
-        ...options,
+      const response = await transport(url, {
+        ...requestOptions,
         signal: controller.signal
       })
 

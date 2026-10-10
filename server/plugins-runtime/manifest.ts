@@ -76,12 +76,71 @@ export function validateManifest(input: unknown, strictVersion = false): PluginM
   }
   for (const text of [value.name, value.description]) if (text !== undefined && (typeof text !== 'string' || text.length > 2000)) throw new PluginError('Invalid plugin manifest')
   if (value.entry !== undefined) validatePath(value.entry)
-  if (value.ui !== undefined) validatePath(value.ui.page)
+  if (value.ui !== undefined) {
+    if (!value.ui || typeof value.ui !== 'object' || Array.isArray(value.ui)) throw new PluginError('Invalid plugin UI')
+    validatePath(value.ui.page)
+  }
   return { id: value.id, name: value.name, version: value.version, description: value.description,
     engines: value.engines ? { llmhub: value.engines.llmhub } : undefined,
     dependencies: value.dependencies ? { ...value.dependencies } : undefined,
     optionalDependencies: value.optionalDependencies ? { ...value.optionalDependencies } : undefined,
     entry: value.entry, configSchema: validateFields(value.configSchema), ui: value.ui ? { page: value.ui.page } : undefined }
+}
+
+/** Resolve the package root for the ESM runtime, never browser/require branches. */
+function packageExport(input: unknown, depth = 0): string | undefined {
+  if (depth > 20) throw new PluginError('Invalid plugin package exports')
+  if (typeof input === 'string') {
+    if (!input.startsWith('./')) throw new PluginError('Plugin package exports must be relative')
+    return validatePath(input.slice(2))
+  }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new PluginError('Invalid plugin package exports')
+  const value = input as Record<string, unknown>
+  const keys = Object.keys(value)
+  if (keys.some(key => key.startsWith('.'))) {
+    if (depth !== 0 || keys.some(key => !key.startsWith('.')) || !Object.hasOwn(value, '.')) throw new PluginError('Plugin package exports must expose the package root')
+    return packageExport(value['.'], depth + 1)
+  }
+  // Node evaluates matching conditions in declaration order.
+  for (const [condition, target] of Object.entries(value)) {
+    if (!['node', 'import', 'default'].includes(condition)) continue
+    const entry = packageExport(target, depth + 1)
+    if (entry !== undefined) return entry
+  }
+  return undefined
+}
+
+/** Normalize package.json while keeping npm dependencies out of the plugin graph. */
+export function validatePackageManifest(input: unknown): PluginManifest {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new PluginError('Invalid plugin package manifest')
+  const value = input as Record<string, unknown>
+  if (typeof value.name !== 'string' || value.name.length > 214
+    || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(value.name)) throw new PluginError('Invalid plugin package name')
+  if (!value.llmhub || typeof value.llmhub !== 'object' || Array.isArray(value.llmhub)) throw new PluginError('Plugin package requires llmhub metadata')
+  if (value.type !== undefined && value.type !== 'module' && value.type !== 'commonjs') throw new PluginError('Invalid plugin package type')
+  const metadata = value.llmhub as Record<string, unknown>
+  let entry: unknown
+  if (value.exports !== undefined) {
+    entry = packageExport(value.exports)
+    if (entry === undefined) throw new PluginError('Plugin package exports must support ESM imports')
+  }
+  if (entry === undefined) entry = value.main === undefined ? 'index.mjs' : value.main
+  if (typeof entry !== 'string') throw new PluginError('Invalid plugin package entry')
+  if (entry.startsWith('./')) entry = entry.slice(2)
+  // Remove the npm scope and conventional prefix; explicit IDs override derivation.
+  const id = metadata.id === undefined ? value.name.replace(/^@[^/]+\//, '').replace(/^llmhub-plugin-/, '') : metadata.id
+  return validateManifest({
+    id, name: metadata.name === undefined ? value.name : metadata.name,
+    version: value.version, description: value.description, engines: value.engines,
+    entry, configSchema: metadata.configSchema, ui: metadata.ui,
+    dependencies: metadata.dependencies, optionalDependencies: metadata.optionalDependencies
+  }, true)
+}
+
+/** Accept either package metadata or the legacy plugin.json / literal export shape. */
+export function normalizeManifest(input: unknown, strictVersion = false): PluginManifest {
+  if (input && typeof input === 'object' && Object.hasOwn(input, 'llmhub')) return validatePackageManifest(input)
+  return validateManifest(input, strictVersion)
 }
 
 export function validateConfiguration(fields: PluginField[], input: unknown, previous: Record<string, unknown> = {}, requireFields = true): Record<string, unknown> {

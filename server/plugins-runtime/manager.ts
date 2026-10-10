@@ -1,17 +1,21 @@
-import { mkdir, readdir, readFile, writeFile, rename, rm, lstat } from 'node:fs/promises'
-import { resolve, dirname, basename } from 'node:path'
+import { mkdir, readdir, readFile, writeFile, rename, rm, lstat, mkdtemp, realpath } from 'node:fs/promises'
+import { resolve, dirname, basename, relative, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { gt, valid } from 'semver'
-import { createModuleGeneration, type ModuleGeneration } from './module-generation'
+import { packageCapabilities, packageUpdates, type PackageExecutor } from './package-operations'
+import { discoverPackages, installProject, runNpm, type NpmRunner } from './npm-project'
+import { DEFAULT_REGISTRY, githubSpecification, npmSpecification, validateRegistry, type PackageSpecification } from './specifications'
+import { createModuleGeneration, GENERATIONS_DIRECTORY, type ModuleGeneration } from './module-generation'
 import { assertCompatibility, decorateRecords, dependencyIssues, dependencyOrder, manifestWarnings } from './dependencies'
 import type { H3Event } from 'h3'
 import type { ProviderDefinition, ProviderRegistry } from '../core/registry'
 import type { RequestHook, HookRegistry } from '../core/hooks'
 import { ProtocolRegistry, type ProtocolDefinition } from '../core/protocol-registry'
 import { IngressRegistry, type IngressDefinition } from '../core/ingress-registry'
-import type { PluginManifest, PluginRecord } from '../../shared/types/plugin'
-import { PluginError, safePath, validatePath, validateId, validateManifest, parseUploadedManifest, validateFields, validateConfiguration } from './manifest'
+import type { PluginManifest, PluginPackageManifest, PluginRecord, PluginSource } from '../../shared/types/plugin'
+import { PluginError, safePath, validatePath, validateId, validateManifest, validatePackageManifest, normalizeManifest, parseUploadedManifest, validateFields, validateConfiguration } from './manifest'
 
 export interface PluginStorage {
   getItem<T>(key: string): Promise<T | null>
@@ -35,7 +39,7 @@ export interface PluginAPI {
   logger: Pick<Console, 'info' | 'warn' | 'error'>
 }
 export interface PluginModule {
-  manifest?: PluginManifest
+  manifest?: PluginManifest | PluginPackageManifest
   default?: { setup(api: PluginAPI): void | Cleanup | Promise<void | Cleanup> }
   setup?: (api: PluginAPI) => void | Cleanup | Promise<void | Cleanup>
 }
@@ -49,6 +53,7 @@ interface InstalledPlugin {
   installed?: boolean
   invalid?: boolean
   runtime?: Runtime
+  source?: PluginSource
   isolateModules?: boolean
 }
 interface Runtime {
@@ -76,6 +81,8 @@ export interface PluginManagerOptions {
   hookRegistry: HookRegistry
   protocolRegistry?: ProtocolRegistry
   ingressRegistry?: IngressRegistry
+  npmRunner?: NpmRunner
+  packageExecutor?: PackageExecutor
   timeoutMs?: number
   cleanupTimeoutMs?: number
   onRegistryChange?: () => void
@@ -133,11 +140,309 @@ export class PluginManager {
 
   list(): PluginRecord[] {
     const runtimePlugins: PluginRecord[] = [...this.plugins.values()].map(plugin => ({ id: plugin.manifest.id, manifest: structuredClone(plugin.manifest),
-      warnings: manifestWarnings(plugin.manifest), enabled: plugin.enabled, status: plugin.error ? 'error' : plugin.enabled ? 'enabled' : plugin.installed ? 'installed' : 'disabled', error: plugin.error,
+      source: plugin.source ?? { type: 'directory' }, capabilities: { update: !!plugin.source?.direct, uninstall: !plugin.source || !['npm', 'github'].includes(plugin.source.type) || !!plugin.source.direct }, warnings: manifestWarnings(plugin.manifest), enabled: plugin.enabled, status: plugin.error ? 'error' : plugin.enabled ? 'enabled' : plugin.installed ? 'installed' : 'disabled', error: plugin.error,
       providers: [...(plugin.runtime?.providers ?? [])], hooks: [...(plugin.runtime?.hooks ?? [])],
       protocols: [...(plugin.runtime?.protocols ?? [])], ingresses: [...(plugin.runtime?.ingresses ?? [])] }))
-    return decorateRecords([...(this.options.builtinPlugins?.() ?? []), ...runtimePlugins])
+    return decorateRecords([...(this.options.builtinPlugins?.() ?? []).map(plugin => ({ ...plugin, source: { type: 'builtin' as const } })), ...runtimePlugins])
   }
+
+  async getRegistry(): Promise<string> {
+    return validateRegistry(await this.options.storage.getItem<string>('runtime-plugins:registry') ?? DEFAULT_REGISTRY)
+  }
+
+  async listSources(): Promise<Record<string, PackageSpecification>> {
+    return structuredClone((await this.npmState()).sources)
+  }
+
+  capabilities() {
+    return packageCapabilities(this.options.packageExecutor)
+  }
+
+  updates(id: string) {
+    return this.serial(id, async () => {
+      const plugin = this.get(id)
+      const source = plugin.source
+      if (!source?.direct || !source.packageName) throw new PluginError('Only directly installed packages can be updated')
+      const saved = (await this.npmState()).sources[source.packageName]
+      if (!saved) throw new PluginError('Package installation source is unavailable')
+      return packageUpdates({ ...saved, commit: source.commit }, await this.getRegistry(), plugin.manifest.version, this.options.packageExecutor)
+    })
+  }
+
+  setRegistry(registry: unknown): Promise<string> {
+    return this.serial('$registry', async () => {
+      const normalized = validateRegistry(registry)
+      await this.options.storage.setItem('runtime-plugins:registry', normalized)
+      return normalized
+    })
+  }
+
+  private async readDirectoryManifest(directory: string): Promise<PluginManifest> {
+    try {
+      const metadata = JSON.parse(await readFile(await safePath(directory, 'package.json'), 'utf8'))
+      const manifest = validatePackageManifest(metadata)
+      // Directory packages use the same dependency graph as npm-installed packages.
+      // Resolve from the importing package, not from a global package-name map.
+      const required = { ...metadata.peerDependencies, ...metadata.dependencies }
+      const optional = { ...metadata.optionalDependencies }
+      for (const [name, range] of Object.entries(metadata.peerDependencies ?? {})) {
+        if (metadata.peerDependenciesMeta?.[name]?.optional !== true || Object.hasOwn(metadata.dependencies ?? {}, name)) continue
+        optional[name] ??= range
+        delete required[name]
+      }
+      for (const name of Object.keys(optional)) delete required[name]
+      for (const [dependencies, key] of [[required, 'dependencies'], [optional, 'optionalDependencies']] as const) {
+        for (const [name, range] of Object.entries(dependencies)) {
+          // A package name is a path component here, never an installation spec.
+          if (!/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(name)) throw new PluginError('Invalid npm dependency name')
+          for (let ancestor = directory; ; ancestor = dirname(ancestor)) {
+            try {
+              const dependency = JSON.parse(await readFile(await safePath(ancestor, `node_modules/${name}/package.json`), 'utf8'))
+              if (Object.hasOwn(dependency, 'llmhub')) {
+                const dependencyManifest = validatePackageManifest(dependency)
+                manifest[key] = { ...manifest[key], [dependencyManifest.id]: manifest[key]?.[dependencyManifest.id] ?? range as string }
+              }
+              break
+            } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+            if (ancestor === dirname(ancestor)) break
+          }
+        }
+      }
+      return manifest
+    }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+    return validateManifest(JSON.parse(await readFile(await safePath(directory, 'plugin.json'), 'utf8')))
+  }
+
+  private async npmState(): Promise<{ directory: string; sources: Record<string, PackageSpecification> }> {
+    const state = await this.options.storage.getItem<{ directory: string; sources: Record<string, PackageSpecification> }>('runtime-plugins:npm-project')
+    return { directory: this.directory, sources: state?.sources ?? {} }
+  }
+
+  private async discoverNpmPlugins(activate: Set<string>): Promise<void> {
+    const state = await this.npmState()
+    for (const discovered of await discoverPackages(state.directory, true)) {
+      this.assertRuntimePlugin(discovered.manifest.id)
+      const existing = this.plugins.get(discovered.manifest.id)
+      if (existing) {
+        if (existing.source?.packageName !== discovered.packageName) throw new PluginError('Plugin identity collision')
+        continue
+      }
+      const stored = await this.options.storage.getItem<{ enabled?: boolean; configuration?: Record<string, unknown>; source?: InstalledPlugin['source'] }>(`runtime-plugins:${discovered.manifest.id}:state`)
+      if (!discovered.invalid) {
+        try { assertCompatibility(discovered.manifest) }
+        catch (error) {
+          discovered.error = error instanceof PluginError ? error.message : 'Plugin compatibility check failed'
+        }
+      }
+      const source = state.sources[discovered.packageName]
+      this.plugins.set(discovered.manifest.id, { ...discovered, entry: discovered.manifest.entry!, enabled: false, isolateModules: true,
+        configuration: validateConfiguration(discovered.manifest.configSchema ?? [], stored?.configuration ?? {}, {}, false),
+        source: { ...source, type: source?.source ?? 'npm', packageName: discovered.packageName, direct: !!source } })
+      if (stored?.enabled && !discovered.invalid) activate.add(discovered.manifest.id)
+    }
+  }
+
+  installNpm(specification: unknown, force = false): Promise<PluginRecord[]> {
+    return this.serial('$npm-install', () => this.installPackage(npmSpecification(specification), force))
+  }
+
+  installGithub(specification: unknown, force = false): Promise<PluginRecord[]> {
+    return this.serial('$github-install', () => this.installPackage(githubSpecification(specification), force))
+  }
+
+  update(id: string, specification?: unknown, force = false): Promise<PluginRecord[]> {
+    return this.serial(id, async () => {
+      const source = this.get(id).source
+      if (!source?.direct || !source.specification) throw new PluginError('Only directly installed packages can be updated')
+      const saved = (await this.npmState()).sources[source.packageName!]
+      const parsed = source.type === 'github' ? githubSpecification(specification ?? saved) : npmSpecification(specification ?? { name: source.packageName, version: saved?.range })
+      if (parsed.packageName && parsed.packageName !== source.packageName) throw new PluginError('Package update cannot change package identity')
+      return this.installPackage(parsed, force, source.packageName)
+    })
+  }
+
+  private async installPackage(specification: PackageSpecification, force: boolean, previousName?: string): Promise<PluginRecord[]> {
+    if (specification.source === 'github') {
+      const capabilities = await this.capabilities()
+      if (!capabilities.git.available) throw new PluginError(`GitHub installation unavailable: git ${capabilities.git.reason}`)
+    }
+    await this.prepareDirectory()
+    const state = await this.npmState()
+    const sources = { ...state.sources }
+    // GitHub's package name is metadata, never guessed from the repository name.
+    let packageName = specification.packageName ?? previousName
+    let probe: string | undefined
+    try {
+      if (!packageName) {
+        probe = await mkdtemp(join(await realpath(tmpdir()), 'llmhub-npm-probe-'))
+        await installProject(probe, { 'llmhub-github-probe': specification.specification }, await this.getRegistry(), this.options.npmRunner ?? runNpm)
+        const metadata = JSON.parse(await readFile(await safePath(probe, 'node_modules/llmhub-github-probe/package.json'), 'utf8'))
+        const manifest = normalizeManifest(metadata, true)
+        this.assertRuntimePlugin(manifest.id)
+        packageName = metadata.name
+      }
+      sources[packageName!] = specification
+      return await this.replaceNpmProject(sources, force, packageName)
+    } finally { if (probe) await rm(probe, { recursive: true, force: true }) }
+  }
+
+  private async uninstallPackage(id: string): Promise<PluginRecord[]> {
+    const plugin = this.get(id)
+    if (!plugin.source?.direct || !plugin.source.packageName) throw new PluginError('Transitive packages must be removed through their owning package')
+    this.assertRemovable(id)
+    const state = await this.npmState()
+    const sources = { ...state.sources }
+    delete sources[plugin.source.packageName]
+    return this.replaceNpmProject(sources, false)
+  }
+
+  private async replaceNpmProject(sources: Record<string, PackageSpecification>, force: boolean, updatingPackage?: string): Promise<PluginRecord[]> {
+    const previousState = await this.options.storage.getItem('runtime-plugins:npm-project')
+    const temporary = await mkdtemp(join(await realpath(tmpdir()), 'llmhub-npm-transaction-'))
+    const directory = resolve(temporary, 'project')
+    const backup = resolve(temporary, 'backup')
+    const previous = new Map(this.plugins)
+    // Every npm runtime shares the replaced library tree. Only its enabled dependents
+    // outside that tree need restarting; unrelated directory plugins stay live.
+    const affected = new Set<string>()
+    for (const plugin of previous.values()) {
+      if (!plugin.source || !['npm', 'github'].includes(plugin.source.type)) continue
+      for (const dependent of this.affected(plugin.manifest.id)) affected.add(dependent.manifest.id)
+    }
+    const enabled = new Set([...previous.values()].filter(plugin => plugin.enabled && affected.has(plugin.manifest.id)).map(plugin => plugin.manifest.id))
+    const backedUp: string[] = []
+    const activated: string[] = []
+    let stopped = false
+    let rollbackFailed = false
+    try {
+      const dependencies = Object.fromEntries(Object.entries(sources).map(([name, source]) => [name, source.source === 'npm' ? source.range ?? '*' : source.specification]))
+      await mkdir(directory, { recursive: true })
+      try {
+        const lock = JSON.parse(await readFile(await safePath(this.directory, 'package-lock.json'), 'utf8'))
+        // Refresh only the requested direct package; unrelated locked versions stay pinned.
+        if (updatingPackage) {
+          delete lock.packages?.[`node_modules/${updatingPackage}`]
+          delete lock.dependencies?.[updatingPackage]
+        }
+        await writeFile(resolve(directory, 'package-lock.json'), JSON.stringify(lock))
+      }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      await installProject(directory, dependencies, await this.getRegistry(), this.options.npmRunner ?? runNpm)
+      const discovered = await discoverPackages(directory, true)
+      let lock: { packages?: Record<string, { resolved?: string }> } = {}
+      try { lock = JSON.parse(await readFile(resolve(directory, 'package-lock.json'), 'utf8')) }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      for (const [name, source] of Object.entries(sources)) {
+        if (source.source !== 'github') continue
+        const resolved = lock.packages?.[`node_modules/${name}`]?.resolved
+        const commit = resolved?.match(/#([a-f0-9]{40}|[a-f0-9]{64})$/)?.[1]
+        if (!commit) throw new PluginError('GitHub installation did not resolve to a commit in package-lock.json')
+        sources[name] = { ...source, packageName: name, commit } as PackageSpecification
+      }
+      for (const name of Object.keys(sources)) if (!discovered.some(plugin => plugin.packageName === name)) throw new PluginError('Installed package does not expose llmhub plugin metadata')
+      const replacements = new Map([...previous].filter(([, plugin]) => !plugin.source || !['npm', 'github'].includes(plugin.source.type)))
+      for (const candidate of discovered) {
+        const id = candidate.manifest.id
+        this.assertRuntimePlugin(id)
+        if (replacements.has(id)) throw new PluginError('Plugin identity collision')
+        const old = previous.get(id)
+        const previousPackage = [...previous.values()].find(plugin => plugin.source?.packageName === candidate.packageName)
+        if (previousPackage && previousPackage.manifest.id !== id) throw new PluginError('Package update cannot change plugin identity')
+        if (old && old.source?.packageName !== candidate.packageName) throw new PluginError('Plugin identity collision')
+        if (old) {
+          if (candidate.invalid) throw new PluginError(candidate.error ?? 'Invalid plugin replacement')
+          this.assertVersion(old.manifest, candidate.manifest, force)
+        } else {
+          try { assertCompatibility(candidate.manifest) }
+          catch (error) {
+            candidate.invalid = true
+            candidate.error = error instanceof PluginError ? error.message : 'Plugin compatibility check failed'
+          }
+        }
+        const source = sources[candidate.packageName]
+        replacements.set(id, { ...candidate, directory: resolve(this.directory, relative(directory, candidate.directory)), entry: candidate.manifest.entry!, isolateModules: true, enabled: false, installed: !old,
+          configuration: validateConfiguration(candidate.manifest.configSchema ?? [], old?.configuration ?? {}, {}, false),
+          source: { ...source, type: source?.source ?? 'npm', packageName: candidate.packageName, direct: !!source } })
+      }
+      const { cycles } = dependencyOrder([...replacements.values()].map(plugin => plugin.manifest))
+      if (cycles.size) throw new PluginError([...cycles.values()][0])
+      // Refuse removing a transitive package still required by a live local consumer.
+      for (const plugin of replacements.values()) {
+        if (!enabled.has(plugin.manifest.id)) continue
+        for (const dependency of Object.keys(plugin.manifest.dependencies ?? {})) {
+          if (previous.has(dependency) && !replacements.has(dependency)) throw new PluginError(`Plugin ${dependency} is required by enabled plugin ${plugin.manifest.id}`)
+        }
+      }
+      stopped = true
+      for (const plugin of [...this.ordered(enabled)].reverse()) await this.stop(plugin)
+      await mkdir(backup)
+      for (const name of ['package.json', 'package-lock.json', 'node_modules']) {
+        try { await rename(resolve(this.directory, name), resolve(backup, name)); backedUp.push(name) }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+        try { await rename(resolve(directory, name), resolve(this.directory, name)); activated.push(name) }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      }
+      this.plugins.clear()
+      for (const [id, plugin] of replacements) this.plugins.set(id, plugin)
+      this.storageRollback = new Map()
+      // Disabled packages are never executed: they are validated when next enabled.
+      for (const plugin of this.ordered(enabled)) await this.start(plugin)
+      for (const id of enabled) {
+        const plugin = this.plugins.get(id)
+        if (plugin && dependencyIssues(plugin.manifest, this.list()).length) throw new PluginError('npm operation would disable a required plugin dependency')
+      }
+      for (const [id, plugin] of replacements) {
+        if (!plugin.source || !['npm', 'github'].includes(plugin.source.type)) continue
+        const key = `runtime-plugins:${id}:state`
+        this.storageRollback.set(key, await this.options.storage.getItem(key))
+        await this.persist(plugin)
+      }
+      for (const id of previous.keys()) {
+        if (replacements.has(id)) continue
+        const keys = await this.options.storage.getKeys?.(`runtime-plugins:${id}:storage:`) ?? []
+        for (const key of [...keys, `runtime-plugins:${id}:state`, `runtime-plugins:${id}:source`]) {
+          this.storageRollback.set(key, await this.options.storage.getItem(key))
+          await this.options.storage.removeItem(key)
+        }
+      }
+      await this.options.storage.setItem('runtime-plugins:npm-project', { directory: this.directory, sources })
+      return this.list()
+    } catch (error) {
+      if (!stopped) throw error
+      for (const plugin of [...this.ordered(enabled)].reverse()) {
+        try { await this.stop(plugin) } catch { rollbackFailed = true }
+      }
+      for (const name of activated) {
+        try { await rm(resolve(this.directory, name), { recursive: true, force: true }) } catch { rollbackFailed = true }
+      }
+      for (const name of backedUp) {
+        try { await rename(resolve(backup, name), resolve(this.directory, name)) } catch { rollbackFailed = true }
+      }
+      const storageRollback = this.storageRollback
+      this.storageRollback = undefined
+      for (const [key, value] of storageRollback ?? []) {
+        try { if (value === null) await this.options.storage.removeItem(key); else await this.options.storage.setItem(key, value) }
+        catch { rollbackFailed = true }
+      }
+      try {
+        if (previousState === null) await this.options.storage.removeItem('runtime-plugins:npm-project')
+        else await this.options.storage.setItem('runtime-plugins:npm-project', previousState)
+      } catch { rollbackFailed = true }
+      this.plugins.clear()
+      for (const [id, plugin] of previous) this.plugins.set(id, plugin)
+      for (const plugin of this.ordered(enabled)) {
+        try { await this.start(plugin) } catch { rollbackFailed = true }
+      }
+      if (rollbackFailed) throw new PluginError(`npm rollback incomplete; recovery files retained at ${backup}`)
+      throw error
+    } finally {
+      this.storageRollback = undefined
+      if (!rollbackFailed) await rm(temporary, { recursive: true, force: true })
+    }
+  }
+
+  private generationsSwept = false
 
   private async prepareDirectory(): Promise<void> {
     // Validate the existing ancestor before recursive mkdir can follow a symlink.
@@ -152,13 +457,18 @@ export class PluginManager {
     await safePath(ancestor)
     await mkdir(this.directory, { recursive: true })
     await safePath(this.directory)
+    if (!this.generationsSwept) {
+      // Snapshots left behind by a crashed process are never reused.
+      this.generationsSwept = true
+      await rm(resolve(this.directory, GENERATIONS_DIRECTORY), { recursive: true, force: true })
+    }
   }
 
   private async loadModule(directory: string, entry: string, runtime?: Runtime): Promise<PluginModule> {
     const filename = await safePath(directory, entry)
-    if (!filename.endsWith('.mjs') || !(await lstat(filename)).isFile()) throw new PluginError('Invalid plugin entry')
+    if (!/\.(?:mjs|cjs|js)$/.test(filename) || !(await lstat(filename)).isFile()) throw new PluginError('Invalid plugin entry')
     if (!runtime) return this.bounded(importModule(`${pathToFileURL(filename).href}?generation=${randomUUID()}`))
-    const generation = await createModuleGeneration(directory)
+    const generation = await createModuleGeneration(directory, this.directory)
     runtime.moduleGeneration = generation
     if (!runtime.active) {
       await generation.dispose()
@@ -204,25 +514,28 @@ export class PluginManager {
     return this.serial('$scan', async () => {
       await this.prepareDirectory()
       const activate = new Set<string>()
+      try { await this.discoverNpmPlugins(activate) }
+      catch (error) { console.warn('[LLMHub] Failed to discover npm plugins:', error) }
       const changed: string[] = []
       // Discover every manifest before activating anything: filesystem order is not dependency order.
       for (const item of await readdir(this.directory, { withFileTypes: true })) {
-        if (!item.isDirectory() || item.name.startsWith('.')) continue
+        if (!item.isDirectory() || item.name.startsWith('.') || item.name === 'node_modules') continue
         try {
           validateId(item.name)
           if (this.options.builtinPlugins?.().some(plugin => plugin.id === item.name)) continue
           const directory = await safePath(this.directory, item.name)
-          const manifest = validateManifest(JSON.parse(await readFile(await safePath(directory, 'plugin.json'), 'utf8')))
+          const manifest = await this.readDirectoryManifest(directory)
           if (manifest.id !== item.name) throw new PluginError('Plugin identity mismatch')
           const existing = this.plugins.get(item.name)
+          if (existing?.source && ['npm', 'github'].includes(existing.source.type)) throw new PluginError('Plugin identity collision')
           if (existing && !existing.invalid) {
             if (existing.manifest.version !== manifest.version) changed.push(item.name)
             continue
           }
           const entry = manifest.entry ?? 'index.mjs'
           await safePath(directory, entry)
-          const stored = await this.options.storage.getItem<{ enabled?: boolean; configuration?: Record<string, unknown> }>(`runtime-plugins:${manifest.id}:state`)
-          const plugin: InstalledPlugin = { manifest, directory, entry, enabled: false,
+          const stored = await this.options.storage.getItem<{ enabled?: boolean; configuration?: Record<string, unknown>; source?: InstalledPlugin['source'] }>(`runtime-plugins:${manifest.id}:state`)
+          const plugin: InstalledPlugin = { manifest, directory, entry, enabled: false, source: await this.options.storage.getItem<PluginSource>(`runtime-plugins:${manifest.id}:source`) ?? stored?.source ?? { type: 'directory' },
             configuration: validateConfiguration(manifest.configSchema ?? [], stored?.configuration ?? {}, {}, false) }
           this.plugins.set(manifest.id, plugin)
           try { assertCompatibility(manifest) }
@@ -269,6 +582,7 @@ export class PluginManager {
       manifest.entry = 'index.mjs'
       if (manifest.ui) throw new PluginError('Plugin assets require directory installation')
       const previous = this.plugins.get(manifest.id)
+      if (previous?.source && ['npm', 'github'].includes(previous.source.type)) throw new PluginError('Package plugins must be updated through their package source')
       if (previous) {
         const sameVersion = previous.manifest.version === manifest.version || (valid(previous.manifest.version) && !gt(previous.manifest.version, manifest.version) && !gt(manifest.version, previous.manifest.version))
         if (sameVersion && !force) throw new PluginError('Plugin already installed')
@@ -309,7 +623,7 @@ export class PluginManager {
         }
         await rename(directory, target)
         moved = true
-        const plugin: InstalledPlugin = { manifest, directory: target, entry: 'index.mjs', configuration, enabled: false, installed: !previous }
+        const plugin: InstalledPlugin = { manifest, directory: target, entry: 'index.mjs', configuration, enabled: false, installed: !previous, source: { type: 'upload' } }
         this.plugins.set(manifest.id, plugin)
         this.storageRollback = new Map()
         if (previous && !enabled.has(manifest.id)) {
@@ -368,7 +682,10 @@ export class PluginManager {
     })
   }
 
-  private persist(plugin: InstalledPlugin): Promise<unknown> {
+  private async persist(plugin: InstalledPlugin): Promise<unknown> {
+    const sourceKey = `runtime-plugins:${plugin.manifest.id}:source`
+    if (this.storageRollback && !this.storageRollback.has(sourceKey)) this.storageRollback.set(sourceKey, await this.options.storage.getItem(sourceKey))
+    if (plugin.source) await this.options.storage.setItem(sourceKey, plugin.source)
     return this.options.storage.setItem(`runtime-plugins:${plugin.manifest.id}:state`, { enabled: plugin.enabled, configuration: plugin.configuration })
   }
 
@@ -527,7 +844,13 @@ export class PluginManager {
     return this.serial(id, async () => {
       const plugin = this.get(id)
       plugin.installed = false
-      if (!plugin.enabled) await this.start(plugin)
+      if (!plugin.enabled) {
+        try { await this.start(plugin) }
+        catch (error) {
+          plugin.error = error instanceof PluginError ? error.message : 'Plugin activation failed'
+          throw error
+        }
+      }
       try { await this.persist(plugin) } catch { await this.stop(plugin); throw new PluginError('Plugin persistence failed') }
       return this.list()
     })
@@ -543,7 +866,10 @@ export class PluginManager {
 
   private async reloadPlugin(id: string): Promise<void> {
     const plugin = this.get(id)
-    const manifest = validateManifest(JSON.parse(await readFile(await safePath(plugin.directory, 'plugin.json'), 'utf8')))
+    const manifest = plugin.source && ['npm', 'github'].includes(plugin.source.type)
+      ? (await discoverPackages(this.directory)).find(candidate => candidate.manifest.id === id)?.manifest
+      : await this.readDirectoryManifest(plugin.directory)
+    if (!manifest) throw new PluginError('Plugin manifest not found')
     if (manifest.id !== id) throw new PluginError('Plugin identity mismatch')
     this.assertVersion(plugin.manifest, manifest)
     const entry = manifest.entry ?? 'index.mjs'
@@ -576,6 +902,8 @@ export class PluginManager {
 
   uninstall(id: string): Promise<PluginRecord[]> {
     return this.serial(id, async () => {
+      const source = this.get(id).source
+      if (source && ['npm', 'github'].includes(source.type)) return this.uninstallPackage(id)
       const plugin = this.get(id)
       this.assertRemovable(id)
       await this.stop(plugin)
@@ -586,6 +914,7 @@ export class PluginManager {
       const keys = await this.options.storage.getKeys?.(prefix) ?? []
       for (const key of keys) await this.options.storage.removeItem(key)
       await this.options.storage.removeItem(`runtime-plugins:${id}:state`)
+      await this.options.storage.removeItem(`runtime-plugins:${id}:source`)
       this.plugins.delete(id)
       return this.list()
     })

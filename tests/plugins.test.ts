@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { tmpdir } from 'node:os'
 import { test } from 'node:test'
 
 const require = createRequire(import.meta.url)
@@ -13,8 +14,7 @@ const { PluginManager } = require(`${buildDirectory}/plugins-runtime/manager.js`
 const { safePath, validateConfiguration } = require(`${buildDirectory}/plugins-runtime/manifest.js`)
 
 async function temporaryDirectory() {
-  const parent = path.resolve('.programmer/tmp')
-  await mkdir(parent, { recursive: true })
+  const parent = await realpath(tmpdir())
   return mkdtemp(path.join(parent, 'plugins-test-'))
 }
 

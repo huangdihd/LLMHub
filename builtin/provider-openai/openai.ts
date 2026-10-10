@@ -298,12 +298,6 @@ export class OpenAIAdapter implements ProviderAdapter {
     return new ReadableStream({
       start(controller) {
         ;(async () => {
-          const abortController = new AbortController()
-          let timeoutId: any
-          if (config.connection.enable_timeout) {
-            timeoutId = setTimeout(() => abortController.abort(), config.connection.timeout || 30000)
-          }
-
           let reader: ReadableStreamDefaultReader | undefined
           let closed = false
           const safeClose = () => {
@@ -317,7 +311,8 @@ export class OpenAIAdapter implements ProviderAdapter {
             try { controller.error(err) } catch {}
           }
           try {
-            const response = await fetch(`${config.connection.base_url}/chat/completions`, {
+            // Retries cover only the wait for response headers, so no output is ever repeated.
+            const response = await fetchWithRetry(`${config.connection.base_url}/chat/completions`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -325,10 +320,8 @@ export class OpenAIAdapter implements ProviderAdapter {
                 'Connection': 'close'
               },
               body: JSON.stringify(request),
-              signal: abortController.signal
-            })
-
-            if (timeoutId) clearTimeout(timeoutId)
+              enable_timeout: !!config.connection.enable_timeout
+            }, config.connection)
 
             if (!response.ok) {
               const errorBody = await response.text().catch(() => '')
@@ -417,7 +410,6 @@ export class OpenAIAdapter implements ProviderAdapter {
           } catch (err: any) {
             safeError(err)
           } finally {
-            if (timeoutId) clearTimeout(timeoutId)
             if (reader) {
               reader.cancel().catch(() => {})
             }

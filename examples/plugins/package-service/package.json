@@ -1,0 +1,14 @@
+{
+  "name": "@llmhub/example-package-service",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "An npm-shaped plugin exposing a small greeting service.",
+  "exports": { ".": { "import": "./index.js" } },
+  "dependencies": { "@llmhub/example-greeting": "file:./greeting" },
+  "engines": { "llmhub": "^1.0.0" },
+  "llmhub": {
+    "id": "example-package-service",
+    "name": "Package Service",
+    "configSchema": [{ "key": "prefix", "type": "text", "default": "Hello " }]
+  }
+}

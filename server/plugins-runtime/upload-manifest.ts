@@ -1,15 +1,16 @@
-import { PluginError, validateManifest } from './manifest'
+import { PluginError, normalizeManifest } from './manifest'
 import type { PluginManifest } from '../../shared/types/plugin'
 
 /**
  * Read a literal manifest without executing any uploaded code or resolving imports.
  * Only comments and static ESM imports may precede `export const manifest`.
- * Arbitrary preceding code and computed manifests require a separate plugin.json;
+ * Both legacy and package-shaped literals are accepted. Computed manifests and
+ * arbitrary preceding code require a separate package.json or plugin.json;
  * scanning general JavaScript without a full parser risks matching fake exports.
  */
 export function parseUploadedManifest(source: string): PluginManifest {
   let position = 0
-  const fail = (): never => { throw new PluginError('Upload requires a literal export const manifest = { ... }, preceded only by comments or static imports; use plugin.json for computed manifests') }
+  const fail = (): never => { throw new PluginError('Upload requires a literal export const manifest = { ... }, preceded only by comments or static imports; use package.json or plugin.json for computed manifests') }
   const skip = () => {
     while (position < source.length) {
       if (/\s/.test(source[position]!)) { position++; continue }
@@ -153,5 +154,5 @@ export function parseUploadedManifest(source: string): PluginManifest {
   skip(); if (source[position++] !== '=') fail()
   const manifest = value()
   skip(); if (source[position] !== ';' && !/^export\b/.test(source.slice(position)) && position !== source.length) fail()
-  return validateManifest(manifest, true)
+  return normalizeManifest(manifest, true)
 }

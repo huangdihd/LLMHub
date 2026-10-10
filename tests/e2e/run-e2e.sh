@@ -70,3 +70,6 @@ node tests/e2e/plugins.test.mjs
 
 echo "== running plugin dependency and upgrade tests =="
 node tests/e2e/plugin-dependencies.test.mjs
+
+echo "== running offline npm plugin tests =="
+node tests/e2e/plugin-npm.test.mjs

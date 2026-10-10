@@ -72,6 +72,12 @@ using shared registries and provide storage when exercising persisted policy
 operations. Built-ins share codecs/adapters and helpers rather than forming
 independently deployable packages.
 
+Built-in layers also own their dashboard forms, login/usage panels, policy
+sections and whole pages. Generic dashboard shells discover typed contributions
+from `builtin/*/dashboard-*.ts`; adding plugin UI does not require editing those
+shells. Existing page URLs, navigation order and settings APIs are preserved.
+Runtime provider connection schemas continue to use the generic schema form.
+
 ### Thinking Policy
 
 The **Thinking** dashboard page configures the global effort-to-token-budget mapping used when requests cross Claude, OpenAI/Codex, and Gemini protocols. Explicit client settings are respected by default. Claude signatures/redacted thinking and Codex encrypted reasoning remain opaque and are only replayed to compatible upstreams.

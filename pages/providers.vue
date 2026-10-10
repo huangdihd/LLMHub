@@ -18,7 +18,7 @@
       <div class="py-10">
         <UIcon name="i-heroicons-link" class="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600" />
         <h3 class="mt-4 font-medium text-gray-900 dark:text-white">No providers connected</h3>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Add an API provider or connect a ChatGPT subscription.</p>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ dashboard.extensions.find(extension => extension.emptyDescription)?.emptyDescription || 'Add a provider to get started.' }}</p>
         <UButton class="mt-5" @click="openAddModal">Add your first provider</UButton>
       </div>
     </UCard>
@@ -32,14 +32,7 @@
               <UBadge :color="provider.enabled ? 'green' : 'gray'" variant="subtle" size="sm">
                 {{ provider.enabled ? 'Enabled' : 'Disabled' }}
               </UBadge>
-              <UBadge
-                v-if="isSubscriptionProtocol(provider.protocol)"
-                :color="provider.connection.authenticated ? 'green' : 'red'"
-                variant="subtle"
-                size="sm"
-              >
-                {{ provider.connection.authenticated ? subscriptionConnectedLabel(provider.protocol) : 'Reconnect required' }}
-              </UBadge>
+              <component :is="dashboard.extension(provider.protocol)?.badge" v-if="dashboard.extension(provider.protocol)?.badge" :provider="provider" />
             </div>
             <p v-if="provider.available === false" class="mt-2 text-sm text-amber-600 dark:text-amber-400">Unavailable: {{ provider.unavailableReason || 'Provider plugin is not active' }}</p>
             <div class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
@@ -49,15 +42,7 @@
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
-            <UButton
-              v-if="isSubscriptionProtocol(provider.protocol)"
-              color="gray"
-              variant="ghost"
-              :icon="usageState(provider.name).expanded ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
-              :aria-expanded="usageState(provider.name).expanded"
-              :aria-controls="`subscription-usage-${provider.name}`"
-              @click="toggleUsageDetails(provider.name)"
-            >{{ usageState(provider.name).expanded ? 'Hide details' : 'Details' }}</UButton>
+            <component :is="dashboard.extension(provider.protocol)?.actions" v-if="dashboard.extension(provider.protocol)?.actions" :provider="provider" :state="dashboard.state(provider.protocol)" />
             <UButton
               color="gray"
               variant="soft"
@@ -69,148 +54,7 @@
           </div>
         </div>
 
-        <div
-          v-if="isSubscriptionProtocol(provider.protocol) && usageState(provider.name).expanded"
-          :id="`subscription-usage-${provider.name}`"
-          class="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4"
-        >
-          <div class="flex items-center justify-between gap-3">
-            <UBadge
-              :color="usageState(provider.name).data?.plan ? 'primary' : 'gray'"
-              variant="subtle"
-              size="sm"
-            >
-              {{ usageState(provider.name).data?.plan ? titleCase(usageState(provider.name).data!.plan!) : 'Plan unavailable' }}
-            </UBadge>
-            <UButton
-              color="gray"
-              variant="ghost"
-              size="xs"
-              icon="i-heroicons-arrow-path"
-              :loading="usageState(provider.name).loading"
-              :disabled="usageState(provider.name).loading"
-              @click="fetchSubscriptionUsage(provider.name, true)"
-            >Refresh</UButton>
-          </div>
-
-          <div v-if="provider.protocol === 'codex-subscription'" class="mt-4 flex items-center justify-between gap-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-800/50">
-            <div>
-              <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Automatically use a banked reset</p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">When Codex rejects a request because its quota is exhausted, use one reset and retry that request once.</p>
-            </div>
-            <UToggle
-              :model-value="provider.connection.auto_reset_on_quota_exhausted === true"
-              :disabled="autoResetSaving[provider.name]"
-              :aria-label="`Automatically use a banked reset for ${provider.display_name}`"
-              @update:model-value="setAutoReset(provider, $event)"
-            />
-          </div>
-
-          <div v-if="provider.protocol === 'antigravity-subscription'" class="mt-4 flex items-center justify-between gap-4 rounded-lg bg-amber-50 p-3 dark:bg-amber-950/20">
-            <div>
-              <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Use Google One AI Credits</p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">Paid usage. Only retry once with AI Credits when Google explicitly reports that the free model quota is exhausted. Rate limits do not trigger it.</p>
-            </div>
-            <UToggle
-              :model-value="provider.connection.use_ai_credits_on_quota_exhausted === true"
-              :disabled="aiCreditsSaving[provider.name]"
-              :aria-label="`Use Google One AI Credits for ${provider.display_name}`"
-              @update:model-value="setAiCredits(provider, $event)"
-            />
-          </div>
-
-          <div v-if="usageState(provider.name).loading && !usageState(provider.name).data" class="flex items-center gap-2 py-5 text-sm text-gray-500 dark:text-gray-400">
-            <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin" />
-            Loading quota details…
-          </div>
-          <p v-else-if="usageState(provider.name).error" class="py-4 text-sm text-red-600 dark:text-red-400" role="alert">
-            {{ usageState(provider.name).error }}
-          </p>
-          <template v-else-if="usageState(provider.name).data">
-            <div v-if="usageState(provider.name).data!.windows.length" class="mt-4 space-y-4">
-              <div v-for="window in usageState(provider.name).data!.windows" :key="window.id">
-                <div class="flex items-baseline justify-between gap-3 text-sm">
-                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ window.label }}</span>
-                  <span class="tabular-nums text-gray-500 dark:text-gray-400">{{ formatPercent(window.used_percent) }} used</span>
-                </div>
-                <div
-                  class="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
-                  role="progressbar"
-                  :aria-label="`${window.label}: ${formatPercent(window.used_percent)} used`"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  :aria-valuenow="clampPercent(window.used_percent)"
-                >
-                  <div class="h-full rounded-full bg-primary-500" :style="{ width: `${clampPercent(window.used_percent)}%` }" />
-                </div>
-                <div v-if="window.reset_at || window.detail" class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                  <span v-if="window.reset_at">Resets {{ formatResetTime(window.reset_at) }}</span>
-                  <span v-if="window.detail">{{ window.detail }}</span>
-                </div>
-              </div>
-            </div>
-            <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">Quota details unavailable</p>
-
-            <div v-if="usageState(provider.name).data!.credits" class="mt-4 rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800/60">
-              <span class="font-medium text-gray-800 dark:text-gray-200">Credits:</span>
-              <span class="ml-1 text-gray-600 dark:text-gray-300">
-                {{ formatCredits(usageState(provider.name).data!.credits!) }}
-              </span>
-              <p v-if="usageState(provider.name).data!.credits!.detail" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ usageState(provider.name).data!.credits!.detail }}
-              </p>
-            </div>
-
-            <div
-              v-if="provider.protocol === 'codex-subscription' && usageState(provider.name).data!.reset_credits"
-              class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700"
-            >
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <p class="text-sm font-medium text-gray-800 dark:text-gray-200">Banked resets</p>
-                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{ usageState(provider.name).data!.reset_credits!.available_count }} available
-                  </p>
-                </div>
-              </div>
-
-              <div v-if="usageState(provider.name).data!.reset_credits!.credits?.length" class="mt-3 space-y-2">
-                <div
-                  v-for="credit in usageState(provider.name).data!.reset_credits!.credits"
-                  :key="credit.id"
-                  class="flex flex-col gap-2 rounded-md bg-gray-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between dark:bg-gray-800/60"
-                >
-                  <div class="min-w-0">
-                    <p class="text-sm text-gray-800 dark:text-gray-200">{{ credit.title || 'Usage limit reset' }}</p>
-                    <p v-if="credit.description" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ credit.description }}</p>
-                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                      {{ credit.expires_at ? `Expires ${formatResetTime(credit.expires_at)}` : 'Does not expire' }}
-                    </p>
-                  </div>
-                  <UButton
-                    color="primary"
-                    variant="soft"
-                    size="xs"
-                    class="self-start sm:self-auto"
-                    :loading="usageState(provider.name).resettingCreditId === credit.id"
-                    :disabled="Boolean(usageState(provider.name).resettingCreditId)"
-                    @click="useSubscriptionReset(provider.name, credit)"
-                  >Use reset</UButton>
-                </div>
-              </div>
-              <UButton
-                v-else-if="usageState(provider.name).data!.reset_credits!.available_count > 0"
-                class="mt-3"
-                color="primary"
-                variant="soft"
-                size="xs"
-                :loading="usageState(provider.name).resettingCreditId === '__next__'"
-                :disabled="Boolean(usageState(provider.name).resettingCreditId)"
-                @click="useSubscriptionReset(provider.name)"
-              >Use reset</UButton>
-            </div>
-          </template>
-        </div>
+        <component :is="dashboard.extension(provider.protocol)?.details" v-if="dashboard.extension(provider.protocol)?.details" :provider="provider" :state="dashboard.state(provider.protocol)" />
       </UCard>
     </div>
 
@@ -263,195 +107,11 @@
             </UFormGroup>
           </div>
 
-          <section v-if="form.protocol === 'codex-subscription'" class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div class="flex items-center gap-2">
-                  <h4 class="font-medium text-gray-900 dark:text-white">ChatGPT subscription</h4>
-                  <UBadge
-                    v-if="editingProvider && !activeLogin"
-                    :color="editingProvider.connection.authenticated ? 'green' : 'red'"
-                    variant="subtle"
-                    size="sm"
-                  >
-                    {{ editingProvider.connection.authenticated ? 'Connected' : 'Not connected' }}
-                  </UBadge>
-                </div>
-                <p class="mt-1 text-sm leading-5 text-gray-500 dark:text-gray-400">
-                  Sign in on OpenAI. LLMHub stores the session server-side and refreshes it automatically.
-                </p>
-              </div>
-              <UButton
-                v-if="activeLogin?.status !== 'pending'"
-                type="button"
-                icon="i-heroicons-arrow-top-right-on-square"
-                :loading="startingLogin"
-                @click="startCodexLogin"
-              >
-                {{ codexConnectLabel }}
-              </UButton>
-            </div>
-
-            <div v-if="activeLogin?.status === 'pending'" class="mt-5 border-t border-gray-200 dark:border-gray-700 pt-5">
-              <ol class="space-y-4">
-                <li class="flex gap-3">
-                  <span class="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium">1</span>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-gray-900 dark:text-white">Open the secure OpenAI sign-in page</p>
-                    <UButton class="mt-2" type="button" variant="soft" icon="i-heroicons-arrow-top-right-on-square" @click="openVerificationPage">Open ChatGPT</UButton>
-                  </div>
-                </li>
-                <li class="flex gap-3">
-                  <span class="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-medium">2</span>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-gray-900 dark:text-white">Enter this one-time code</p>
-                    <div class="mt-2 flex items-center gap-2">
-                      <code class="rounded-md bg-gray-100 dark:bg-gray-800 px-3 py-2 font-mono text-lg tracking-wider text-gray-900 dark:text-white">{{ activeLogin.user_code }}</code>
-                      <UButton type="button" color="gray" variant="ghost" icon="i-heroicons-clipboard-document" aria-label="Copy code" @click="copyLoginCode" />
-                    </div>
-                  </div>
-                </li>
-              </ol>
-              <div class="mt-5 flex items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
-                <span class="flex items-center gap-2"><UIcon name="i-heroicons-arrow-path" class="w-4 h-4 animate-spin" /> Waiting for confirmation</span>
-                <span>Expires in {{ loginMinutesRemaining }} min</span>
-              </div>
-            </div>
-
-            <UAlert
-              v-else-if="activeLogin?.status === 'failed'"
-              class="mt-4"
-              color="red"
-              variant="subtle"
-              title="Could not connect ChatGPT"
-              :description="activeLogin.error"
-            />
-          </section>
-
-          <section v-else-if="form.protocol === 'claude-subscription'" class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div class="flex items-center gap-2">
-                  <h4 class="font-medium text-gray-900 dark:text-white">Claude Code subscription</h4>
-                  <UBadge
-                    v-if="editingProvider && !activeLogin"
-                    :color="editingProvider.connection.authenticated ? 'green' : 'red'"
-                    variant="subtle"
-                    size="sm"
-                  >
-                    {{ editingProvider.connection.authenticated ? 'Connected' : 'Not connected' }}
-                  </UBadge>
-                </div>
-                <p class="mt-1 text-sm leading-5 text-gray-500 dark:text-gray-400">
-                  Sign in on Anthropic, then paste the authorization code shown there.
-                </p>
-              </div>
-              <UButton
-                v-if="activeLogin?.status !== 'pending'"
-                type="button"
-                icon="i-heroicons-arrow-top-right-on-square"
-                :loading="startingLogin"
-                @click="startClaudeLogin"
-              >
-                {{ claudeConnectLabel }}
-              </UButton>
-            </div>
-
-            <div v-if="activeLogin?.status === 'pending'" class="mt-5 space-y-4 border-t border-gray-200 dark:border-gray-700 pt-5">
-              <UButton type="button" variant="soft" icon="i-heroicons-arrow-top-right-on-square" @click="openAuthorizationPage">Open Anthropic</UButton>
-              <UFormGroup label="Authorization code" help="Paste the code displayed after authorizing LLMHub.">
-                <div class="flex flex-col gap-2 sm:flex-row">
-                  <UInput v-model="authorizationCode" class="flex-1" placeholder="Paste authorization code" autocomplete="off" @keyup.enter="completeClaudeLogin" />
-                  <UButton type="button" :loading="completingLogin" :disabled="!authorizationCode.trim()" @click="completeClaudeLogin">Complete connection</UButton>
-                </div>
-              </UFormGroup>
-              <div class="flex items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
-                <span>Waiting for authorization code</span>
-                <span>Expires in {{ loginMinutesRemaining }} min</span>
-              </div>
-            </div>
-
-            <UAlert
-              v-else-if="activeLogin?.status === 'failed'"
-              class="mt-4"
-              color="red"
-              variant="subtle"
-              title="Could not connect Claude"
-              :description="activeLogin.error"
-            />
-          </section>
-
-          <section v-else-if="form.protocol === 'antigravity-subscription'" class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div class="flex items-center gap-2">
-                  <h4 class="font-medium text-gray-900 dark:text-white">Google Antigravity subscription</h4>
-                  <UBadge
-                    v-if="editingProvider && !activeLogin"
-                    :color="editingProvider.connection.authenticated ? 'green' : 'red'"
-                    variant="subtle"
-                    size="sm"
-                  >
-                    {{ editingProvider.connection.authenticated ? 'Connected' : 'Not connected' }}
-                  </UBadge>
-                </div>
-                <p class="mt-1 text-sm leading-5 text-gray-500 dark:text-gray-400">
-                  Sign in with Google. When localhost cannot open, copy the full callback URL from the browser address bar and paste it below.
-                </p>
-              </div>
-              <UButton
-                v-if="activeLogin?.status !== 'pending'"
-                type="button"
-                icon="i-heroicons-arrow-top-right-on-square"
-                :loading="startingLogin"
-                @click="startAntigravityLogin"
-              >
-                {{ antigravityConnectLabel }}
-              </UButton>
-            </div>
-
-            <div v-if="activeLogin?.status === 'pending'" class="mt-5 space-y-4 border-t border-gray-200 dark:border-gray-700 pt-5">
-              <UButton type="button" variant="soft" icon="i-heroicons-arrow-top-right-on-square" @click="openAuthorizationPage">Open Google</UButton>
-              <UFormGroup label="Callback URL" help="Paste the complete http://localhost:8086 callback URL so LLMHub can verify the login state.">
-                <div class="flex flex-col gap-2 sm:flex-row">
-                  <UInput v-model="authorizationCode" class="flex-1" placeholder="http://localhost:8086/?code=…&state=…" autocomplete="off" @keyup.enter="completeAntigravityLogin" />
-                  <UButton type="button" :loading="completingLogin" :disabled="!authorizationCode.trim()" @click="completeAntigravityLogin">Complete connection</UButton>
-                </div>
-              </UFormGroup>
-              <div class="flex items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
-                <span>Waiting for Google callback</span>
-                <span>Expires in {{ loginMinutesRemaining }} min</span>
-              </div>
-            </div>
-
-            <UAlert
-              v-else-if="activeLogin?.status === 'failed'"
-              class="mt-4"
-              color="red"
-              variant="subtle"
-              title="Could not connect Antigravity"
-              :description="activeLogin.error"
-            />
-          </section>
-
-          <section v-else-if="isPluginProvider" class="space-y-4">
-            <UAlert v-if="providerTypeUnavailable" color="amber" title="Provider type unavailable" description="Enable the plugin before editing this provider." />
-            <PluginSchemaForm v-else :key="`${form.protocol}:${form.name}`" ref="schemaForm" v-model="form.extra" :fields="connectionSchema" :editing="!!editingProvider" />
-          </section>
+          <component :is="dashboard.extension(form.protocol)?.form" v-if="!isPluginProvider" :form="form" :errors="errors" :editing-provider="editingProvider" :state="dashboard.state(form.protocol)" />
 
           <section v-else class="space-y-4">
-            <UFormGroup v-if="form.protocol === 'openai'" label="API protocol">
-              <USelect v-model="form.api_type" :options="[
-                { value: 'responses', label: 'Responses (default)' },
-                { value: 'chat_completions', label: 'Chat Completions' }
-              ]" />
-            </UFormGroup>
-            <UFormGroup label="Base URL" required :error="errors.base_url" help="The root URL for this provider's API.">
-              <UInput v-model="form.base_url" :placeholder="protocolDefaults[form.protocol].baseUrl" />
-            </UFormGroup>
-            <UFormGroup label="API key" :required="!editingProvider" :error="errors.api_key" :help="editingProvider ? 'Leave empty to keep the current key.' : 'Stored on the LLMHub server and never returned to the browser.'">
-              <UInput v-model="form.api_key" type="password" autocomplete="new-password" :placeholder="editingProvider ? 'Keep current key' : protocolDefaults[form.protocol].keyPlaceholder" />
-            </UFormGroup>
+            <UAlert v-if="providerTypeUnavailable" color="amber" title="Provider type unavailable" description="Enable the plugin before editing this provider." />
+            <PluginSchemaForm v-else :key="`${form.protocol}:${form.name}`" ref="schemaForm" v-model="form.extra" :fields="connectionSchema" :editing="!!editingProvider" />
           </section>
 
           <details class="rounded-lg border border-gray-200 dark:border-gray-700">
@@ -478,13 +138,7 @@
               </div>
               <UCheckbox v-model="form.enable_timeout" label="Enable request timeout" />
 
-              <UFormGroup v-if="form.protocol === 'claude'" label="Anthropic API version">
-                <UInput v-model="form.version" placeholder="2023-06-01" />
-              </UFormGroup>
-
-              <UFormGroup v-if="form.protocol === 'codex-subscription'" label="Codex client version" help="Sent to OpenAI when fetching the subscription model catalog.">
-                <UInput v-model="form.client_version" placeholder="0.149.0" />
-              </UFormGroup>
+              <component :is="dashboard.extension(form.protocol)?.advanced" v-if="dashboard.extension(form.protocol)?.advanced" :form="form" />
 
               <UCheckbox v-model="form.use_custom_models" label="Use a custom model list instead of fetching models" />
               <div v-if="form.use_custom_models" class="space-y-2 rounded-md bg-gray-50 dark:bg-gray-800/50 p-3">
@@ -496,21 +150,21 @@
                 <UButton type="button" color="gray" variant="soft" size="sm" @click="form.custom_models.push({ id: '', display_name: '' })">Add model</UButton>
               </div>
 
-              <UCheckbox v-model="form.normalize_cch" label="Normalize cch in the system prompt for upstream cache reuse" />
+              <component :is="section.advanced" v-for="section in dashboard.sections" :key="section.id" :form="form" />
             </div>
           </details>
         </form>
 
         <template #footer>
           <div class="flex justify-between gap-3">
-            <UButton v-if="activeLogin?.status === 'pending'" color="red" variant="ghost" @click="cancelActiveLogin">Cancel login</UButton>
+            <UButton v-if="dashboard.pending()" color="red" variant="ghost" @click="dashboard.cancel">Cancel login</UButton>
             <span v-else />
             <div class="flex gap-2">
               <UButton color="gray" variant="ghost" :disabled="saving" @click="closeModal">Cancel</UButton>
               <UButton
                 v-if="protocolChosen && (!isSubscriptionProtocol(form.protocol) || !!editingProvider)"
                 :loading="saving"
-                :disabled="activeLogin?.status === 'pending' || providerTypeUnavailable"
+                :disabled="dashboard.pending() || providerTypeUnavailable"
                 @click="saveProvider"
               >Save changes</UButton>
             </div>
@@ -522,90 +176,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useProviderDashboard } from '~/composables/useProviderDashboard'
 import type { PluginField } from '~/shared/types/plugin'
-
+import type { DashboardProviderForm, DashboardProviderRecord } from '~/shared/dashboard/providers'
 type Protocol = string
 type ProviderType = { id: string; displayName: string; connectionSchema?: PluginField[] }
-type LoginState = {
-  login_id: string
-  status: 'pending' | 'completed' | 'failed' | 'cancelled'
-  verification_url?: string
-  user_code?: string
-  authorization_url?: string
-  expires_at: number
-  error?: string
-}
-type SubscriptionUsageWindow = {
-  id: string
-  label: string
-  used_percent: number
-  reset_at?: string
-  detail?: string
-}
-type SubscriptionCredits = {
-  balance?: number | string
-  unlimited?: boolean
-  detail?: string
-}
-type SubscriptionResetCredit = {
-  id: string
-  reset_type: string
-  status: string
-  granted_at?: string
-  expires_at?: string
-  title?: string
-  description?: string
-}
-type SubscriptionUsage = {
-  provider: string
-  protocol: string
-  plan?: string
-  windows: SubscriptionUsageWindow[]
-  credits?: SubscriptionCredits
-  reset_credits?: {
-    available_count: number
-    credits?: SubscriptionResetCredit[]
-  }
-  fetched_at: string
-}
-type SubscriptionUsageState = {
-  loading: boolean
-  resettingCreditId: string
-  error: string
-  data: SubscriptionUsage | null
-  expanded: boolean
-}
-
 const toast = useToast()
-const providers = ref<any[]>([])
+const providers = ref<DashboardProviderRecord[]>([])
 const loading = ref(true)
 const saving = ref(false)
-const startingLogin = ref(false)
-const completingLogin = ref(false)
 const isModalOpen = ref(false)
 const protocolChosen = ref(false)
-const editingProvider = ref<any>(null)
-const activeLogin = ref<LoginState | null>(null)
-const authorizationCode = ref('')
-const loginNow = ref(Date.now())
-const usageNow = ref(Date.now())
-const subscriptionUsage = reactive<Record<string, SubscriptionUsageState>>({})
-const autoResetSaving = reactive<Record<string, boolean>>({})
-const aiCreditsSaving = reactive<Record<string, boolean>>({})
+const editingProvider = ref<DashboardProviderRecord | null>(null)
 const nameTouched = ref(false)
-let pollTimer: ReturnType<typeof setTimeout> | null = null
-let usageClockTimer: ReturnType<typeof setInterval> | null = null
-
-const builtinProtocolOptions: { value: Protocol; label: string; description: string; icon: string }[] = [
-  { value: 'openai', label: 'OpenAI compatible', description: 'OpenAI, DeepSeek, OpenRouter, Ollama, and compatible APIs.', icon: 'i-heroicons-command-line' },
-  { value: 'codex-subscription', label: 'ChatGPT subscription', description: 'Use Codex models included with a ChatGPT plan. Sign in with OpenAI.', icon: 'i-heroicons-user-circle' },
-  { value: 'claude-subscription', label: 'Claude Code subscription', description: 'Use Claude models included with a Claude plan. Sign in with Anthropic.', icon: 'i-heroicons-user-circle' },
-  { value: 'antigravity-subscription', label: 'Google Antigravity subscription', description: 'Use Gemini and Claude models included with Google Antigravity.', icon: 'i-heroicons-sparkles' },
-  { value: 'claude', label: 'Anthropic Claude', description: 'Providers using the Anthropic Messages API.', icon: 'i-heroicons-chat-bubble-left-right' },
-  { value: 'gemini', label: 'Google Gemini', description: 'Providers using the Gemini generateContent API.', icon: 'i-heroicons-sparkles' }
-]
-
+const form = reactive<DashboardProviderForm>({ name: '', display_name: '', protocol: '', enabled: true, use_custom_models: false, custom_models: [], timeout: 30000, enable_timeout: true, max_retries: 3, extra: {} })
+const errors = reactive<Record<string, string>>({ name: '', display_name: '', base_url: '', api_key: '' })
+const dashboard = useProviderDashboard({ form, errors, editingProvider, isModalOpen, validateBasics, loadProviders, showError })
+const builtinProtocolOptions = dashboard.extensions.map(extension => ({ value: extension.id, label: extension.label, description: extension.description, icon: extension.icon }))
+Object.assign(form, dashboard.defaults)
+form.protocol = dashboard.extensions[0]?.id || ''
 const providerTypes = ref<ProviderType[]>([])
 const providerTypesError = ref('')
 const schemaForm = ref<{ validate: () => boolean } | null>(null)
@@ -629,59 +219,12 @@ async function loadProviderTypes() {
   }
 }
 
-const protocolDefaults: Record<Protocol, { baseUrl: string; keyPlaceholder: string }> = {
-  openai: { baseUrl: 'https://api.openai.com/v1', keyPlaceholder: 'sk-…' },
-  claude: { baseUrl: 'https://api.anthropic.com', keyPlaceholder: 'sk-ant-…' },
-  gemini: { baseUrl: 'https://generativelanguage.googleapis.com', keyPlaceholder: 'Google API key' },
-  'codex-subscription': { baseUrl: '', keyPlaceholder: '' },
-  'claude-subscription': { baseUrl: '', keyPlaceholder: '' },
-  'antigravity-subscription': { baseUrl: '', keyPlaceholder: '' }
-}
-
-const form = reactive({
-  name: '', display_name: '', protocol: 'openai' as Protocol, enabled: true,
-  use_custom_models: false, custom_models: [] as { id: string; display_name: string }[],
-  api_type: 'responses' as 'responses' | 'chat_completions',
-  base_url: '', api_key: '', timeout: 30000, enable_timeout: true,
-  max_retries: 3, version: '2023-06-01', normalize_cch: false,
-  client_version: '0.149.0', extra: {} as Record<string, unknown>
-})
-
-const errors = reactive({ name: '', display_name: '', base_url: '', api_key: '' })
 const modalTitle = computed(() => editingProvider.value ? `Edit ${editingProvider.value.display_name}` : 'Add provider')
-const codexConnectLabel = computed(() => {
-  if (activeLogin.value?.status === 'failed') return 'Try again'
-  if (editingProvider.value) return 'Reconnect'
-  return 'Connect ChatGPT'
-})
-const claudeConnectLabel = computed(() => {
-  if (activeLogin.value?.status === 'failed') return 'Try again'
-  if (editingProvider.value) return 'Reconnect'
-  return 'Connect Claude'
-})
-const antigravityConnectLabel = computed(() => {
-  if (activeLogin.value?.status === 'failed') return 'Try again'
-  if (editingProvider.value) return 'Reconnect'
-  return 'Connect Google'
-})
-const loginMinutesRemaining = computed(() => activeLogin.value
-  ? Math.max(0, Math.ceil((activeLogin.value.expires_at - loginNow.value) / 60000))
-  : 0)
-
 watch(() => form.display_name, value => {
   if (!editingProvider.value && !nameTouched.value) form.name = slugify(value)
 })
 
-onMounted(() => {
-  loadProviders()
-  loadProviderTypes()
-  usageClockTimer = setInterval(() => { usageNow.value = Date.now() }, 60000)
-})
-onBeforeUnmount(() => {
-  stopPolling()
-  if (usageClockTimer) clearInterval(usageClockTimer)
-})
-
+onMounted(() => { loadProviders(); loadProviderTypes() })
 async function loadProviders() {
   loading.value = true
   try {
@@ -695,173 +238,6 @@ async function loadProviders() {
   }
 }
 
-function usageState(name: string): SubscriptionUsageState {
-  if (!subscriptionUsage[name]) {
-    subscriptionUsage[name] = { loading: false, resettingCreditId: '', error: '', data: null, expanded: false }
-  }
-  return subscriptionUsage[name]
-}
-
-async function setAutoReset(provider: any, enabled: boolean) {
-  if (autoResetSaving[provider.name]) return
-  autoResetSaving[provider.name] = true
-  try {
-    await $fetch(`/api/hub/providers/${encodeURIComponent(provider.name)}`, {
-      method: 'PUT',
-      body: { auto_reset_on_quota_exhausted: enabled }
-    })
-    provider.connection.auto_reset_on_quota_exhausted = enabled
-    toast.add({
-      title: enabled ? 'Automatic reset enabled' : 'Automatic reset disabled',
-      color: enabled ? 'green' : 'gray',
-      icon: enabled ? 'i-heroicons-check-circle' : 'i-heroicons-information-circle'
-    })
-  } catch (error: any) {
-    if (error?.statusCode === 401) return navigateTo('/login')
-    showError(error, 'Unable to update automatic reset')
-  } finally {
-    autoResetSaving[provider.name] = false
-  }
-}
-
-async function setAiCredits(provider: any, enabled: boolean) {
-  if (aiCreditsSaving[provider.name]) return
-  aiCreditsSaving[provider.name] = true
-  try {
-    await $fetch(`/api/hub/providers/${encodeURIComponent(provider.name)}`, {
-      method: 'PUT',
-      body: { use_ai_credits_on_quota_exhausted: enabled }
-    })
-    provider.connection.use_ai_credits_on_quota_exhausted = enabled
-    toast.add({
-      title: enabled ? 'Google One AI Credits enabled' : 'Google One AI Credits disabled',
-      description: enabled ? 'Paid credits will only be used after explicit free-quota exhaustion.' : undefined,
-      color: enabled ? 'amber' : 'gray',
-      icon: enabled ? 'i-heroicons-currency-dollar' : 'i-heroicons-information-circle'
-    })
-  } catch (error: any) {
-    if (error?.statusCode === 401) return navigateTo('/login')
-    showError(error, 'Unable to update AI Credits usage')
-  } finally {
-    aiCreditsSaving[provider.name] = false
-  }
-}
-
-async function toggleUsageDetails(name: string) {
-  const state = usageState(name)
-  state.expanded = !state.expanded
-  if (state.expanded && !state.data && !state.loading) await fetchSubscriptionUsage(name)
-}
-
-async function fetchSubscriptionUsage(name: string, refresh = false) {
-  const state = usageState(name)
-  state.loading = true
-  state.error = ''
-  try {
-    const suffix = refresh ? '?refresh=1' : ''
-    const data = await $fetch<SubscriptionUsage>(`/api/hub/providers/${encodeURIComponent(name)}/subscription-usage${suffix}`)
-    state.data = {
-      provider: data.provider,
-      protocol: data.protocol,
-      plan: data.plan,
-      windows: Array.isArray(data.windows) ? data.windows : [],
-      credits: data.credits,
-      reset_credits: data.reset_credits,
-      fetched_at: data.fetched_at
-    }
-  } catch (error: any) {
-    state.error = error?.data?.message
-      || error?.statusMessage
-      || 'Unable to load quota details. Try refreshing.'
-  } finally {
-    state.loading = false
-  }
-}
-
-async function useSubscriptionReset(name: string, credit?: SubscriptionResetCredit) {
-  const title = credit?.title || 'usage limit reset'
-  if (!confirm(`Use this ${title}? This will reset your eligible weekly and 5-hour usage limits.`)) return
-
-  const state = usageState(name)
-  const pendingId = credit?.id || '__next__'
-  state.resettingCreditId = pendingId
-  try {
-    const result = await $fetch<{ code: string; windows_reset: number }>(
-      `/api/hub/providers/${encodeURIComponent(name)}/subscription-reset`,
-      { method: 'POST', body: credit ? { credit_id: credit.id } : {} }
-    )
-    const messages: Record<string, string> = {
-      reset: `Reset applied to ${result.windows_reset || 'eligible'} usage limit window${result.windows_reset === 1 ? '' : 's'}.`,
-      nothing_to_reset: 'No current usage limit window is eligible for a reset.',
-      no_credit: 'That usage limit reset is no longer available.',
-      already_redeemed: 'This reset was already used.'
-    }
-    toast.add({
-      title: result.code === 'reset' ? 'Usage limits reset' : 'Reset not applied',
-      description: messages[result.code] || `OpenAI returned: ${result.code}`,
-      color: result.code === 'reset' ? 'green' : 'orange',
-      icon: result.code === 'reset' ? 'i-heroicons-check-circle' : 'i-heroicons-information-circle'
-    })
-    await fetchSubscriptionUsage(name, true)
-  } catch (error: any) {
-    showError(error, 'Unable to use usage limit reset')
-  } finally {
-    state.resettingCreditId = ''
-  }
-}
-
-function titleCase(value: string): string {
-  return value
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, character => character.toUpperCase())
-}
-
-function clampPercent(value: number): number {
-  const percent = Number(value)
-  if (!Number.isFinite(percent)) return 0
-  return Math.min(100, Math.max(0, percent))
-}
-
-function formatPercent(value: number): string {
-  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(clampPercent(value))}%`
-}
-
-function formatResetTime(resetAt: string): string {
-  const timestamp = Date.parse(resetAt)
-  if (!Number.isFinite(timestamp)) return 'at an unknown time'
-
-  const absolute = new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(timestamp)
-  const seconds = (timestamp - usageNow.value) / 1000
-  let value: number
-  let unit: Intl.RelativeTimeFormatUnit
-  if (Math.abs(seconds) < 60) {
-    value = Math.round(seconds)
-    unit = 'second'
-  } else if (Math.abs(seconds) < 3600) {
-    value = Math.round(seconds / 60)
-    unit = 'minute'
-  } else if (Math.abs(seconds) < 86400) {
-    value = Math.round(seconds / 3600)
-    unit = 'hour'
-  } else {
-    value = Math.round(seconds / 86400)
-    unit = 'day'
-  }
-  const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(value, unit)
-  return `${absolute} (${relative})`
-}
-
-function formatCredits(credits: SubscriptionCredits): string {
-  if (credits.unlimited) return 'Unlimited'
-  if (credits.balance === undefined) return 'Balance unavailable'
-  return typeof credits.balance === 'number'
-    ? new Intl.NumberFormat().format(credits.balance)
-    : String(credits.balance)
-}
-
 function openAddModal() {
   editingProvider.value = null
   resetForm()
@@ -872,27 +248,16 @@ function openAddModal() {
 function chooseProtocol(protocol: Protocol) {
   form.protocol = protocol
   const option = protocolOptions.value.find(item => item.value === protocol)!
-  if (protocol === 'codex-subscription') {
-    form.display_name = 'Codex Subscription'
-    form.name = 'codex'
-  } else if (protocol === 'claude-subscription') {
-    form.display_name = 'Claude Subscription'
-    form.name = 'claude-sub'
-  } else if (protocol === 'antigravity-subscription') {
-    form.display_name = 'Antigravity Subscription'
-    form.name = 'antigravity'
-  } else {
-    form.display_name = option.label
-    form.name = slugify(form.display_name)
-  }
-  form.base_url = protocolDefaults[protocol]?.baseUrl || ''
-  form.timeout = protocol === 'antigravity-subscription' ? 120000 : 30000
+  const extension = dashboard.extension(protocol)
+  form.display_name = extension?.initial?.display_name || option.label
+  form.name = extension?.initial?.name || slugify(form.display_name)
+  Object.assign(form, { base_url: '' }, extension?.chooseDefaults)
+  form.timeout = extension?.initial?.timeout || 30000
   nameTouched.value = false
   protocolChosen.value = true
 }
-
 function backToProtocolChoice() {
-  if (activeLogin.value?.status === 'pending') return
+  if (dashboard.pending()) return
   resetForm()
   protocolChosen.value = false
 }
@@ -907,17 +272,13 @@ function editProvider(provider: any) {
   form.enabled = provider.enabled
   form.use_custom_models = provider.use_custom_models || false
   form.custom_models = (provider.models || []).map((model: any) => ({ id: model.id, display_name: model.display_name }))
-  form.api_type = provider.connection.api_type ?? 'chat_completions'
-  form.base_url = provider.connection.base_url || ''
   form.timeout = provider.connection.timeout || 30000
   form.enable_timeout = provider.connection.enable_timeout ?? true
   form.max_retries = provider.connection.max_retries ?? 3
-  form.version = provider.connection.version || '2023-06-01'
-  form.client_version = provider.connection.client_version || '0.149.0'
+  dashboard.edit(provider)
   form.extra = {}
   // Copy only known non-secret fields, even when provider types are still loading.
   populatePluginFields()
-  form.normalize_cch = provider.normalize_cch || false
   isModalOpen.value = true
 }
 
@@ -934,205 +295,16 @@ function populatePluginFields() {
 watch(connectionSchema, populatePluginFields)
 
 function resetForm() {
-  stopPolling()
-  activeLogin.value = null
-  authorizationCode.value = ''
+  dashboard.reset()
   nameTouched.value = false
   clearErrors()
-  Object.assign(form, {
-    name: '', display_name: '', protocol: 'openai', enabled: true,
-    use_custom_models: false, custom_models: [], base_url: '', api_key: '',
-    api_type: 'responses', timeout: 30000, enable_timeout: true, max_retries: 3,
-    version: '2023-06-01', normalize_cch: false, client_version: '0.149.0', extra: {}
-  })
+  Object.assign(form, dashboard.defaults, { name: '', display_name: '', protocol: dashboard.extensions[0]?.id || '', enabled: true, use_custom_models: false, custom_models: [], base_url: '', api_key: '', timeout: 30000, enable_timeout: true, max_retries: 3, extra: {} })
 }
-
 async function closeModal() {
-  if (activeLogin.value?.status === 'pending') await cancelActiveLogin()
+  if (dashboard.pending()) await dashboard.cancel()
   isModalOpen.value = false
-  stopPolling()
+  dashboard.reset()
 }
-
-async function startCodexLogin() {
-  if (!validateBasics()) return
-  startingLogin.value = true
-  try {
-    const models = form.use_custom_models ? form.custom_models.filter(model => model.id.trim()) : []
-    activeLogin.value = await $fetch<LoginState>('/api/hub/providers/codex-login/start' as any, {
-      method: 'POST',
-      body: {
-        name: form.name, display_name: form.display_name, enabled: form.enabled,
-        normalize_cch: form.normalize_cch, timeout: form.timeout,
-        enable_timeout: form.enable_timeout, max_retries: form.max_retries,
-        use_custom_models: form.use_custom_models, models,
-        client_version: form.client_version,
-        reconnect: Boolean(editingProvider.value)
-      }
-    })
-    loginNow.value = Date.now()
-    schedulePoll()
-  } catch (error: any) {
-    showError(error, 'Unable to start ChatGPT login')
-  } finally {
-    startingLogin.value = false
-  }
-}
-
-async function startClaudeLogin() {
-  if (!validateBasics()) return
-  startingLogin.value = true
-  try {
-    const models = form.use_custom_models ? form.custom_models.filter(model => model.id.trim()) : []
-    activeLogin.value = await $fetch<LoginState>('/api/hub/providers/claude-login/start' as any, {
-      method: 'POST',
-      body: {
-        name: form.name, display_name: form.display_name, enabled: form.enabled,
-        normalize_cch: form.normalize_cch, timeout: form.timeout,
-        enable_timeout: form.enable_timeout, max_retries: form.max_retries,
-        use_custom_models: form.use_custom_models, models,
-        reconnect: Boolean(editingProvider.value)
-      }
-    })
-    authorizationCode.value = ''
-    loginNow.value = Date.now()
-    openAuthorizationPage()
-  } catch (error: any) {
-    showError(error, 'Unable to start Claude login')
-  } finally {
-    startingLogin.value = false
-  }
-}
-
-async function completeClaudeLogin() {
-  if (!activeLogin.value || !authorizationCode.value.trim()) return
-  completingLogin.value = true
-  try {
-    const status = await $fetch<LoginState>(`/api/hub/providers/claude-login/${activeLogin.value.login_id}/complete` as any, {
-      method: 'POST',
-      body: { code: authorizationCode.value.trim() }
-    })
-    activeLogin.value = status
-    if (status.status === 'completed') {
-      toast.add({ title: 'Claude connected', description: `${form.display_name} is ready to use.`, color: 'green', icon: 'i-heroicons-check-circle' })
-      isModalOpen.value = false
-      await loadProviders()
-    }
-  } catch (error: any) {
-    if (error?.statusCode === 401) return navigateTo('/login')
-    showError(error, 'Unable to complete Claude login')
-  } finally {
-    completingLogin.value = false
-  }
-}
-
-async function startAntigravityLogin() {
-  if (!validateBasics()) return
-  startingLogin.value = true
-  try {
-    const models = form.use_custom_models ? form.custom_models.filter(model => model.id.trim()) : []
-    activeLogin.value = await $fetch<LoginState>('/api/hub/providers/antigravity-login/start' as any, {
-      method: 'POST',
-      body: {
-        name: form.name, display_name: form.display_name, enabled: form.enabled,
-        normalize_cch: form.normalize_cch, timeout: form.timeout,
-        enable_timeout: form.enable_timeout, max_retries: form.max_retries,
-        use_custom_models: form.use_custom_models, models,
-        reconnect: Boolean(editingProvider.value)
-      }
-    })
-    authorizationCode.value = ''
-    loginNow.value = Date.now()
-    openAuthorizationPage()
-  } catch (error: any) {
-    showError(error, 'Unable to start Google login')
-  } finally {
-    startingLogin.value = false
-  }
-}
-
-async function completeAntigravityLogin() {
-  if (!activeLogin.value || !authorizationCode.value.trim()) return
-  completingLogin.value = true
-  try {
-    const status = await $fetch<LoginState>(`/api/hub/providers/antigravity-login/${activeLogin.value.login_id}/complete` as any, {
-      method: 'POST',
-      body: { code: authorizationCode.value.trim() }
-    })
-    activeLogin.value = status
-    if (status.status === 'completed') {
-      toast.add({ title: 'Google connected', description: `${form.display_name} is ready to use.`, color: 'green', icon: 'i-heroicons-check-circle' })
-      isModalOpen.value = false
-      await loadProviders()
-    }
-  } catch (error: any) {
-    if (error?.statusCode === 401) return navigateTo('/login')
-    showError(error, 'Unable to complete Google login')
-  } finally {
-    completingLogin.value = false
-  }
-}
-
-function schedulePoll() {
-  stopPolling()
-  pollTimer = setTimeout(pollLogin, 1500)
-}
-
-async function pollLogin() {
-  if (!activeLogin.value || activeLogin.value.status !== 'pending') return
-  loginNow.value = Date.now()
-  try {
-    const status = await $fetch<LoginState>(`/api/hub/providers/codex-login/${activeLogin.value.login_id}/poll` as any, { method: 'POST' })
-    activeLogin.value = status
-    if (status.status === 'completed') {
-      toast.add({ title: 'ChatGPT connected', description: `${form.display_name} is ready to use.`, color: 'green', icon: 'i-heroicons-check-circle' })
-      stopPolling()
-      isModalOpen.value = false
-      await loadProviders()
-      return
-    }
-    if (status.status === 'failed') {
-      stopPolling()
-      return
-    }
-    schedulePoll()
-  } catch (error: any) {
-    if (error?.statusCode === 401) return navigateTo('/login')
-    schedulePoll()
-  }
-}
-
-function stopPolling() {
-  if (pollTimer) clearTimeout(pollTimer)
-  pollTimer = null
-}
-
-async function cancelActiveLogin() {
-  stopPolling()
-  const login = activeLogin.value
-  activeLogin.value = null
-  if (!login) return
-  const loginType = form.protocol === 'claude-subscription'
-    ? 'claude-login'
-    : form.protocol === 'antigravity-subscription'
-      ? 'antigravity-login'
-      : 'codex-login'
-  await $fetch(`/api/hub/providers/${loginType}/${login.login_id}` as any, { method: 'DELETE' }).catch(() => {})
-}
-
-function openVerificationPage() {
-  if (activeLogin.value?.verification_url) window.open(activeLogin.value.verification_url, '_blank', 'noopener,noreferrer')
-}
-
-function openAuthorizationPage() {
-  if (activeLogin.value?.authorization_url) window.open(activeLogin.value.authorization_url, '_blank', 'noopener,noreferrer')
-}
-
-async function copyLoginCode() {
-  if (!activeLogin.value?.user_code) return
-  await navigator.clipboard.writeText(activeLogin.value.user_code)
-  toast.add({ title: 'Code copied', color: 'green', timeout: 1500 })
-}
-
 async function saveProvider() {
   if (saving.value) return
   if (isSubscriptionProtocol(form.protocol) && !editingProvider.value) return
@@ -1144,16 +316,11 @@ async function saveProvider() {
       name: form.name, display_name: form.display_name, protocol: form.protocol,
       enabled: form.enabled, use_custom_models: form.use_custom_models,
       timeout: form.timeout, enable_timeout: form.enable_timeout,
-      max_retries: form.max_retries, version: form.version,
-      client_version: form.client_version,
-      models, normalize_cch: form.normalize_cch
+      max_retries: form.max_retries,
+      models
     }
-    if (form.protocol === 'openai') body.api_type = form.api_type
+    Object.assign(body, dashboard.payload())
     if (isPluginProvider.value) body.connection = { extra: form.extra }
-    if (!isPluginProvider.value && !isSubscriptionProtocol(form.protocol)) {
-      body.base_url = form.base_url
-      body.api_key = form.api_key
-    }
 
     if (editingProvider.value) await $fetch(`/api/hub/providers/${form.name}`, { method: 'PUT', body })
     else await $fetch('/api/hub/providers', { method: 'POST', body })
@@ -1173,7 +340,7 @@ async function deleteProvider(name: string) {
   if (!confirm(`Delete provider “${name}”?`)) return
   try {
     await $fetch(`/api/hub/providers/${name}`, { method: 'DELETE' })
-    delete subscriptionUsage[name]
+    dashboard.remove(name)
     toast.add({ title: 'Provider deleted', color: 'green' })
     await loadProviders()
   } catch (error: any) {
@@ -1194,11 +361,7 @@ function validateForm(): boolean {
   const basicsValid = validateBasics()
   if (providerTypeUnavailable.value) return false
   if (isPluginProvider.value) return (schemaForm.value?.validate() ?? false) && basicsValid
-  if (!isSubscriptionProtocol(form.protocol)) {
-    if (!form.base_url.trim()) errors.base_url = 'Enter the provider base URL'
-    if (!editingProvider.value && !form.api_key.trim()) errors.api_key = 'Enter an API key'
-  }
-  return basicsValid && !errors.base_url && !errors.api_key
+  return (dashboard.extension(form.protocol)?.validate?.({ form, errors, editingProvider, isModalOpen, validateBasics, loadProviders, showError }) ?? true) && basicsValid
 }
 
 function clearErrors() {
@@ -1209,17 +372,8 @@ function clearErrors() {
 }
 
 function isSubscriptionProtocol(protocol: Protocol): boolean {
-  return protocol === 'codex-subscription'
-    || protocol === 'claude-subscription'
-    || protocol === 'antigravity-subscription'
+  return Boolean(dashboard.extension(protocol)?.connectedLabel)
 }
-
-function subscriptionConnectedLabel(protocol: Protocol): string {
-  if (protocol === 'codex-subscription') return 'ChatGPT connected'
-  if (protocol === 'antigravity-subscription') return 'Google connected'
-  return 'Claude connected'
-}
-
 function protocolLabel(protocol: Protocol): string {
   return protocolOptions.value.find(option => option.value === protocol)?.label || protocol
 }

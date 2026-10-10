@@ -7,25 +7,13 @@
       </div>
       <div class="flex flex-wrap gap-3">
         <UButton to="/providers" icon="i-heroicons-cog-6-tooth" color="gray" variant="solid">Manage Providers</UButton>
-        <UButton to="/chat" icon="i-heroicons-chat-bubble-left-right" color="primary">New Chat</UButton>
+        <component v-for="(contribution, index) in contributions.filter(item => item.action)" :is="contribution.action" :key="index" />
       </div>
     </div>
 
     <!-- Quick Stats -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-      <UCard :ui="{ body: { padding: 'p-6 sm:p-6' } }">
-        <div class="flex items-center">
-          <div class="p-3 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
-            <UIcon name="i-heroicons-chart-bar" class="w-6 h-6" />
-          </div>
-          <div class="ml-4">
-            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total API Calls</p>
-            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-              {{ loading ? '-' : totalApiCalls }}
-            </h3>
-          </div>
-        </div>
-      </UCard>
+      <component v-for="(contribution, index) in contributions.filter(item => item.metric)" :is="contribution.metric" :key="index" :loading="loading" v-bind="contribution.metricProps()" />
       
       <UCard :ui="{ body: { padding: 'p-6 sm:p-6' } }">
         <div class="flex items-center">
@@ -79,49 +67,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- API Key Usage -->
       <div class="lg:col-span-2 space-y-6">
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                <UIcon name="i-heroicons-key" class="w-5 h-5 text-primary" />
-                API Key Usage
-              </h3>
-              <UButton color="gray" variant="ghost" size="xs" icon="i-heroicons-arrow-path" :loading="refreshingKeys" @click="loadKeyStats" />
-            </div>
-          </template>
-
-          <div v-if="apiKeys.length === 0" class="text-center py-6 text-sm text-gray-500">
-            <UIcon name="i-heroicons-key" class="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-            <p>No API keys created yet.</p>
-            <p class="text-xs mt-1">Create keys from the API Keys page to see usage here.</p>
-          </div>
-
-          <div v-else class="space-y-3">
-            <div v-for="key in apiKeys" :key="key.id" class="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-800">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
-                  <span class="text-sm font-medium text-gray-900 dark:text-white">{{ key.name }}</span>
-                  <UBadge v-if="key.monthly_limit > 0" :color="key.tokens_used >= key.monthly_limit ? 'red' : 'green'" variant="soft" size="xs">
-                    {{ Math.round(key.tokens_used / key.monthly_limit * 100) }}%
-                  </UBadge>
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ key.tokens_used.toLocaleString() }} / {{ key.monthly_limit > 0 ? key.monthly_limit.toLocaleString() : '∞' }} tokens · {{ key.call_count }} calls
-                </div>
-                <div v-if="key.allowed_providers.length > 0 || key.allowed_models.length > 0" class="flex flex-wrap gap-1 mt-1">
-                  <UBadge v-for="p in key.allowed_providers" :key="p" color="blue" variant="soft" size="xs">{{ p }}</UBadge>
-                  <UBadge v-for="m in key.allowed_models" :key="m" color="purple" variant="soft" size="xs">{{ m }}</UBadge>
-                </div>
-              </div>
-              <!-- mini progress bar -->
-              <div v-if="key.monthly_limit > 0" class="ml-4 w-16">
-                <div class="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div class="h-full rounded-full transition-all" :class="key.tokens_used >= key.monthly_limit ? 'bg-red-500' : 'bg-primary'" :style="{ width: Math.min(100, key.tokens_used / key.monthly_limit * 100) + '%' }" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </UCard>
+        <component v-for="(contribution, index) in contributions.filter(item => item.usage)" :is="contribution.usage" :key="index" v-bind="contribution.usageProps()" />
       </div>
 
       <!-- Quick Actions / Status -->
@@ -151,89 +97,7 @@
           </div>
         </UCard>
 
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                <UIcon name="i-heroicons-circle-stack" class="w-5 h-5 text-green-500" />
-                OpenAI Base URL
-              </h3>
-              <UButton
-                color="gray"
-                variant="ghost"
-                size="xs"
-                icon="i-heroicons-clipboard-document"
-                @click="copyUrl(openaiBaseUrl)"
-              />
-            </div>
-          </template>
-          <div class="space-y-2">
-            <code class="block text-sm font-mono bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded select-all break-all">
-              {{ openaiBaseUrl }}
-            </code>
-            <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <UBadge color="gray" variant="soft">/chat/completions</UBadge>
-              <UBadge color="gray" variant="soft">/completions</UBadge>
-              <UBadge color="gray" variant="soft">/responses</UBadge>
-              <UBadge color="gray" variant="soft">/models</UBadge>
-            </div>
-          </div>
-        </UCard>
-
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                <UIcon name="i-heroicons-circle-stack" class="w-5 h-5 text-orange-500" />
-                Claude Base URL
-              </h3>
-              <UButton
-                color="gray"
-                variant="ghost"
-                size="xs"
-                icon="i-heroicons-clipboard-document"
-                @click="copyUrl(claudeBaseUrl)"
-              />
-            </div>
-          </template>
-          <div class="space-y-2">
-            <code class="block text-sm font-mono bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded select-all break-all">
-              {{ claudeBaseUrl }}
-            </code>
-            <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <UBadge color="gray" variant="soft">/messages</UBadge>
-              <UBadge color="gray" variant="soft">/complete</UBadge>
-            </div>
-          </div>
-        </UCard>
-
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                <UIcon name="i-heroicons-circle-stack" class="w-5 h-5 text-blue-500" />
-                Gemini Base URL
-              </h3>
-              <UButton
-                color="gray"
-                variant="ghost"
-                size="xs"
-                icon="i-heroicons-clipboard-document"
-                @click="copyUrl(geminiBaseUrl)"
-              />
-            </div>
-          </template>
-          <div class="space-y-2">
-            <code class="block text-sm font-mono bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded select-all break-all">
-              {{ geminiBaseUrl }}
-            </code>
-            <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <UBadge color="gray" variant="soft">/models</UBadge>
-              <UBadge color="gray" variant="soft">/:model/generateContent</UBadge>
-              <UBadge color="gray" variant="soft">/:model/streamGenerateContent</UBadge>
-            </div>
-          </div>
-        </UCard>
+        <component v-for="(contribution, index) in contributions.filter(item => item.endpoint)" :is="contribution.endpoint" :key="index" />
       </div>
     </div>
   </UContainer>
@@ -242,43 +106,20 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
+const dashboard = useDashboardHome()
+const contributions = dashboard.contributions
 const toast = useToast()
 const loading = ref(true)
 const activeProvidersCount = ref(0)
 const totalProvidersCount = ref(0)
 const totalModelsCount = ref(0)
-const totalApiCalls = ref(0)
 const protocolCounts = ref<Record<string, number>>({})
 const modelsByProvider = ref<Record<string, number>>({})
 
-const openaiBaseUrl = ref('')
-const claudeBaseUrl = ref('')
-const geminiBaseUrl = ref('')
 const providerDisplayNames = ref<Record<string, string>>({})
-const apiKeys = ref<any[]>([])
-const refreshingKeys = ref(false)
 
 function getProviderDisplayName(providerName: string): string {
   return providerDisplayNames.value[providerName] || providerName
-}
-
-async function loadKeyStats() {
-  refreshingKeys.value = true
-  try {
-    const data = await $fetch('/api/hub/keys')
-    apiKeys.value = (data as any).keys || []
-  } catch (e: any) {
-    if (e?.statusCode === 401) return navigateTo('/login')
-    apiKeys.value = []
-  } finally { refreshingKeys.value = false }
-}
-
-function copyUrl(url: string) {
-  navigator.clipboard.writeText(url).then(() => {
-    toast.add({ title: 'Copied!', description: url, icon: 'i-heroicons-check-circle', color: 'green', timeout: 2000 })
-  }).catch(() => {
-    toast.add({ title: 'Copy failed', description: 'Please copy manually', color: 'red', timeout: 2000 })
-  })
 }
 
 async function loadModels() {
@@ -309,14 +150,10 @@ async function refreshModels() {
 }
 
 onMounted(async () => {
-  const origin = window.location.origin
-  openaiBaseUrl.value = `${origin}/api/openai`
-  claudeBaseUrl.value = `${origin}/api/claude`
-  geminiBaseUrl.value = `${origin}/api/gemini`
   try {
-    const [providersData, statsData] = await Promise.all([
+    const [providersData] = await Promise.all([
       $fetch('/api/hub/providers'),
-      $fetch('/api/hub/stats').catch(() => ({ totalCalls: 0 }))
+      dashboard.load()
     ])
 
     const providers = (providersData as any).providers || []
@@ -327,7 +164,7 @@ onMounted(async () => {
     providers.forEach((p: any) => { nameMap[p.name] = p.display_name || p.name })
     providerDisplayNames.value = nameMap
 
-    totalApiCalls.value = (statsData as any).totalCalls || 0
+    dashboard.commit()
 
     // Calculate protocols
     const pCounts: Record<string, number> = {}
@@ -339,7 +176,7 @@ onMounted(async () => {
     protocolCounts.value = pCounts
 
     await loadModels()
-    loadKeyStats() // non-blocking
+    dashboard.afterLoad() // non-blocking
   } catch (error: any) {
     if (error?.statusCode === 401) return navigateTo('/login')
     console.error('Failed to load dashboard metrics:', error)

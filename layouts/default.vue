@@ -101,16 +101,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 
-const navLinks = [
-  { label: 'Home', to: '/' },
-  { label: 'Models', to: '/models' },
-  { label: 'API Keys', to: '/api-keys' },
-  { label: 'Providers', to: '/providers' },
-  { label: 'Plugins', to: '/plugins' },
-  { label: 'Security', to: '/security' },
-  { label: 'Thinking', to: '/thinking' },
-  { label: 'Chat', to: '/chat' },
-]
+const navLinks = useDashboardNavigation()
 
 const mobileMenuOpen = ref(false)
 const route = useRoute()

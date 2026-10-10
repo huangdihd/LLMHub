@@ -468,6 +468,64 @@ promises cannot be cancelled; late API registration/storage access is rejected,
 but arbitrary external side effects are not reversible. These are consequences
 of the trusted, in-process design, not security isolation guarantees.
 
+## Built-in dashboard contributions
+
+Built-in Nuxt layers own client-side components and pages as well as server
+modules. The client discovery modules under `composables/` use eager
+`builtin/*/dashboard-*.ts` globs; the server catalog is never imported into the
+browser. Add contribution files inside the already registered layer, without
+modifying root pages. These are build-time, trusted Vue components, not the
+runtime plugin iframe contract.
+
+Client contracts live in `shared/dashboard/`:
+
+- `dashboard-navigation.ts`: `DashboardNavigationItem[]` with `label`, `to`,
+  `order`; core links and contributions are sorted by numeric order.
+- `dashboard-provider.ts`: `DashboardProviderExtension` supplies picker metadata,
+  connection and advanced forms, list badges/actions/details, defaults,
+  `edit(form, provider)`, `payload(form)`, optional validation and a per-page
+  `create(context)` session. Sessions own OAuth polling, cancellation and usage
+  state. Unknown/runtime types keep `PluginSchemaForm` and `connectionSchema`.
+- `dashboard-provider-section.ts`: `DashboardProviderSection` contributes common
+  advanced controls plus `defaults`, `edit(form, provider)` and `payload(form)`;
+  CCH normalization uses this path for built-in and runtime provider records.
+- `dashboard-api-key.ts`: `ApiKeyDashboardExtension.create(context)` returns
+  ordered component sections plus optional `load()`, `reset(record?)`,
+  `payload()` lifecycle methods. Slots are badge, summary, meter, details and
+  editor. Symbol-keyed capabilities share the access-control catalog with quota
+  and fallback without teaching the shell policy fields.
+- `dashboard-sections.ts`: `DashboardSectionExtension.create()` returns ordered
+  page sections and optional `load()`, `hydrate(data)`, `decorate(record)` and
+  `payload()`. Models and security keep their orchestration; billing, request
+  limits and SSRF state belong to their respective layers. The existing shared
+  security GET/PUT and stored configuration remain unchanged.
+- `dashboard-home.ts`: home contributions supply ordered endpoint/action/metric/
+  usage components and optional `create()` sessions with `load()`, `commit()`,
+  `afterLoad()` and component-props factories. The ingress layers own endpoint
+  cards and chat action; statistics owns usage data and displays. Commit runs
+  only after all initial requests succeed, retaining the old failure boundary.
+
+Keep reactive state in page sessions, not module singletons. Extract template
+fragments without additional wrapper boxes or attribute fallthrough. Whole-page
+moves preserve filenames: thinking belongs to thinking-policy; the existing
+multi-protocol playground lives with its default OpenAI ingress and retains all
+existing protocol flows. Explicit cross-plugin UI dependencies are allowed for
+these always-on built-ins, just as shared codecs are on the server.
+
+`npm test` includes `tests/dashboard-render.test.mjs`: it compiles original SFCs
+from the pinned pre-split Git commit and current SFCs, supplies identical fixture
+state and UI doubles, and compares SSR HTML after removing Vue comment anchors
+and normalizing whitespace. Coverage includes provider create/edit forms,
+subscription pending/failed login and collapsed/expanded usage, populated key
+editors, security, model ratios, thinking and desktop/mobile navigation. This
+is supplemented by `tests/dashboard-behavior.test.mjs`, which executes both
+versions' scripts to check loading barriers, POST/PUT sequences and payloads,
+plus extension state isolation, catalog reactivity and save failures. Neither
+is a pixel screenshot or browser interaction test: real OAuth, clipboard, popup,
+timers, hydration, responsive layout and actual Nuxt UI dialogs still need
+manual acceptance. `DASHBOARD_BASELINE` may override the source baseline;
+preserve the original commit in repositories used to run this regression test.
+
 ## Management endpoints
 
 All paths below require the existing dashboard session:

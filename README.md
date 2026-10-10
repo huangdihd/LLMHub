@@ -14,6 +14,53 @@ A unified LLM gateway that aggregates multiple LLM providers behind OpenAI, Clau
 
 ## Quick Start
 
+### Install (Linux / macOS)
+
+Install Git, Node (**20.19+ or 22.12+**) and npm first.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/huangdihd/LLMHub/main/install.sh | sh
+```
+
+Rerun to upgrade; local modifications and non-fast-forward updates are refused, and `.data/` is retained. Back up data first. On Linux with systemd, the installer asks via the terminal before writing `/etc/systemd/system/llmhub.service` and enabling/restarting it; only service operations use sudo. It runs as the invoking user (root only if invoked as root). Without consent, privileges, or systemd (including macOS), it prints a manual startup command instead. Manual processes must be stopped/restarted by you. Builds are in-place, not atomic; schedule downtime for upgrades.
+
+All configuration uses environment variables **on `sh`, not on `curl`**:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/huangdihd/LLMHub/main/install.sh | LLMHUB_PORT=8080 LLMHUB_SERVICE=no sh
+```
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `LLMHUB_INSTALL_DIR` | `$HOME/llmhub` | Absolute installation path; letters, digits, `/`, `.`, `_`, `-`, no dot segments |
+| `LLMHUB_SOURCE` | `https://github.com/huangdihd/LLMHub.git` | Git URL or absolute local repository path; reuse on upgrade |
+| `LLMHUB_REF` | `main` | Branch or tag; upgrades must be fast-forward |
+| `LLMHUB_PORT` | `3000` | Listening port |
+| `LLMHUB_HOST` | `127.0.0.1` | Listening address |
+| `LLMHUB_SERVICE` | `auto` | `auto` / `yes`: offer systemd when available; `no`: manual startup |
+| `LLMHUB_DRY_RUN` | `0` | `1`: print plan only, without creating files or running installation commands |
+| `LLMHUB_ACTION` | `install` | `uninstall`: remove this installation's service with confirmation; retain installation and data |
+
+Status/logs: `systemctl status llmhub` / `journalctl -u llmhub -f`. To remove the service, rerun with `LLMHUB_ACTION=uninstall` and the same installation directory. Data remains in `<install-dir>/.data/`; no uninstall operation deletes it. The service captures the current Node executable and PATH; rerun after changing your Node installation.
+
+Open http://127.0.0.1:3000 and set the admin password **before** exposing the service. `LLMHUB_HOST=0.0.0.0` allows external access; use a firewall and TLS, and never expose an uninitialized dashboard.
+
+### Docker
+
+From a checkout of this repository, with Docker Compose installed:
+
+```sh
+docker compose up -d --build
+# Upgrade after updating the checkout:
+# docker compose up -d --build
+```
+
+Visit http://127.0.0.1:3000. `LLMHUB_PORT=8080 docker compose up -d` changes the host port; `LLMHUB_HOST` defaults to `127.0.0.1` (the same public-access warning above applies). The non-root container includes npm and Git for runtime plugins. Data, including writable `.data/plugins/node_modules`, lives in the `llmhub-data` named volume. `docker compose down` removes containers but retains data; **do not add `-v` unless you intend to delete data**. Custom bind mounts must be writable by container UID 1000.
+
+Installation integration test (slow; separate from `npm test`): `node tests/install/run-install.mjs`. It uses temporary local clones, builds twice, probes HTTP endpoints, checks upgrades/data retention and dry-run behavior, then cleans up.
+
+### Development
+
 ```bash
 # Install dependencies
 npm install

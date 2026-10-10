@@ -1,0 +1,12 @@
+services:
+  llmhub:
+    build: .
+    ports:
+      - "${LLMHUB_HOST:-127.0.0.1}:${LLMHUB_PORT:-3000}:3000"
+    volumes:
+      - llmhub-data:/app/.data
+    restart: unless-stopped
+    init: true
+
+volumes:
+  llmhub-data:

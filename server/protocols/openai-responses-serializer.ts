@@ -154,6 +154,11 @@ export class OpenAIResponsesSerializer implements ProtocolSerializer {
     return { event: type, data: { type, ...data, sequence_number: this.sequenceNumber++ } }
   }
 
+  /** Terminal stream error; it shares the stream's sequence numbering like every other event. */
+  errorEvent(message: string, code: string | null = null): ResponsesStreamEvent {
+    return this.event('error', { code, message, param: null })
+  }
+
   startEvents(): ResponsesStreamEvent[] {
     return [
       this.event('response.created', { response: this.buildResponseObject('in_progress', [], null) }),

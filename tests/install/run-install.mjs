@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Standalone, real install/upgrade test: node tests/install/run-install.mjs
 // Requires git, npm, network access for npm ci, and the installer's Node version.
-// Source is committed HEAD, not uncommitted application changes. Only the installer
-// is taken from the working tree. No service is registered and no npm test hook exists.
+// Application source is committed HEAD; installer support scripts are overlaid from
+// the working tree. No service is registered and no npm test hook exists.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { access, cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -151,10 +151,18 @@ try {
   temporaryDirectory = await mkdtemp(join(tmpdir(), 'llmhub-install-test-'))
   const sourceDirectory = join(temporaryDirectory, 'source')
   const installationDirectory = join(temporaryDirectory, 'installation')
-  const committedHead = await run('git', ['rev-parse', 'HEAD'])
+  let committedHead = await run('git', ['rev-parse', 'HEAD'])
   await run('git', ['clone', '--no-local', '--no-checkout', repositoryDirectory, sourceDirectory])
   const sourceOptions = { cwd: sourceDirectory }
   await run('git', ['checkout', '-B', 'install-test', committedHead], sourceOptions)
+  await cp(join(repositoryDirectory, 'scripts'), join(sourceDirectory, 'scripts'), { recursive: true })
+  await run('git', ['add', '--', 'scripts'], sourceOptions)
+  await run('git', [
+    '-c', 'user.name=LLMHub Installation Test', '-c', 'user.email=install-test@example.invalid',
+    '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null',
+    'commit', '--allow-empty', '-m', 'test: current installer support scripts\n\nCo-Authored-By: programmer <noreply@programmer.local>',
+  ], sourceOptions)
+  committedHead = await run('git', ['rev-parse', 'HEAD'], sourceOptions)
   const installerEnvironment = {
     ...process.env,
     LLMHUB_INSTALL_DIR: installationDirectory,
@@ -203,6 +211,16 @@ try {
   assert.equal(await readFile(dataPath, 'utf8'), dataMarker)
   await access(join(installationDirectory, '.output/server/index.mjs'))
   await checkServer(installationDirectory)
+
+  console.log('== switched release and supervisor ownership refuse in-place rebuilds ==')
+  const updateDirectory = join(installationDirectory, '.data/updates')
+  await writeFile(join(updateDirectory, 'current.json'), JSON.stringify({ directory: installationDirectory }))
+  assert.match(await install({}, true), /has switched releases/)
+  await rm(join(updateDirectory, 'current.json'))
+  await mkdir(join(updateDirectory, 'supervisor.lock'))
+  assert.match(await install({}, true), /Supervisor owns/)
+  await rm(join(updateDirectory, 'supervisor.lock'), { recursive: true })
+  assert.equal(await readFile(dataPath, 'utf8'), dataMarker)
 
   console.log('== dirty tracked worktree is refused without losing changes ==')
   const dirtyMarker = 'Local modification that must not be overwritten\n'

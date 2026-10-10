@@ -75,6 +75,9 @@
       </UContainer>
     </nav>
     <slot />
+    <UContainer v-if="authenticated" class="max-w-5xl pb-6 text-center">
+      <SystemVersion />
+    </UContainer>
   </div>
 </template>
 

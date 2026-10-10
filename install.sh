@@ -8,7 +8,7 @@ llmhub_install() (
     progress() { step=$1; printf '\n==> %s\n' "$step"; }
     directory=${LLMHUB_INSTALL_DIR:-"$HOME/llmhub"}
     source=${LLMHUB_SOURCE:-https://github.com/huangdihd/LLMHub.git}
-    reference=${LLMHUB_REF:-main}
+    reference=${LLMHUB_REF:-auto-stable}
     port=${LLMHUB_PORT:-3000}
     host=${LLMHUB_HOST:-127.0.0.1}
     service=${LLMHUB_SERVICE:-auto}
@@ -25,6 +25,7 @@ llmhub_install() (
     case "$action" in install|uninstall) ;; *) fail 'LLMHUB_ACTION must be install or uninstall.' ;; esac
     case "$dry_run" in 0|1) ;; *) fail 'LLMHUB_DRY_RUN must be 0 or 1.' ;; esac
     case "$reference" in ''|-*) fail 'Invalid branch/tag.' ;; esac
+    case "$source" in ''|-*) fail 'Invalid source.' ;; esac
     if [ "$dry_run" = 1 ]; then
         printf 'DRY RUN: action=%s directory=%s source=%s ref=%s host=%s port=%s service=%s\n' "$action" "$directory" "$source" "$reference" "$host" "$port" "$service"
         if [ "$action" = install ]; then
@@ -69,6 +70,24 @@ llmhub_install() (
     done
     # The same range the locked Nuxt, Nitro and Vite declare: ^20.19.0 || >=22.12.0.
     node -e 'const [major, minor] = process.versions.node.split(".").map(Number); const ok = (major === 20 && minor >= 19) || (major === 22 && minor >= 12) || major > 22; if (!ok) process.exit(1)' || fail "Node 20.19+ or 22.12+ is required; found $(node -v). Install a current LTS release, then rerun."
+    if [ "$reference" = auto-stable ]; then
+        progress 'select highest stable release (main if none)'
+        remote_tags=$(git ls-remote --tags --refs -- "$source") || fail 'Cannot list release tags; refusing an unverified fallback.'
+        reference=$(printf '%s\n' "$remote_tags" | node -e '
+            let input = "";
+            process.stdin.on("data", chunk => { input += chunk });
+            process.stdin.on("end", () => {
+                const tags = input.split("\n").map(line => line.split("refs/tags/")[1]).filter(tag => /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(tag));
+                tags.sort((left, right) => {
+                    const first = left.slice(1).split(".").map(BigInt);
+                    const second = right.slice(1).split(".").map(BigInt);
+                    for (let index = 0; index < 3; index++) if (first[index] !== second[index]) return first[index] > second[index] ? -1 : 1;
+                    return 0;
+                });
+                console.log(tags[0] || "main");
+            });
+        ')
+    fi
     git check-ref-format "refs/heads/$reference" >/dev/null || fail 'Invalid branch/tag name.'
     node_path=$(command -v node)
     service_ready=no
@@ -79,6 +98,8 @@ llmhub_install() (
     progress 'clone or update repository'
     if [ -e "$directory" ]; then
         [ -d "$directory/.git" ] || fail 'Install directory exists but is not a Git checkout; choose another directory.'
+        [ ! -e "$directory/.data/updates/supervisor.lock" ] || fail 'Supervisor owns this installation; use dashboard updates or stop it before rerunning the installer.'
+        [ ! -e "$directory/.data/updates/current.json" ] || fail 'This installation has switched releases; use dashboard updates. Rebuilding the original checkout would not update the active release.'
         [ -z "$(git -C "$directory" status --porcelain --untracked-files=all)" ] || fail 'Local changes found. Commit/stash or remove them yourself before upgrading; nothing overwritten.'
         [ "$(git -C "$directory" remote get-url origin)" = "$source" ] || fail 'Clone source differs from origin; use the original LLMHUB_SOURCE.'
         if git -C "$directory" fetch origin "refs/heads/$reference:refs/remotes/origin/$reference"; then
@@ -94,10 +115,11 @@ llmhub_install() (
         git clone --branch "$reference" -- "$source" "$directory"
     fi
     cd "$directory"
-    progress 'install dependencies'
-    npm ci --include=dev
-    progress 'build production application'
-    NITRO_PRESET=node-server npm run build
+    progress 'initialize release supervisor'
+    [ -f scripts/release-build.mjs ] && [ -f scripts/update-supervisor.mjs ] || fail 'Selected release predates supervised installation; select a release containing scripts/release-build.mjs or set LLMHUB_REF=main.'
+    LLMHUB_INSTALL_DIR="$directory" node scripts/update-supervisor.mjs --initialize
+    progress 'install dependencies and build production application'
+    node scripts/release-build.mjs "$directory"
     progress 'configure service or manual startup'
     if [ "$service_ready" = yes ] && consent 'install service file; systemctl daemon-reload; systemctl enable llmhub; systemctl restart llmhub'; then
         case "$node_path:$PATH" in *[!a-zA-Z0-9_./:-]*) fail 'PATH contains unsupported systemd characters; use LLMHUB_SERVICE=no.' ;; esac
@@ -112,10 +134,13 @@ After=network.target
 Type=simple
 User=$(id -un)
 WorkingDirectory=$directory
-ExecStart=$node_path $directory/.output/server/index.mjs
-Environment="NODE_ENV=production" "HOST=$host" "PORT=$port" "PATH=$PATH"
+ExecStart=$node_path $directory/scripts/update-supervisor.mjs
+Environment="NODE_ENV=production" "HOST=$host" "PORT=$port" "PATH=$PATH" "LLMHUB_DEPLOYMENT=service" "LLMHUB_INSTALL_DIR=$directory"
 Restart=on-failure
 RestartSec=5
+# Let the supervisor stop its detached child before systemd's final group cleanup.
+KillMode=mixed
+TimeoutStopSec=30
 UMask=0077
 [Install]
 WantedBy=multi-user.target

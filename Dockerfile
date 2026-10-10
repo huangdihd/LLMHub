@@ -2,6 +2,8 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY . .
+ARG LLMHUB_BUILD_COMMIT=""
+ENV LLMHUB_BUILD_COMMIT=$LLMHUB_BUILD_COMMIT LLMHUB_BUILD_DEPLOYMENT=docker
 RUN npm ci --include=dev && NITRO_PRESET=node-server npm run build
 
 FROM node:22-bookworm-slim AS runtime

@@ -5,6 +5,8 @@
       <component v-for="(contribution, index) in contributions.filter(item => item.action)" :is="contribution.action" :key="index" />
     </PageHeader>
 
+    <SystemUpdateNotice />
+
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <component v-for="(contribution, index) in contributions.filter(item => item.metric)" :is="contribution.metric" :key="index" :loading="loading" v-bind="contribution.metricProps()" />
       <StatCard icon="i-heroicons-server-stack" tone="blue" label="Providers" :value="activeProvidersCount" :hint="totalProvidersCount > activeProvidersCount ? `of ${totalProvidersCount} enabled` : undefined" :loading="loading" />

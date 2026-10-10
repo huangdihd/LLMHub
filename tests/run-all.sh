@@ -24,6 +24,7 @@ npx tsc .nuxt/types/nitro-imports.d.ts \
   server/middleware/ingress-auth.ts \
   server/plugins-runtime/manager.ts server/plugins-runtime/manifest.ts server/plugins-runtime/market.ts \
   server/api/hub/plugin-contributions/*.ts \
+  server/system/*.ts server/api/hub/system/*.ts server/plugins/system-updates.ts \
   --rootDir . --outDir "$BUILD_DIR" \
   --module commonjs --target es2022 --moduleResolution node \
   --esModuleInterop --skipLibCheck --resolveJsonModule --rewriteRelativeImportExtensions
@@ -58,7 +59,7 @@ done
 
 echo ""
 echo "== dashboard behavior =="
-node --test tests/dashboard-behavior.test.mjs tests/subscription-usage.test.mjs tests/official-plugins.test.mjs || FAIL=1
+node --test tests/dashboard-behavior.test.mjs tests/subscription-usage.test.mjs tests/official-plugins.test.mjs tests/system-update-ui.test.mjs tests/install/update-supervisor.test.mjs || FAIL=1
 
 echo ""
 if [ "$FAIL" = "1" ]; then

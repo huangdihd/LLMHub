@@ -16,7 +16,10 @@ itself.
   (`server/core/pipeline.ts`);
 - the plugin manager (`server/plugins-runtime/`);
 - storage, admin login and sessions, and identifying which API key a request
-  carries.
+  carries;
+- host version/release management (`server/system/`) and its authenticated
+  dashboard endpoints. This manages the application process and build artifacts,
+  not request behaviour, and must remain independent of concrete plugins.
 
 **The core never imports a built-in plugin and never names a specific
 protocol, upstream or policy.** If you find yourself adding

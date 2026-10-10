@@ -34,7 +34,7 @@ curl -fsSL https://raw.githubusercontent.com/huangdihd/LLMHub/main/install.sh | 
 | --- | --- | --- |
 | `LLMHUB_INSTALL_DIR` | `$HOME/llmhub` | Absolute installation path; letters, digits, `/`, `.`, `_`, `-`, no dot segments |
 | `LLMHUB_SOURCE` | `https://github.com/huangdihd/LLMHub.git` | Git URL or absolute local repository path; reuse on upgrade |
-| `LLMHUB_REF` | `main` | Branch or tag; upgrades must be fast-forward |
+| `LLMHUB_REF` | Latest stable `vX.Y.Z` tag, or `main` if none exist | Explicit branch or tag override; upgrades must be fast-forward |
 | `LLMHUB_PORT` | `3000` | Listening port |
 | `LLMHUB_HOST` | `127.0.0.1` | Listening address |
 | `LLMHUB_SERVICE` | `auto` | `auto` / `yes`: offer systemd when available; `no`: manual startup |
@@ -57,7 +57,13 @@ docker compose up -d --build
 
 Visit http://127.0.0.1:3000. `LLMHUB_PORT=8080 docker compose up -d` changes the host port; `LLMHUB_HOST` defaults to `127.0.0.1` (the same public-access warning above applies). The non-root container includes npm and Git for runtime plugins. Data, including writable `.data/plugins/node_modules`, lives in the `llmhub-data` named volume. `docker compose down` removes containers but retains data; **do not add `-v` unless you intend to delete data**. Custom bind mounts must be writable by container UID 1000.
 
-Installation integration test (slow; separate from `npm test`): `node tests/install/run-install.mjs`. It uses temporary local clones, builds twice, probes HTTP endpoints, checks upgrades/data retention and dry-run behavior, then cleans up.
+The dashboard footer shows the built version and commit and links to **System updates**. Release detection uses `git ls-remote --tags`, first after one minute and then every six hours; prereleases are ignored, and no tags means there is no comparable release. Automatic **checks** can be disabled persistently there; manual checks still work. Checks never install anything automatically. `LLMHUB_UPDATE_REPOSITORY` overrides the check source; otherwise installer checkouts use their origin and other deployments use the official repository.
+
+Installer-managed system services support confirmed one-click updates from their recorded official origin. A separate, unprivileged supervisor downloads a sibling checkout, runs the same dependency-install/build routine as the installer, then switches only after a successful build. Failed startup/readiness rolls back to the previous build. `.data/` stays in place, local modifications block updates, and one previous release is retained. Restarts briefly interrupt requests; back up data first (data/schema changes cannot be rolled back). Manual and Docker deployments show copyable upgrade commands instead. Older installations must rerun the installer once to adopt the new service definition. A running supervisor or an installation that has switched releases blocks in-place installer reruns. The supervisor itself stays in the initial checkout; changing its implementation requires a planned service maintenance operation. After an unclean supervisor shutdown, verify its lock owner is no longer running before removing `.data/updates/supervisor.lock`.
+
+Maintainers publish by updating the root `package.json` version (and lockfile metadata), committing the tested release, and pushing a matching stable tag such as `v1.2.0`; use a GitHub release page for notes. Tags, not changes on `main`, trigger update notices. Release tags must be immutable, contain the supervised installer scripts, and match the package version. Docker builds accept `--build-arg LLMHUB_BUILD_COMMIT=<full-sha>` when `.git` is absent.
+
+Installation integration tests (slow; separate from `npm test`): `node tests/install/run-install.mjs` and `node tests/install/run-update.mjs`. They use disposable local repositories and real builds/HTTP endpoints, cover installation/data retention plus successful updates, build failure and startup-crash rollback, and clean up without registering system services.
 
 ### Development
 

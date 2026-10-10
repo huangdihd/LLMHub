@@ -55,6 +55,7 @@ const html = computed(() => markdown.parse(props.source || '') as string)
 }
 .dark .plugin-readme code { background: rgb(31 41 55); }
 .plugin-readme pre { background: rgb(17 24 39); color: rgb(229 231 235); padding: 12px 14px; border-radius: 8px; overflow-x: auto; }
+.dark .plugin-readme pre { background: rgb(3 7 18); }
 .plugin-readme pre code, .dark .plugin-readme pre code { background: transparent; padding: 0; font-size: 0.8rem; }
 .plugin-readme blockquote { border-left: 3px solid rgb(209 213 219); padding-left: 12px; color: rgb(107 114 128); }
 .dark .plugin-readme blockquote { border-left-color: rgb(75 85 99); color: rgb(156 163 175); }

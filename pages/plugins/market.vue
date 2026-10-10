@@ -149,7 +149,7 @@
               <USelect v-model="version" class="w-40" :options="versionOptions" />
               <div class="flex items-center gap-3">
                 <NuxtLink v-if="detail.installed && detail.pluginId" :to="`/plugins/${encodeURIComponent(detail.pluginId)}`" class="text-sm text-primary-600 dark:text-primary-400 hover:underline">Configure</NuxtLink>
-                <UButton :disabled="action.disabled" @click="confirming = true; installError = ''">{{ action.label }}</UButton>
+                <UButton :color="action.disabled ? 'gray' : 'primary'" :variant="action.disabled ? 'soft' : 'solid'" :disabled="action.disabled" @click="confirming = true; installError = ''">{{ action.label }}</UButton>
               </div>
             </div>
           </div>

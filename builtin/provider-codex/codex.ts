@@ -9,7 +9,7 @@ import type {
 } from '../../server/core/types'
 import { ResponsesCodec } from '../provider-openai/responses-codec'
 import { fetchWithRetry } from '../../server/utils/fetch'
-import { toResponsesFormat } from '../../server/utils/structured-output'
+import { toResponsesFormat } from '../shared/structured-output'
 import { extractChatGptAccountId } from './codex-auth'
 import { ensureCodexAccessToken } from './codex-token-manager'
 import { consumeSubscriptionResetCredit } from '../../server/services/subscription-usage'

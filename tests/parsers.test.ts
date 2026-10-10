@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
-import { OpenAIChatParser } from '../server/protocols/openai-chat.ts'
-import { ClaudeMessagesParser } from '../server/protocols/claude-messages.ts'
-import { ClaudeMessagesSerializer } from '../server/protocols/claude-messages-serializer.ts'
+import { OpenAIChatParser } from '../builtin/ingress-openai/openai-chat.ts'
+import { ClaudeMessagesParser } from '../builtin/ingress-claude/claude-messages.ts'
+import { ClaudeMessagesSerializer } from '../builtin/ingress-claude/claude-messages-serializer.ts'
 
 let passed = 0
 function test(name: string, fn: () => void) {

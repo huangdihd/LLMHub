@@ -145,8 +145,8 @@ await test('provider responses hide OAuth identifiers and expose the AI Credits 
   assert.equal('account_email' in sanitized.connection, false)
 })
 
-const { ClaudeMessagesParser } = require(`${buildDir}/protocols/claude-messages.js`)
-const { ClaudeMessagesSerializer } = require(`${buildDir}/protocols/claude-messages-serializer.js`)
+const { ClaudeMessagesParser } = require(`${buildDir}/../builtin/ingress-claude/claude-messages.js`)
+const { ClaudeMessagesSerializer } = require(`${buildDir}/../builtin/ingress-claude/claude-messages-serializer.js`)
 
 console.log('antigravity adapter')
 

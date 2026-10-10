@@ -1,6 +1,6 @@
 import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock, EmbeddingRequest, EmbeddingResponse } from '../../server/core/types'
 import { fetchWithRetry } from '../../server/utils/fetch'
-import { toChatResponseFormat } from '../../server/utils/structured-output'
+import { toChatResponseFormat } from '../shared/structured-output'
 
 export class OpenAIAdapter implements ProviderAdapter {
   name = 'openai'

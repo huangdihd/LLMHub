@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import { OpenAICompletionSerializer } from '../server/protocols/openai-completion-serializer.ts'
-import { OpenAICompletionParser } from '../server/protocols/openai-completion.ts'
+import { OpenAICompletionSerializer } from '../builtin/ingress-openai/openai-completion-serializer.ts'
+import { OpenAICompletionParser } from '../builtin/ingress-openai/openai-completion.ts'
 
 let passed = 0
 function test(name: string, fn: () => void) {

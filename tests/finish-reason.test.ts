@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { OpenAIChatSerializer } from '../server/protocols/openai-chat-serializer.ts'
-import { ClaudeMessagesSerializer } from '../server/protocols/claude-messages-serializer.ts'
+import { OpenAIChatSerializer } from '../builtin/ingress-openai/openai-chat-serializer.ts'
+import { ClaudeMessagesSerializer } from '../builtin/ingress-claude/claude-messages-serializer.ts'
 
 // Adapters use TS parameter properties (not strip-only compatible),
 // so they are precompiled by tests/run-all.sh into $ADAPTER_BUILD.

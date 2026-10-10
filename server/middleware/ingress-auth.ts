@@ -1,25 +1,25 @@
 import { getHeader } from 'h3'
 import { getAuthStore } from '../stores/auth.store'
 import { requestHooks, type AdmissionContext } from '../core/hooks'
-import { extractIngressKey, ingressModel, ingressProtocol, missingKeyMessage, sendAdmissionError } from '../protocols/admission'
+import { ingressRegistry } from '../core/ingress-registry'
 
 export default defineEventHandler(async event => {
-  const protocol = ingressProtocol(event)
-  if (!protocol) return
+  const ingress = ingressRegistry.match(event.path)
+  if (!ingress) return
 
   const store = getAuthStore()
-  const plainKey = extractIngressKey(event, protocol)
-  const context: AdmissionContext = { event, incomingProtocol: protocol, model: '' }
+  const plainKey = ingress.extractKey(event)
+  const context: AdmissionContext = { event, incomingProtocol: ingress.id, model: '' }
   if (event.method === 'POST') {
     const rejection = await requestHooks.admission('onBeforeIdentity', context)
-    if (rejection) return sendAdmissionError(event, rejection)
+    if (rejection) return ingress.sendError(event, rejection)
   }
 
   let record = null
   if (!plainKey) {
     const token = getCookie(event, 'llmhub_session') || ''
     if (!token || !await store.validateSession(token)) {
-      return sendAdmissionError(event, { status: 401, message: missingKeyMessage(protocol), code: 'invalid_api_key' })
+      return ingress.sendError(event, { status: 401, message: ingress.missingKeyMessage, code: 'invalid_api_key' })
     }
     const impersonateId = getHeader(event, 'X-LLMHub-Key-ID')
     if (impersonateId) record = await store.getKeyById(impersonateId)
@@ -35,20 +35,20 @@ export default defineEventHandler(async event => {
     }
   } else {
     record = await store.getKeyRecord(plainKey)
-    if (!record) return sendAdmissionError(event, { status: 401, message: 'Invalid API Key', code: 'invalid_api_key' })
+    if (!record) return ingress.sendError(event, { status: 401, message: 'Invalid API Key', code: 'invalid_api_key' })
   }
 
   context.apiKeyRecord = record
   if (event.method === 'POST') {
     const rejection = await requestHooks.admission('onAfterIdentity', context)
-    if (rejection) return sendAdmissionError(event, rejection)
-    const source = await ingressModel(event, protocol)
+    if (rejection) return ingress.sendError(event, rejection)
+    const source = await ingress.extractModel(event)
     context.model = source.model
     if (context.model) {
       const modelRejection = await requestHooks.admission('onModelResolved', context)
       // Body fallback rewrites historically remain visible even when access fails.
-      if (protocol !== 'gemini') source.replace(context.model)
-      if (modelRejection) return sendAdmissionError(event, modelRejection)
+      if (ingress.rewriteBeforeRejection) source.replace(context.model)
+      if (modelRejection) return ingress.sendError(event, modelRejection)
     }
     source.replace(context.model)
   }

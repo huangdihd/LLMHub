@@ -23,6 +23,7 @@
             <p class="text-sm text-gray-500">{{ plugin.id }} · {{ plugin.manifest?.version || 'Unknown version' }}</p>
             <p v-if="plugin.manifest?.description" class="mt-2 text-sm">{{ plugin.manifest?.description }}</p>
             <p class="mt-2 text-xs text-gray-500">Providers: {{ plugin.providers.join(', ') || 'None' }} · Hooks: {{ plugin.hooks.join(', ') || 'None' }}</p>
+            <p v-if="plugin.protocols?.length || plugin.ingresses?.length" class="mt-1 text-xs text-gray-500">Protocols: {{ plugin.protocols?.join(', ') || 'None' }} · Ingresses: {{ plugin.ingresses?.join(', ') || 'None' }}</p>
             <p v-if="plugin.error" class="mt-2 text-sm text-red-500">{{ plugin.error }}</p>
           </div>
           <div v-if="!plugin.builtin" class="flex flex-wrap items-start gap-2">

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { OpenAIResponsesParser } from '../server/protocols/openai-responses.ts'
-import { ClaudeMessagesParser } from '../server/protocols/claude-messages.ts'
+import { OpenAIResponsesParser } from '../builtin/ingress-openai/openai-responses.ts'
+import { ClaudeMessagesParser } from '../builtin/ingress-claude/claude-messages.ts'
 
 const require = createRequire(import.meta.url)
 const buildDir = process.env.ADAPTER_BUILD
@@ -10,7 +10,7 @@ if (!buildDir) throw new Error('ADAPTER_BUILD is required')
 const { OpenAIAdapter } = require(`${buildDir}/../builtin/provider-openai/openai.js`)
 const { ClaudeAdapter } = require(`${buildDir}/../builtin/provider-claude/claude.js`)
 const { GeminiAdapter } = require(`${buildDir}/../builtin/provider-gemini/gemini.js`)
-const { GeminiGenerateParser } = require(`${buildDir}/protocols/gemini-generate.js`)
+const { GeminiGenerateParser } = require(`${buildDir}/../builtin/ingress-gemini/gemini-generate.js`)
 
 const dummyConfig = {
   name: 'test',

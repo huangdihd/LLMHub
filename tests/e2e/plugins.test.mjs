@@ -72,6 +72,27 @@ try {
       assert.equal(response.ok, false, `${id} must remain read-only`)
     }
   }
+  for (const [family, protocols] of [
+    ['openai', ['openai-chat', 'openai-completion', 'openai-responses']],
+    ['claude', ['claude-messages', 'claude-completion']],
+    ['gemini', ['gemini-generate']]
+  ]) {
+    const id = `ingress-${family}`
+    const builtin = before.find(plugin => plugin.id === id)
+    assert.equal(builtin?.builtin, true)
+    assert.equal(builtin.enabled, true)
+    assert.deepEqual(builtin.ingresses, [family])
+    assert.deepEqual(builtin.protocols, protocols)
+    assert.deepEqual(builtin.providers, [])
+    assert.deepEqual(builtin.hooks, [])
+    for (const [method, suffix] of [['POST', '/enable'], ['POST', '/disable'], ['DELETE', '']]) {
+      const response = await fetch(`${gateway}/api/hub/plugins/${id}${suffix}`, {
+        method, headers: { cookie: `llmhub_session=${session}` }
+      })
+      assert.equal(response.ok, false, `${id} must remain read-only`)
+    }
+  }
+  console.log('  ok - three builtin ingress plugins retain protocol IDs and reject lifecycle mutations')
   // Missing session probes exercise built layer routes without contacting OAuth upstreams.
   for (const [flow, action, label] of [['codex', 'poll', 'ChatGPT'], ['claude', 'complete', 'Claude'], ['antigravity', 'complete', 'Antigravity']]) {
     const response = await fetch(`${gateway}/api/hub/providers/${flow}-login/${session}/${action}`, {

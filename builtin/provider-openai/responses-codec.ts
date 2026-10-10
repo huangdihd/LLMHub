@@ -1,5 +1,5 @@
 import type { Content, ContentBlock, LLMRequest, LLMResponse, LLMStreamChunk, ProviderConfig, ToolCall } from '../../server/core/types'
-import { toResponsesFormat } from '../../server/utils/structured-output'
+import { toResponsesFormat } from '../shared/structured-output'
 
 // Lifecycle and full-text mirrors are deliberately ignored after their deltas.
 const ignoredResponseEvents = new Set([

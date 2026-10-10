@@ -5,9 +5,9 @@ import { test } from 'node:test'
 import ts from 'typescript'
 
 const routes = {
-  openai: 'server/api/openai/models.get.ts',
-  claude: 'server/api/claude/v1/models.get.ts',
-  gemini: 'server/api/gemini/[version]/models.get.ts'
+  openai: 'builtin/ingress-openai/server/api/openai/models.get.ts',
+  claude: 'builtin/ingress-claude/server/api/claude/v1/models.get.ts',
+  gemini: 'builtin/ingress-gemini/server/api/gemini/[version]/models.get.ts'
 } as const
 const timestamp = '2026-01-02T03:04:05.000Z'
 const capabilities = { tools: true, vision: false, streaming: true }

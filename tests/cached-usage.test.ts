@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { OpenAIChatSerializer } from '../server/protocols/openai-chat-serializer.ts'
-import { OpenAICompletionSerializer } from '../server/protocols/openai-completion-serializer.ts'
-import { OpenAIResponsesSerializer } from '../server/protocols/openai-responses-serializer.ts'
-import { ClaudeMessagesSerializer } from '../server/protocols/claude-messages-serializer.ts'
+import { OpenAIChatSerializer } from '../builtin/ingress-openai/openai-chat-serializer.ts'
+import { OpenAICompletionSerializer } from '../builtin/ingress-openai/openai-completion-serializer.ts'
+import { OpenAIResponsesSerializer } from '../builtin/ingress-openai/openai-responses-serializer.ts'
+import { ClaudeMessagesSerializer } from '../builtin/ingress-claude/claude-messages-serializer.ts'
 
 const require = createRequire(import.meta.url)
 const buildDir = process.env.ADAPTER_BUILD
@@ -15,7 +15,7 @@ const { OpenAIAdapter } = require(`${buildDir}/../builtin/provider-openai/openai
 const { ClaudeAdapter } = require(`${buildDir}/../builtin/provider-claude/claude.js`)
 const { GeminiAdapter } = require(`${buildDir}/../builtin/provider-gemini/gemini.js`)
 const { CodexAdapter } = require(`${buildDir}/../builtin/provider-codex/codex.js`)
-const { GeminiGenerateSerializer } = require(`${buildDir}/protocols/gemini-generate-serializer.js`)
+const { GeminiGenerateSerializer } = require(`${buildDir}/../builtin/ingress-gemini/gemini-generate-serializer.js`)
 
 let passed = 0
 function test(name: string, fn: () => void) {

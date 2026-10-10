@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
-import { OpenAIResponsesParser } from '../server/protocols/openai-responses.ts'
+import { OpenAIResponsesParser } from '../builtin/ingress-openai/openai-responses.ts'
 import { formatErrorResponse } from '../server/utils/error.ts'
 
 const require = createRequire(import.meta.url)

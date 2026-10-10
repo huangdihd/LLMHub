@@ -10,7 +10,7 @@ import type {
   EmbeddingResponse
 } from '../../server/core/types'
 import { fetchWithRetry } from '../../server/utils/fetch'
-import { toClaudeOutputFormat } from '../../server/utils/structured-output'
+import { toClaudeOutputFormat } from '../shared/structured-output'
 
 export class ClaudeAdapter implements ProviderAdapter {
   name = 'claude'

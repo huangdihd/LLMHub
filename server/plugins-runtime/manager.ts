@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto'
 import type { H3Event } from 'h3'
 import type { ProviderDefinition, ProviderRegistry } from '../core/registry'
 import type { RequestHook, HookRegistry } from '../core/hooks'
+import { ProtocolRegistry, type ProtocolDefinition } from '../core/protocol-registry'
+import { IngressRegistry, type IngressDefinition } from '../core/ingress-registry'
 import type { PluginManifest, PluginRecord } from '../../shared/types/plugin'
 import { PluginError, safePath, validatePath, validateId, validateManifest, validateFields, validateConfiguration } from './manifest'
 
@@ -19,6 +21,8 @@ type RouteHandler = (event: H3Event) => unknown | Promise<unknown>
 export interface PluginAPI {
   readonly config: Readonly<Record<string, unknown>>
   registerProvider(definition: ProviderDefinition): void
+  registerProtocol(definition: ProtocolDefinition): void
+  registerIngress(definition: IngressDefinition): void
   registerHook(hook: RequestHook): void
   registerRoute(method: string, path: string, handler: RouteHandler): void
   onConfigChange(listener: (configuration: Readonly<Record<string, unknown>>) => void | Promise<void>): void
@@ -47,6 +51,8 @@ interface Runtime {
   unregister: Cleanup[]
   cleanup?: Cleanup
   providers: string[]
+  protocols: string[]
+  ingresses: string[]
   hooks: string[]
   routes: Map<string, RouteHandler>
   listeners: Array<(configuration: Readonly<Record<string, unknown>>) => void | Promise<void>>
@@ -59,6 +65,8 @@ export interface PluginManagerOptions {
   storage: PluginStorage
   providerRegistry: ProviderRegistry
   hookRegistry: HookRegistry
+  protocolRegistry?: ProtocolRegistry
+  ingressRegistry?: IngressRegistry
   timeoutMs?: number
   cleanupTimeoutMs?: number
   onRegistryChange?: () => void
@@ -67,12 +75,16 @@ const importModule = new Function('url', 'return import(url)') as (url: string) 
 
 export class PluginManager {
   private readonly options: PluginManagerOptions
+  private readonly protocolRegistry: ProtocolRegistry
+  private readonly ingressRegistry: IngressRegistry
   private readonly directory: string
   private readonly plugins = new Map<string, InstalledPlugin>()
   private readonly queues = new Map<string, Promise<unknown>>()
 
   constructor(options: PluginManagerOptions) {
     this.options = options
+    this.protocolRegistry = options.protocolRegistry ?? new ProtocolRegistry()
+    this.ingressRegistry = options.ingressRegistry ?? new IngressRegistry()
     this.directory = resolve(options.directory ?? options.rootDirectory ?? '.data/plugins')
   }
 
@@ -113,7 +125,8 @@ export class PluginManager {
   list(): PluginRecord[] {
     const runtimePlugins: PluginRecord[] = [...this.plugins.values()].map(plugin => ({ id: plugin.manifest.id, manifest: structuredClone(plugin.manifest),
       enabled: plugin.enabled, status: plugin.error ? 'error' : plugin.enabled ? 'enabled' : plugin.installed ? 'installed' : 'disabled', error: plugin.error,
-      providers: [...(plugin.runtime?.providers ?? [])], hooks: [...(plugin.runtime?.hooks ?? [])] }))
+      providers: [...(plugin.runtime?.providers ?? [])], hooks: [...(plugin.runtime?.hooks ?? [])],
+      protocols: [...(plugin.runtime?.protocols ?? [])], ingresses: [...(plugin.runtime?.ingresses ?? [])] }))
     return [...(this.options.builtinPlugins?.() ?? []), ...runtimePlugins]
   }
 
@@ -226,7 +239,7 @@ export class PluginManager {
 
   private async start(plugin: InstalledPlugin): Promise<void> {
     if (plugin.invalid) throw new PluginError('Invalid plugin manifest, configuration, or path')
-    const runtime: Runtime = { accepting: true, active: true, unregister: [], providers: [], hooks: [], routes: new Map(), listeners: [] }
+    const runtime: Runtime = { accepting: true, active: true, unregister: [], providers: [], protocols: [], ingresses: [], hooks: [], routes: new Map(), listeners: [] }
     plugin.runtime = runtime
     const assertRegistration = () => { if (!runtime.accepting || !runtime.active) throw new PluginError('Plugin registration is closed') }
     const prefix = (id: string) => {
@@ -248,6 +261,18 @@ export class PluginManager {
         const secretConnectionFields = [...new Set([...(definition.secretConnectionFields ?? []), ...connectionSchema.filter(field => field.type === 'secret').map(field => `extra.${field.key}`)])]
         runtime.unregister.push(this.options.providerRegistry.register({ ...definition, id, connectionSchema, secretConnectionFields }))
         runtime.providers.push(id)
+      },
+      registerProtocol: definition => {
+        assertRegistration()
+        const id = prefix(definition.id)
+        runtime.unregister.push(this.protocolRegistry.register({ ...definition, id }))
+        runtime.protocols.push(id)
+      },
+      registerIngress: definition => {
+        assertRegistration()
+        const id = prefix(definition.id)
+        runtime.unregister.push(this.ingressRegistry.register({ ...definition, id }))
+        runtime.ingresses.push(id)
       },
       registerHook: hook => {
         assertRegistration()

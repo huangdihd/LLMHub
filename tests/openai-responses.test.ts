@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import { OpenAIResponsesParser } from '../server/protocols/openai-responses.ts'
-import { OpenAIResponsesSerializer } from '../server/protocols/openai-responses-serializer.ts'
+import { OpenAIResponsesParser } from '../builtin/ingress-openai/openai-responses.ts'
+import { OpenAIResponsesSerializer } from '../builtin/ingress-openai/openai-responses-serializer.ts'
 
 let passed = 0
 function test(name: string, fn: () => void) {

@@ -10,8 +10,8 @@ if (!buildDir) {
   process.exit(1)
 }
 const { GeminiAdapter } = require(`${buildDir}/../builtin/provider-gemini/gemini.js`)
-const { GeminiGenerateParser } = require(`${buildDir}/protocols/gemini-generate.js`)
-const { GeminiGenerateSerializer } = require(`${buildDir}/protocols/gemini-generate-serializer.js`)
+const { GeminiGenerateParser } = require(`${buildDir}/../builtin/ingress-gemini/gemini-generate.js`)
+const { GeminiGenerateSerializer } = require(`${buildDir}/../builtin/ingress-gemini/gemini-generate-serializer.js`)
 
 let passed = 0
 function test(name: string, fn: () => void) {

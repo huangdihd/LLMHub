@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createRequire } from 'node:module'
-import { OpenAIResponsesParser } from '../server/protocols/openai-responses.ts'
-import { OpenAIChatParser } from '../server/protocols/openai-chat.ts'
-import { ClaudeMessagesParser } from '../server/protocols/claude-messages.ts'
-import { OpenAIResponsesSerializer } from '../server/protocols/openai-responses-serializer.ts'
-import { toResponsesFormat, toChatResponseFormat, toClaudeOutputFormat, toGeminiOutputConfig, parseGeminiOutputConfig } from '../server/utils/structured-output.ts'
+import { OpenAIResponsesParser } from '../builtin/ingress-openai/openai-responses.ts'
+import { OpenAIChatParser } from '../builtin/ingress-openai/openai-chat.ts'
+import { ClaudeMessagesParser } from '../builtin/ingress-claude/claude-messages.ts'
+import { OpenAIResponsesSerializer } from '../builtin/ingress-openai/openai-responses-serializer.ts'
+import { toResponsesFormat, toChatResponseFormat, toClaudeOutputFormat, toGeminiOutputConfig, parseGeminiOutputConfig } from '../builtin/shared/structured-output.ts'
 
 const schema = { type: 'object', properties: { memory_ids: { type: 'array', items: { type: 'string' } } }, required: ['memory_ids'], additionalProperties: false }
 const format = { type: 'json_schema' as const, name: 'memory_selection', description: 'Selected memories', strict: true, schema }
@@ -43,7 +43,7 @@ test('Claude format and effort coexist; native schema maps without alteration', 
 test('Gemini native schema dialects and JSON mode round-trip', () => {
   const require = createRequire(import.meta.url)
   assert.ok(process.env.ADAPTER_BUILD, 'run via npm test')
-  const { GeminiGenerateParser } = require(`${process.env.ADAPTER_BUILD}/protocols/gemini-generate.js`)
+  const { GeminiGenerateParser } = require(`${process.env.ADAPTER_BUILD}/../builtin/ingress-gemini/gemini-generate.js`)
   for (const field of ['responseSchema', 'responseJsonSchema']) {
     const generationConfig = { responseMimeType: 'application/json', [field]: schema }
     const request = new GeminiGenerateParser().parseRequest({ contents: [], generationConfig })

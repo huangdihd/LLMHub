@@ -14,10 +14,9 @@ echo "== compiling adapters (tsc) =="
 npx tsc .nuxt/types/nitro-imports.d.ts \
   server/providers/manager.ts server/providers/loader.ts \
   server/core/registry.ts server/core/protocol-registry.ts server/core/hooks.ts server/core/pipeline.ts \
-  server/protocols/builtins.ts server/services/subscription-usage.ts \
+  server/core/ingress-registry.ts server/services/subscription-usage.ts \
   server/stores/provider.store.ts builtin/assembly.ts builtin/*/plugin.ts \
-  server/middleware/ingress-auth.ts server/protocols/admission.ts \
-  server/protocols/gemini-generate.ts server/protocols/gemini-generate-serializer.ts \
+  server/middleware/ingress-auth.ts \
   server/plugins-runtime/manager.ts server/plugins-runtime/manifest.ts \
   --rootDir . --outDir "$BUILD_DIR" \
   --module commonjs --target es2022 --moduleResolution node \
@@ -36,7 +35,7 @@ if (process.argv[2].endsWith('/builtin-host.test.ts')) {
   // Preserve the original eight-policy host fixture and its unchanged assertions.
   // provider-capabilities.test.ts separately exercises the complete production catalog.
   const { builtinCatalog } = await import('./builtin/catalog.js')
-  const policies = builtinCatalog.filter(plugin => !plugin.manifest.id.startsWith('provider-'))
+  const policies = builtinCatalog.filter(plugin => !plugin.manifest.id.startsWith('provider-') && !plugin.manifest.id.startsWith('ingress-'))
   builtinCatalog.splice(0, builtinCatalog.length, ...policies)
 }
 const { initializeBuiltinPlugins } = await import('./builtin/assembly.js')

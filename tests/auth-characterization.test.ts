@@ -113,10 +113,18 @@ async function invoke(protocol: Protocol, options: Options = {}) {
       registerHook: (hook: any) => hooks.requestHooks.register({ ...hook, id: `${name}:${hook.id}` })
     })
   }
-  const admission = execute('server/protocols/admission.ts', { h3: transport })
+  const admission = execute('builtin/shared/ingress.ts', { h3: transport })
+  const { IngressRegistry } = execute('server/core/ingress-registry.ts', {})
+  const ingressRegistry = new IngressRegistry()
+  for (const family of ['openai', 'claude', 'gemini']) {
+    const { ingress } = execute(`builtin/ingress-${family}/ingress.ts`, {
+      h3: transport, '../shared/ingress': admission
+    })
+    ingressRegistry.register(ingress)
+  }
   const middleware = execute('server/middleware/ingress-auth.ts', {
     h3: transport, '../stores/auth.store': { getAuthStore: () => store },
-    '../core/hooks': hooks, '../protocols/admission': admission
+    '../core/hooks': hooks, '../core/ingress-registry': { ingressRegistry }
   }).default
   await middleware(event)
   return { event, calls, record, status, responseBody, responseHeaders }

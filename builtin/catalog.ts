@@ -1,3 +1,6 @@
+import ingressOpenai from './ingress-openai/plugin'
+import ingressClaude from './ingress-claude/plugin'
+import ingressGemini from './ingress-gemini/plugin'
 import providerOpenai from './provider-openai/plugin'
 import providerClaude from './provider-claude/plugin'
 import providerGemini from './provider-gemini/plugin'
@@ -26,6 +29,9 @@ function entry(id: string, name: string, plugin: Pick<BuiltinPlugin, 'setup'>): 
 
 /** Server registration list; Nuxt discovers layer configurations without loading this module. */
 export const builtinCatalog: readonly BuiltinPlugin[] = [
+  entry('ingress-openai', 'OpenAI ingress', ingressOpenai),
+  entry('ingress-claude', 'Claude ingress', ingressClaude),
+  entry('ingress-gemini', 'Gemini ingress', ingressGemini),
   entry('provider-openai', 'OpenAI provider', providerOpenai),
   entry('provider-claude', 'Claude provider', providerClaude),
   entry('provider-gemini', 'Gemini provider', providerGemini),

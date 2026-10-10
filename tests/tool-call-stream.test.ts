@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { OpenAIResponsesSerializer } from '../server/protocols/openai-responses-serializer.ts'
+import { OpenAIResponsesSerializer } from '../builtin/ingress-openai/openai-responses-serializer.ts'
 
 // Adapters use TS parameter properties (not strip-only compatible),
 // so they are precompiled by tests/run-all.sh into $ADAPTER_BUILD.

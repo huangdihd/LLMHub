@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { OpenAIResponsesSerializer } from '../server/protocols/openai-responses-serializer.ts'
-import { OpenAIResponsesParser } from '../server/protocols/openai-responses.ts'
+import { OpenAIResponsesSerializer } from '../builtin/ingress-openai/openai-responses-serializer.ts'
+import { OpenAIResponsesParser } from '../builtin/ingress-openai/openai-responses.ts'
 import { decodeThinkingState, encodeThinkingState } from '../builtin/provider-openai/responses-thinking-state.ts'
 
 const require = createRequire(import.meta.url)

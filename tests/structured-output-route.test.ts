@@ -64,12 +64,12 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
     'server/services/subscription-usage.ts': { consumeSubscriptionResetCredit: forbidden }
   }
   const allowed = new Set([
-    'server/api/openai/responses.post.ts',
+    'builtin/ingress-openai/server/api/openai/responses.post.ts',
     'server/core/pipeline.ts',
     'server/core/hooks.ts',
-    'server/protocols/openai-responses.ts',
-    'server/protocols/openai-responses-serializer.ts',
-    'server/utils/structured-output.ts',
+    'builtin/ingress-openai/openai-responses.ts',
+    'builtin/ingress-openai/openai-responses-serializer.ts',
+    'builtin/shared/structured-output.ts',
     'builtin/provider-openai/responses-thinking-state.ts',
     'builtin/provider-openai/responses-codec.ts',
     'builtin/provider-openai/openai.ts',
@@ -110,7 +110,7 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
   const className = { codex: 'CodexAdapter', claude: 'ClaudeAdapter', openai: 'OpenAIAdapter', 'openai-responses': 'OpenAIResponsesAdapter' }[provider]
   const Adapter = load(resolve(root, `builtin/provider-${provider === 'openai-responses' ? 'openai' : provider}/${provider}.ts`))[className]
   adapter = new Adapter({ name: 'offline', models: [{ id: 'test-model' }], connection: {} })
-  parser = new (load(resolve(root, 'server/protocols/openai-responses.ts')).OpenAIResponsesParser)()
+  parser = new (load(resolve(root, 'builtin/ingress-openai/openai-responses.ts')).OpenAIResponsesParser)()
   const upstream = (provider === 'codex' || provider === 'openai-responses')
     ? { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: answer }] }], usage: { input_tokens: 7, output_tokens: 3 } }
     : { choices: [{ message: { content: answer }, finish_reason: 'stop' }], usage: { prompt_tokens: 7, completion_tokens: 3 } }
@@ -141,7 +141,7 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
       }
     })
   }
-  const handler = load(resolve(root, 'server/api/openai/responses.post.ts')).default
+  const handler = load(resolve(root, 'builtin/ingress-openai/server/api/openai/responses.post.ts')).default
   const res = {
     writableEnded: false,
     flushHeaders() { flushed = true },

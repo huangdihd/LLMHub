@@ -1,6 +1,8 @@
 import type { H3Event } from 'h3'
 import type { HookRegistry } from '../server/core/hooks'
 import type { ProviderRegistry } from '../server/core/registry'
+import { ProtocolRegistry } from '../server/core/protocol-registry'
+import { IngressRegistry } from '../server/core/ingress-registry'
 import type { PluginAPI, PluginStorage } from '../server/plugins-runtime/manager'
 import { PluginError, validateId, validatePath } from '../server/plugins-runtime/manifest'
 import type { PluginRecord } from '../shared/types/plugin'
@@ -9,6 +11,8 @@ import type { BuiltinPlugin } from './catalog'
 export interface BuiltinHostOptions {
   hookRegistry: HookRegistry
   providerRegistry: ProviderRegistry
+  protocolRegistry?: ProtocolRegistry
+  ingressRegistry?: IngressRegistry
   storage: PluginStorage
 }
 
@@ -22,7 +26,13 @@ export class BuiltinPluginHost {
   private closing = false
   private shutdownPromise?: Promise<void>
 
-  constructor(private readonly options: BuiltinHostOptions) {}
+  private readonly protocolRegistry: ProtocolRegistry
+  private readonly ingressRegistry: IngressRegistry
+
+  constructor(private readonly options: BuiltinHostOptions) {
+    this.protocolRegistry = options.protocolRegistry ?? new ProtocolRegistry()
+    this.ingressRegistry = options.ingressRegistry ?? new IngressRegistry()
+  }
 
   async register(plugin: BuiltinPlugin): Promise<void> {
     if (this.closing) throw new PluginError('Builtin host is shutting down')
@@ -41,6 +51,8 @@ export class BuiltinPluginHost {
     validateId(id)
     if (this.records.has(id)) throw new PluginError(`Builtin plugin already registered: ${id}`)
     const providers: string[] = []
+    const protocols: string[] = []
+    const ingresses: string[] = []
     const hooks: string[] = []
     const unregister: Array<() => void> = []
     let accepting = true
@@ -69,6 +81,16 @@ export class BuiltinPluginHost {
         const name = definition.id
         unregister.push(this.options.providerRegistry.register({ ...definition, id: name }))
         providers.push(name)
+      },
+      registerProtocol: definition => {
+        registrationId(definition.id)
+        unregister.push(this.protocolRegistry.register({ ...definition }))
+        protocols.push(definition.id)
+      },
+      registerIngress: definition => {
+        registrationId(definition.id)
+        unregister.push(this.ingressRegistry.register({ ...definition }))
+        ingresses.push(definition.id)
       },
       registerRoute: (method, path, handler) => {
         assertRegistration()
@@ -100,7 +122,7 @@ export class BuiltinPluginHost {
       })
       this.records.set(id, {
         id, manifest: structuredClone(plugin.manifest), builtin: true,
-        enabled: true, status: 'enabled', providers, hooks
+        enabled: true, status: 'enabled', providers, hooks, protocols, ingresses
       })
     } catch (error) {
       for (const cleanup of unregister.reverse()) cleanup()

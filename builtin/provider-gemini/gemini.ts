@@ -1,6 +1,6 @@
 import type { ProviderAdapter, ProviderConfig, LLMRequest, LLMResponse, LLMStreamChunk, ModelInfo, ContentBlock, EmbeddingRequest, EmbeddingResponse } from '../../server/core/types'
 import { fetchWithRetry } from '../../server/utils/fetch'
-import { toGeminiOutputConfig } from '../../server/utils/structured-output'
+import { toGeminiOutputConfig } from '../shared/structured-output'
 import { sanitizeGeminiSchema } from './sanitize-gemini-schema'
 
 export class GeminiAdapter implements ProviderAdapter {

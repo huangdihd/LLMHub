@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
-import { OpenAIResponsesSerializer } from '../server/protocols/openai-responses-serializer.ts'
+import { OpenAIResponsesSerializer } from '../builtin/ingress-openai/openai-responses-serializer.ts'
 import type { LLMStreamChunk } from '../server/core/types.ts'
 
 const require = createRequire(import.meta.url)

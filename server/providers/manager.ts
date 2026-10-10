@@ -1,7 +1,7 @@
 import type { ProviderAdapter, ProtocolParser, ProtocolSerializer, ModelInfo, LLMRequest, LLMResponse, EmbeddingRequest, EmbeddingResponse } from '../core/types'
 import { ProviderLoader } from './loader'
 import { providerRegistry } from '../core/registry'
-import { protocolRegistry } from '../protocols/builtins'
+import { protocolRegistry } from '../core/protocol-registry'
 
 export class ProviderManager {
   private loader: ProviderLoader

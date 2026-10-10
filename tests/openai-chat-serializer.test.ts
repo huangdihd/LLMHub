@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { OpenAIChatSerializer } from '../server/protocols/openai-chat-serializer.ts'
+import { OpenAIChatSerializer } from '../builtin/ingress-openai/openai-chat-serializer.ts'
 
 let passed = 0
 function test(name: string, fn: () => void) {

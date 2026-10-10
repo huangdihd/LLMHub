@@ -58,6 +58,13 @@ preserved. The shared provider contract includes management, subscription usage,
 reset, refresh and login declarations for runtime plugins too; refresh/login
 metadata does not itself dispatch a flow (see the plugin guide).
 
+Client endpoints ship in `builtin/ingress-openai/`, `ingress-claude/`, and
+`ingress-gemini/` Nuxt layers. Each owns its routes, parsers, serializers, stream
+framing and admission definition; all public URLs and protocol IDs are unchanged.
+Core authentication dispatches through the ingress registry rather than protocol
+names. Runtime plugins can also register ingress definitions and codecs, but
+cannot add Nitro file routes or a new public generation endpoint at runtime.
+
 `builtin/catalog.ts` registers plugins at runtime. Nuxt discovers layers by
 scanning `builtin/*/nuxt.config.ts` without importing that catalog. Non-Nitro
 callers must await `initializeBuiltinPlugins()` from `builtin/assembly.ts` before
@@ -306,17 +313,8 @@ LLMHub/
 ├── server/                   # Backend (Nitro)
 │   ├── api/                  #   API routes
 │   │   ├── auth/             #     Authentication
-│   │   ├── hub/              #     Dashboard APIs
-│   │   ├── openai/           #     OpenAI-compatible endpoints
-│   │   ├── claude/v1/        #     Claude-compatible endpoints
-│   │   └── gemini/v1/        #     Gemini-compatible endpoints
-│   ├── protocols/            #   Request/response parsers & serializers
-│   │   ├── openai-chat.ts    #     OpenAI Chat parser
-│   │   ├── openai-chat-serializer.ts
-│   │   ├── claude-messages.ts#     Claude Messages parser
-│   │   ├── claude-messages-serializer.ts
-│   │   ├── gemini-generate.ts#     Gemini GenerateContent parser
-│   │   └── gemini-generate-serializer.ts
+│   │   └── hub/              #     Dashboard APIs
+│   ├── core/                 #   Unified types, registries, hooks & pipeline
 │   ├── providers/            #   Registry-based provider loading/routing
 │   │   ├── loader.ts         #     Config & model loader
 │   │   └── manager.ts        #     Adapter manager & cross-protocol router
@@ -324,14 +322,13 @@ LLMHub/
 │   │   ├── auth.store.ts     #     Keys, sessions, brute-force
 │   │   └── provider.store.ts #     Provider configs
 │   └── middleware/           #   Auth middleware
-│       ├── openai-auth.ts    #     Validate OpenAI-compatible API keys
-│       ├── claude-auth.ts    #     Validate Claude API keys
-│       ├── gemini-auth.ts    #     Validate Gemini API keys
+│       ├── ingress-auth.ts   #     Registry-dispatched API key identity/admission
 │       └── hub-auth.ts       #     Validate admin session
 │
-├── builtin/                  # Always-on provider and policy plugins
+├── builtin/                  # Always-on ingress, provider and policy plugins
+│   ├── ingress-*/            #   Compatible API routes, codecs, framing & admission
 │   ├── provider-*/           #   Adapters, discovery, management, login/token flows
-│   ├── shared/               #   Shared subscription helpers
+│   ├── shared/               #   Shared schema, admission and subscription helpers
 │   ├── catalog.ts            #   Runtime plugin registration list
 │   └── assembly.ts           #   Explicit composition entry (also for non-Nitro)
 └── .data/                    # Runtime storage (gitignored)

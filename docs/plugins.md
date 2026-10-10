@@ -112,6 +112,8 @@ type Cleanup = () => Awaitable<void>
 interface PluginAPI {
   readonly config: Readonly<Record<string, unknown>>
   registerProvider(definition: ProviderDefinition): void
+  registerProtocol(definition: ProtocolDefinition): void
+  registerIngress(definition: IngressDefinition): void
   registerHook(hook: RequestHook): void
   registerRoute(method: string, path: string,
     handler: (event: H3Event) => Awaitable<unknown>): void
@@ -137,9 +139,9 @@ Gateway types live in `server/core/types.ts`, `server/core/registry.ts`, and
 `server/plugins-runtime/manager.ts`. No extra `types` runtime helper is currently
 needed or exposed; throw ordinary `Error` objects for failures.
 
-Register providers, hooks, routes, and config listeners during `setup`, including
+Register providers, protocols, ingress definitions, hooks, routes, and config listeners during `setup`, including
 its awaited work. Registration closes when setup finishes or times out. Supply
-**local** provider/hook IDs matching `[a-z0-9][a-z0-9-]{0,63}`: the loader always
+**local** provider/protocol/ingress/hook IDs matching `[a-z0-9][a-z0-9-]{0,63}`: the loader always
 prepends `<pluginId>:`. Passing a pre-prefixed ID is invalid. Duplicate
 registrations fail rather than replacing other plugins or built-ins.
 
@@ -228,6 +230,65 @@ pipeline recognizes `data: [DONE]`. The echo example demonstrates content, final
 usage, and finish chunks without network access. See `server/core/types.ts` for
 unified messages, tool calls, reasoning, embedding, and usage structures.
 
+### Client protocols and ingress admission
+
+```ts
+interface ProtocolDefinition {
+  id: string
+  createParser(): ProtocolParser
+  createSerializer(): ProtocolSerializer
+}
+interface IngressModel {
+  model: string
+  replace(model: string): void
+}
+interface IngressDefinition {
+  id: string
+  pathPrefix: string
+  extractKey(event: H3Event): string
+  missingKeyMessage: string
+  extractModel(event: H3Event): IngressModel | Promise<IngressModel>
+  rewriteBeforeRejection: boolean
+  sendError(event: H3Event, rejection: AdmissionRejection): Awaitable<unknown>
+}
+```
+
+Contracts and shared registries live in `server/core/protocol-registry.ts` and
+`server/core/ingress-registry.ts`. Register codecs and admission definitions
+separately during `setup`. Registration is rolled back on setup failure and
+revoked on disable/reload/shutdown. Runtime IDs receive the plugin namespace;
+built-ins retain their existing IDs. `PluginRecord.protocols` and `.ingresses`
+report registered IDs alongside `.providers` and `.hooks`.
+
+Ingress lookup uses first-registration **raw `startsWith(pathPrefix)`** matching,
+not path-segment or longest-prefix matching. Exact duplicate prefixes are rejected;
+overlapping prefixes retain registration precedence. This preserves existing
+compatible-endpoint behavior, including matching suffixes immediately after the
+prefix. Define narrow prefixes: admission runs before the matching route handler
+and can otherwise affect unrelated management endpoints.
+
+`extractKey` runs before POST admission hooks. Missing keys can still use the
+existing dashboard session/impersonation path. `extractModel` runs after identity
+and quota admission. `rewriteBeforeRejection` controls whether a resolved model
+is written back even when model admission rejects: true for built-in body-based
+entrypoints, false for the URL-based entrypoint. `sendError` owns status, headers
+and the rejection body; it must terminate or return the response appropriately.
+
+Codec registration order is parser precedence. Each new `ProviderManager` creates
+fresh parser/serializer instances; an existing manager retains its snapshot for
+its request. Serializer lookup uses the **registered protocol ID**, not necessarily
+`parser.name` (runtime factory instances may retain local names). Existing in-flight
+requests are not cancelled by unregistering a codec.
+
+**Runtime limits:** these APIs register codecs and admission behavior, not Nitro
+file routes. There is no generic public generation dispatcher that turns an
+entry definition into a new endpoint. Runtime plugins can implement handlers via
+`registerRoute` under their existing management-route namespace, subject to its
+dashboard authentication, or supply definitions consumed by an already mounted
+compatible handler. Registering a parser alone does not override the six built-in
+routes' serializer selection or framing. Public endpoint files require a bundled
+Nuxt layer and a rebuild; runtime plugins must not import gateway build internals.
+
 ### Hooks
 
 ```ts
@@ -312,7 +373,16 @@ fallback, access-control, quota, token-billing, thinking-policy,
 cch-normalization and stats. Upstream implementations ship in six additional
 built-ins: `provider-openai`, `provider-claude`, `provider-gemini`,
 `provider-codex`, `provider-claude-subscription`, and `provider-antigravity`.
-Their adapters, discovery, management declarations, and applicable login/token
+Three more built-ins, `ingress-openai`, `ingress-claude`, and `ingress-gemini`,
+own their Nuxt routes, parsers, serializers, stream consumers and admission
+metadata. Public URLs, rejection envelopes and the six codec IDs remain unchanged:
+`openai-chat`, `openai-completion`, `openai-responses`, `claude-messages`,
+`claude-completion`, `gemini-generate` (also their parser precedence).
+Shared structured-output conversion lives in `builtin/shared/`; Responses thinking
+state and Gemini schema helpers remain provider-owned and are imported by ingress.
+The core has no concrete protocol registration table or ingress-name dispatch.
+
+Provider adapters, discovery, management declarations, and applicable login/token
 and subscription-usage implementations live in those directories, not in
 `server/providers/`. That directory retains generic loading and routing.
 
@@ -404,7 +474,7 @@ All paths below require the existing dashboard session:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/hub/plugins` | Records, manifests, statuses, errors, provider/hook IDs |
+| GET | `/api/hub/plugins` | Records, manifests, statuses, errors, provider/hook/protocol/ingress IDs |
 | POST | `/api/hub/plugins/install` | Multipart `file` containing one `.mjs`; Content-Length required |
 | POST | `/api/hub/plugins/scan` | Discover manually installed directories |
 | POST | `/api/hub/plugins/<id>/enable` | Activate |

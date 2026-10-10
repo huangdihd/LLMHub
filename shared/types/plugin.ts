@@ -27,4 +27,6 @@ export interface PluginRecord {
   error?: string
   providers: string[]
   hooks: string[]
+  protocols?: string[]
+  ingresses?: string[]
 }

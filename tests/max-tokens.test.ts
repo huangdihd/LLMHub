@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { OpenAIChatParser } from '../server/protocols/openai-chat.ts'
-import { OpenAICompletionParser } from '../server/protocols/openai-completion.ts'
-import { OpenAIResponsesParser } from '../server/protocols/openai-responses.ts'
-import { ClaudeMessagesParser } from '../server/protocols/claude-messages.ts'
-import { ClaudeCompletionParser } from '../server/protocols/claude-completion.ts'
+import { OpenAIChatParser } from '../builtin/ingress-openai/openai-chat.ts'
+import { OpenAICompletionParser } from '../builtin/ingress-openai/openai-completion.ts'
+import { OpenAIResponsesParser } from '../builtin/ingress-openai/openai-responses.ts'
+import { ClaudeMessagesParser } from '../builtin/ingress-claude/claude-messages.ts'
+import { ClaudeCompletionParser } from '../builtin/ingress-claude/claude-completion.ts'
 
 // Adapters use TS parameter properties (not strip-only compatible),
 // so they are precompiled by tests/run-all.sh into $ADAPTER_BUILD.
@@ -17,7 +17,7 @@ if (!buildDir) {
 const { OpenAIAdapter } = require(`${buildDir}/../builtin/provider-openai/openai.js`)
 const { ClaudeAdapter } = require(`${buildDir}/../builtin/provider-claude/claude.js`)
 const { GeminiAdapter } = require(`${buildDir}/../builtin/provider-gemini/gemini.js`)
-const { GeminiGenerateParser } = require(`${buildDir}/protocols/gemini-generate.js`)
+const { GeminiGenerateParser } = require(`${buildDir}/../builtin/ingress-gemini/gemini-generate.js`)
 
 let passed = 0
 function test(name: string, fn: () => void) {

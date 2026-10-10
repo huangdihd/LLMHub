@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import { ClaudeCompletionParser } from '../server/protocols/claude-completion.ts'
-import { ClaudeCompletionSerializer } from '../server/protocols/claude-completion-serializer.ts'
+import { ClaudeCompletionParser } from '../builtin/ingress-claude/claude-completion.ts'
+import { ClaudeCompletionSerializer } from '../builtin/ingress-claude/claude-completion-serializer.ts'
 
 let passed = 0
 function test(name: string, fn: () => void) {

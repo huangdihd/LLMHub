@@ -1,5 +1,7 @@
 import { requestHooks } from '../server/core/hooks'
 import { providerRegistry } from '../server/core/registry'
+import { protocolRegistry } from '../server/core/protocol-registry'
+import { ingressRegistry } from '../server/core/ingress-registry'
 import { builtinCatalog } from './catalog'
 import { BuiltinPluginHost } from './host'
 import { BUILTIN_PROVIDER_IDS } from './provider-ids'
@@ -18,6 +20,8 @@ providerRegistry.subscriptionResetErrors = {
 export const builtinHost = new BuiltinPluginHost({
   hookRegistry: requestHooks,
   providerRegistry,
+  protocolRegistry,
+  ingressRegistry,
   storage: {
     getItem: <T>(key: string) => useStorage('data').getItem(key) as Promise<T | null>,
     setItem: (key, value) => useStorage('data').setItem(key, value as any),

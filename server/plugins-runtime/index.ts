@@ -1,5 +1,7 @@
 import { PluginManager } from './manager'
 import { providerRegistry } from '../core/registry'
+import { protocolRegistry } from '../core/protocol-registry'
+import { ingressRegistry } from '../core/ingress-registry'
 import { requestHooks } from '../core/hooks'
 import type { PluginManagerOptions } from './manager'
 import { ProviderLoader } from '../providers/loader'
@@ -20,7 +22,7 @@ export function configureBuiltinHost(options: typeof builtinOptions): void {
 export function getPluginManager(): PluginManager {
   if (!manager) manager = new PluginManager({
     ...builtinOptions,
-    storage: useStorage('data'), providerRegistry, hookRegistry: requestHooks,
+    storage: useStorage('data'), providerRegistry, hookRegistry: requestHooks, protocolRegistry, ingressRegistry,
     onRegistryChange: () => ProviderLoader.invalidateCache()
   })
   return manager

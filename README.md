@@ -1,5 +1,7 @@
 # LLMHub
 
+English | [简体中文](README.zh-CN.md)
+
 A unified LLM gateway that aggregates multiple LLM providers behind OpenAI, Claude, and Gemini compatible API endpoints.
 
 ## Features

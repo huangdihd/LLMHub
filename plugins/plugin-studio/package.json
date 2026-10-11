@@ -1,0 +1,32 @@
+{
+  "name": "llmhub-plugin-plugin-studio",
+  "version": "1.0.0",
+  "description": "Write LLMHub plugins inside LLMHub: an editor, a VS Code server and an assistant powered by your own models.",
+  "type": "module",
+  "main": "index.mjs",
+  "files": ["index.mjs", "lib", "ui", "README.md"],
+  "keywords": ["llmhub-plugin", "llmhub", "editor", "vscode", "agent", "developer-tools"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/huangdihd/LLMHub.git", "directory": "plugins/plugin-studio" },
+  "homepage": "https://github.com/huangdihd/LLMHub/tree/main/plugins/plugin-studio",
+  "engines": { "llmhub": "^1.4.0" },
+  "llmhub": {
+    "id": "plugin-studio",
+    "name": "Plugin Studio",
+    "configSchema": [
+      { "key": "model", "label": "Assistant model (provider/model)", "type": "text", "default": "" },
+      { "key": "apiKey", "label": "LLMHub API key for the assistant (empty: use your dashboard session)", "type": "secret" },
+      { "key": "gatewayUrl", "label": "OpenAI-compatible base URL (empty: this gateway)", "type": "text", "default": "" },
+      { "key": "maxSteps", "label": "Assistant steps per message", "type": "number", "default": 25 },
+      { "key": "workspace", "label": "Plugin folder (empty: .data/plugins)", "type": "text", "default": "" },
+      { "key": "vscodeCommand", "label": "VS Code server command (empty: find openvscode-server, code-server or code)", "type": "text", "default": "" },
+      { "key": "vscodeHost", "label": "VS Code server address", "type": "text", "default": "127.0.0.1" },
+      { "key": "vscodePort", "label": "VS Code server port", "type": "number", "default": 3100 },
+      { "key": "vscodePublicUrl", "label": "VS Code public HTTPS URL (behind your reverse proxy)", "type": "text", "default": "" }
+    ],
+    "contributes": {
+      "panels": [{ "id": "studio", "title": "Plugin Studio", "location": "page", "page": "ui/studio.html" }],
+      "navigation": [{ "panel": "studio", "label": "Studio", "icon": "i-heroicons-code-bracket-square" }]
+    }
+  }
+}

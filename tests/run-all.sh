@@ -59,7 +59,7 @@ done
 
 echo ""
 echo "== dashboard behavior =="
-node --test tests/dashboard-behavior.test.mjs tests/subscription-usage.test.mjs tests/official-plugins.test.mjs tests/system-update-ui.test.mjs tests/install/update-supervisor.test.mjs || FAIL=1
+node --test tests/dashboard-behavior.test.mjs tests/subscription-usage.test.mjs tests/official-plugins.test.mjs tests/plugin-studio.test.mjs tests/system-update-ui.test.mjs tests/install/update-supervisor.test.mjs || FAIL=1
 
 echo ""
 if [ "$FAIL" = "1" ]; then

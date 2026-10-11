@@ -74,6 +74,7 @@ npx vue-tsc --noEmit # project type-check
 - Runtime helper imports in native-Node parser tests use `.ts` extensions; project type checking allows them and test precompilation uses `--rewriteRelativeImportExtensions`.
 - `tests/run-all.sh` explicitly lists provider and utility files that need precompilation; update it when tests import a new adapter using TypeScript syntax unsupported by Node type stripping.
 - E2E tests modify `.data/`, start local processes, and restore seeded state through their cleanup trap. They may rebuild `.output/`.
+- Root `plugins/` holds official runtime plugins (published to npm), not Nuxt app plugins; `nuxt.config.ts` points `dir.plugins` elsewhere so Nuxt never bundles them into the dashboard. Keep it that way, since they import Node built-ins. `tests/official-plugins.test.mjs` and `tests/plugin-studio.test.mjs` cover them.
 - There is no configured standalone linter. Type checking is the available continuous diagnostic checker.
 
 - Gemini tool signature placeholders are injected only when the current assistant message has no real thinking/tool signature. Never select this behavior by model name or borrow a signature from a previous turn.

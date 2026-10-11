@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plugin Studio</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --text: #111827; --muted: #6b7280; --faint: #9ca3af;
+      --card: #ffffff; --line: #e5e7eb; --row: #f3f4f6; --active: #e0e7ff;
+      --button: #f3f4f6; --button-hover: #e5e7eb; --primary: #4f46e5; --primary-text: #ffffff;
+      --editor: #ffffff; --gutter: #9ca3af; --caret: #111827; --select: rgba(79, 70, 229, .18);
+      --keyword: #7c3aed; --string: #047857; --number: #b45309; --comment: #9ca3af; --tag: #2563eb; --property: #0e7490;
+      --user: #eef2ff; --bad: #dc2626; --bad-bg: #fef2f2; --ok: #16a34a;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --text: #f9fafb; --muted: #9ca3af; --faint: #6b7280;
+      --card: #111827; --line: #1f2937; --row: #1f2937; --active: #312e81;
+      --button: #1f2937; --button-hover: #374151; --primary: #6366f1;
+      --editor: #0b1020; --gutter: #4b5563; --caret: #f9fafb; --select: rgba(99, 102, 241, .35);
+      --keyword: #c4b5fd; --string: #6ee7b7; --number: #fcd34d; --comment: #6b7280; --tag: #93c5fd; --property: #67e8f9;
+      --user: #1e1b4b; --bad: #f87171; --bad-bg: rgba(248, 113, 113, .1); --ok: #4ade80;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); background: transparent; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { font-weight: 500; background: var(--button); border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+    button:hover { background: var(--button-hover); }
+    button:disabled { opacity: .5; cursor: default; }
+    button.primary { background: var(--primary); color: var(--primary-text); }
+    button.quiet { background: transparent; color: var(--muted); }
+    button.quiet:hover { color: var(--text); background: var(--button); }
+    input, select { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; min-width: 0; }
+    .studio { display: flex; flex-direction: column; height: 820px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+    .toolbar .spacer { flex: 1; }
+    .toolbar label { color: var(--muted); }
+    .main { flex: 1; display: grid; grid-template-columns: 200px minmax(0, 1fr) 340px; min-height: 0; }
+    .pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+    .pane + .pane { border-left: 1px solid var(--line); }
+    .pane-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; min-height: 37px; }
+    .pane-head strong { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .files { flex: 1; overflow: auto; padding: 4px 0; }
+    .file { display: block; width: 100%; text-align: left; border-radius: 0; background: transparent; padding: 3px 10px; font-family: var(--mono); font-size: 12px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+    .file:hover { background: var(--row); }
+    .file.active { background: var(--active); }
+    .file .dir { color: var(--faint); }
+    .empty { padding: 24px 16px; color: var(--muted); text-align: center; }
+    .empty strong { display: block; color: var(--text); font-weight: 500; margin-bottom: 4px; }
+
+    .editor { position: relative; flex: 1; display: flex; min-height: 0; background: var(--editor); font: 13px/20px var(--mono); }
+    .gutter { flex: none; padding: 8px 8px 8px 12px; text-align: right; color: var(--gutter); user-select: none; overflow: hidden; white-space: pre; min-width: 44px; }
+    .code { position: relative; flex: 1; min-width: 0; }
+    .code pre, .code textarea { position: absolute; inset: 0; margin: 0; padding: 8px 12px; border: 0; font: inherit; white-space: pre; overflow: auto; tab-size: 2; }
+    .code pre { pointer-events: none; color: var(--text); overflow: hidden; }
+    .code textarea { resize: none; outline: none; background: transparent; color: transparent; caret-color: var(--caret); }
+    .code textarea::selection { background: var(--select); color: transparent; }
+    .tok-k { color: var(--keyword); } .tok-s { color: var(--string); } .tok-n { color: var(--number); }
+    .tok-c { color: var(--comment); font-style: italic; } .tok-t { color: var(--tag); } .tok-p { color: var(--property); }
+    .status { display: flex; justify-content: space-between; gap: 8px; padding: 4px 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; min-height: 27px; }
+    .status .bad { color: var(--bad); }
+    .status .ok { color: var(--ok); }
+
+    .chat { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .msg { border-radius: 8px; padding: 6px 10px; overflow-wrap: anywhere; }
+    .msg.user { background: var(--user); align-self: flex-end; max-width: 90%; white-space: pre-wrap; }
+    .msg.assistant p { margin: 0 0 6px; white-space: pre-wrap; }
+    .msg.assistant p:last-child { margin-bottom: 0; }
+    .msg pre { margin: 6px 0; padding: 8px; background: var(--editor); border: 1px solid var(--line); border-radius: 6px; font: 12px/1.45 var(--mono); overflow: auto; max-height: 260px; }
+    .tool { align-self: flex-start; font: 12px var(--mono); color: var(--muted); background: var(--row); border-radius: 6px; padding: 2px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tool.failed { color: var(--bad); background: var(--bad-bg); }
+    .notice { color: var(--bad); background: var(--bad-bg); border-radius: 6px; padding: 6px 10px; }
+    .thinking { color: var(--muted); font-style: italic; }
+    .composer { border-top: 1px solid var(--line); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .composer textarea { width: 100%; min-height: 64px; max-height: 160px; resize: vertical; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; outline: none; }
+    .composer .row { display: flex; gap: 6px; align-items: center; }
+    .composer .row select { flex: 1; }
+
+    dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); padding: 0; width: min(520px, 92vw); }
+    dialog::backdrop { background: rgba(0, 0, 0, .35); }
+    dialog .body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    dialog h2 { margin: 0; font-size: 15px; font-weight: 600; }
+    dialog p { margin: 0; color: var(--muted); }
+    dialog label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+    dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .templates { display: grid; gap: 6px; }
+    .templates label { flex-direction: row; align-items: flex-start; gap: 8px; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; cursor: pointer; }
+    .templates small { display: block; color: var(--muted); }
+    .url { display: flex; gap: 6px; }
+    .url input { flex: 1; font-family: var(--mono); font-size: 12px; }
+    .log { font: 11px/1.4 var(--mono); max-height: 140px; overflow: auto; background: var(--editor); border: 1px solid var(--line); border-radius: 6px; padding: 6px; white-space: pre-wrap; margin: 0; }
+    .error-text { color: var(--bad); }
+    [hidden] { display: none !important; }
+
+    @media (max-width: 900px) {
+      .studio { height: auto; }
+      .main { grid-template-columns: 1fr; }
+      .pane + .pane { border-left: 0; border-top: 1px solid var(--line); }
+      .files { max-height: 160px; }
+      .editor { height: 420px; flex: none; }
+      .chat { height: 320px; flex: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="studio">
+    <div class="toolbar">
+      <label for="project">Plugin</label>
+      <select id="project"></select>
+      <button id="new" type="button">New plugin</button>
+      <span class="spacer"></span>
+      <button id="vscode" type="button" title="Open the plugin folder in a VS Code server">VS Code</button>
+    </div>
+    <div class="main">
+      <section class="pane">
+        <div class="pane-head"><strong>Files</strong><button id="new-file" class="quiet" type="button" title="New file">+</button></div>
+        <div class="files" id="files"></div>
+      </section>
+      <section class="pane">
+        <div class="pane-head">
+          <strong id="file-name">No file open</strong>
+          <span>
+            <button id="delete-file" class="quiet" type="button" disabled>Delete</button>
+            <button id="save" type="button" disabled>Save</button>
+          </span>
+        </div>
+        <div class="editor">
+          <div class="gutter" id="gutter">1</div>
+          <div class="code">
+            <pre id="highlight" aria-hidden="true"></pre>
+            <textarea id="source" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" disabled placeholder="Choose a file"></textarea>
+          </div>
+        </div>
+        <div class="status"><span id="message"></span><span id="position"></span></div>
+      </section>
+      <section class="pane">
+        <div class="pane-head"><strong>Assistant</strong><button id="clear" class="quiet" type="button">Clear</button></div>
+        <div class="chat" id="chat"></div>
+        <div class="composer">
+          <textarea id="prompt" placeholder="Describe what the plugin should do. Ctrl+Enter to send."></textarea>
+          <div class="row">
+            <select id="model" title="Model"></select>
+            <button id="send" class="primary" type="button">Send</button>
+            <button id="stop" type="button" hidden>Stop</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <dialog id="create-dialog">
+    <div class="body" id="create-form">
+      <h2>New plugin</h2>
+      <p>Created as a folder in the runtime plugin directory. Use Plugins → Scan to load it.</p>
+      <label>ID (also the folder name)<input id="create-id" required pattern="[a-z0-9][a-z0-9-]{1,40}" placeholder="my-plugin"></label>
+      <label>Display name<input id="create-name" placeholder="My plugin"></label>
+      <div class="templates" id="templates"></div>
+      <p class="error-text" id="create-error"></p>
+      <div class="actions"><button type="button" class="quiet" id="create-cancel">Cancel</button><button type="button" class="primary" id="create-submit">Create</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="ask-dialog">
+    <div class="body" id="ask-form">
+      <h2 id="ask-title"></h2>
+      <input id="ask-input" hidden>
+      <div class="actions"><button type="button" class="quiet" id="ask-cancel">Cancel</button><button type="button" class="primary" id="ask-ok">OK</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="vscode-dialog">
+    <div class="body">
+      <h2>VS Code</h2>
+      <p id="vscode-summary">Checking…</p>
+      <div class="url" id="vscode-url-row" hidden>
+        <input id="vscode-url" readonly>
+        <button id="vscode-copy" type="button">Copy</button>
+        <button id="vscode-open" type="button" hidden>Open</button>
+      </div>
+      <p id="vscode-password" hidden></p>
+      <p>The editor opens in its own tab: the dashboard cannot frame other pages. Anyone who has this link can run commands as the gateway, so keep the server on 127.0.0.1 and reach it through an SSH tunnel or an HTTPS reverse proxy.</p>
+      <pre class="log" id="vscode-log" hidden></pre>
+      <p class="error-text" id="vscode-error"></p>
+      <div class="actions">
+        <button type="button" class="quiet" id="vscode-close">Close</button>
+        <button type="button" id="vscode-stop" hidden>Stop server</button>
+        <button type="button" class="primary" id="vscode-start">Start</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    'use strict'
+    const $ = id => document.getElementById(id)
+    const MAX_EDIT_BYTES = 60 * 1024
+    const state = { projects: [], project: '', files: [], file: '', saved: '', since: 0, polling: null, running: false }
+
+    function element(tag, className, text) {
+      const node = document.createElement(tag)
+      if (className) node.className = className
+      if (text !== undefined) node.textContent = text
+      return node
+    }
+    // The frame is sandboxed without allow-modals or allow-forms: confirm() and prompt() never
+    // show and forms never submit, so dialogs are driven by buttons and the Enter key.
+    function onEnter(container, action) {
+      container.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && event.target.tagName === 'INPUT' && !event.isComposing) { event.preventDefault(); action() }
+      })
+    }
+    function ask(title, { input = false, placeholder = '', ok = 'OK' } = {}) {
+      const dialog = $('ask-dialog')
+      $('ask-title').textContent = title
+      $('ask-ok').textContent = ok
+      $('ask-input').hidden = !input
+      $('ask-input').value = ''
+      $('ask-input').placeholder = placeholder
+      return new Promise(resolve => {
+        const finish = value => {
+          $('ask-ok').onclick = null
+          $('ask-cancel').onclick = null
+          dialog.onclose = null
+          if (dialog.open) dialog.close()
+          resolve(value)
+        }
+        $('ask-ok').onclick = () => finish(input ? $('ask-input').value.trim() || null : true)
+        $('ask-cancel').onclick = () => finish(input ? null : false)
+        dialog.onclose = () => finish(input ? null : false)
+        dialog.showModal()
+        ;(input ? $('ask-input') : $('ask-ok')).focus()
+      })
+    }
+    onEnter($('ask-form'), () => $('ask-ok').click())
+    const discard = () => !state.file || source.value === state.saved || ask(`Discard unsaved changes to ${state.file}?`, { ok: 'Discard' })
+    const say = (text, kind = '') => { $('message').textContent = text; $('message').className = kind }
+    const call = (path, body, method = body === undefined ? 'GET' : 'POST') => llmhub.fetch(path, body === undefined ? { method } : { method, body })
+
+    // ---------- Syntax highlighting ----------
+    // Text is escaped before any markup is added; the layer never receives raw file content as HTML.
+    const escape = text => text.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
+    const KEYWORDS = 'async await break case catch class const continue default delete do else export extends false finally for from function if import in instanceof let new null of return static super switch this throw true try typeof undefined var void while yield'
+    const JS = new RegExp([
+      '(\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?(?:\\*\\/|$))',
+      '("(?:[^"\\\\\\n]|\\\\.)*"?|\'(?:[^\'\\\\\\n]|\\\\.)*\'?|`(?:[^`\\\\]|\\\\[\\s\\S])*`?)',
+      '\\b(' + KEYWORDS.split(' ').join('|') + ')\\b',
+      '\\b(\\d[\\d_]*(?:\\.\\d+)?(?:e[+-]?\\d+)?)\\b',
+      '(\\.[A-Za-z_$][\\w$]*)'
+    ].join('|'), 'g')
+    const JSON_TOKENS = /("(?:[^"\\\n]|\\.)*"(?=\s*:))|("(?:[^"\\\n]|\\.)*"?)|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b)/gi
+    const HTML_TOKENS = /(<!--[\s\S]*?(?:-->|$))|(<\/?[A-Za-z][\w-]*|\/?>)|("[^"\n]*"?|'[^'\n]*'?)/g
+    const MD_TOKENS = /(^#{1,6} [^\n]*)|(`[^`\n]+`)|(\*\*[^*\n]+\*\*)/gm
+
+    function paint(text, pattern, classes) {
+      let out = ''
+      let last = 0
+      pattern.lastIndex = 0
+      for (let match; (match = pattern.exec(text));) {
+        if (!match[0]) { pattern.lastIndex++; continue }
+        out += escape(text.slice(last, match.index))
+        const group = match.findIndex((value, index) => index > 0 && value !== undefined)
+        const kind = classes[group - 1]
+        out += kind ? `<span class="tok-${kind}">${escape(match[0])}</span>` : escape(match[0])
+        last = match.index + match[0].length
+      }
+      return out + escape(text.slice(last))
+    }
+    function highlight(text, path) {
+      if (text.length > 200000) return escape(text)
+      if (/\.(m?js|cjs|ts)$/.test(path)) return paint(text, JS, ['c', 's', 'k', 'n', 'p'])
+      if (/\.json$/.test(path)) return paint(text, JSON_TOKENS, ['p', 's', 'k', 'n'])
+      if (/\.html?$/.test(path)) return paint(text, HTML_TOKENS, ['c', 't', 's'])
+      if (/\.md$/.test(path)) return paint(text, MD_TOKENS, ['k', 's', 'p'])
+      return escape(text)
+    }
+
+    // ---------- Editor ----------
+    const source = $('source')
+    const layer = $('highlight')
+    const gutter = $('gutter')
+    function refreshEditor() {
+      // A trailing newline needs a visible line in the overlay to keep both layers the same height.
+      layer.innerHTML = highlight(source.value, state.file) + '\n'
+      const lines = source.value.split('\n').length
+      if (state.lines !== lines) state.lines = lines, gutter.textContent = Array.from({ length: lines }, (_, i) => i + 1).join('\n')
+      syncScroll()
+      const dirty = state.file && source.value !== state.saved
+      $('save').disabled = !dirty
+      $('file-name').textContent = state.file ? `${state.file}${dirty ? ' •' : ''}` : 'No file open'
+    }
+    function syncScroll() {
+      layer.scrollTop = source.scrollTop
+      layer.scrollLeft = source.scrollLeft
+      gutter.scrollTop = source.scrollTop
+    }
+    function showPosition() {
+      const before = source.value.slice(0, source.selectionStart).split('\n')
+      $('position').textContent = state.file ? `Ln ${before.length}, Col ${before.at(-1).length + 1}` : ''
+    }
+    function replaceSelection(text, start = source.selectionStart, end = source.selectionEnd) {
+      source.setRangeText(text, start, end, 'end')
+      refreshEditor()
+    }
+    source.addEventListener('input', refreshEditor)
+    source.addEventListener('scroll', syncScroll)
+    source.addEventListener('keyup', showPosition)
+    source.addEventListener('click', showPosition)
+    source.addEventListener('keydown', event => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); save(); return }
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        const { selectionStart: start, selectionEnd: end, value } = source
+        const lineStart = value.lastIndexOf('\n', start - 1) + 1
+        if (start === end && !event.shiftKey) return replaceSelection('  ')
+        const block = value.slice(lineStart, end)
+        const changed = event.shiftKey ? block.replace(/^ {1,2}/gm, '') : block.replace(/^/gm, '  ')
+        source.setRangeText(changed, lineStart, end, 'select')
+        refreshEditor()
+        return
+      }
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault()
+        const { selectionStart: start, value } = source
+        const line = value.slice(value.lastIndexOf('\n', start - 1) + 1, start)
+        let indent = line.match(/^\s*/)[0]
+        if (/[{[(]\s*$/.test(line)) indent += '  '
+        replaceSelection('\n' + indent)
+      }
+    })
+
+    async function openFile(path, { force = false } = {}) {
+      if (!force && !(await discard())) return
+      try {
+        const { content } = await call('files/read', { project: state.project, path })
+        state.file = path
+        state.saved = content
+        source.value = content
+        const editable = new TextEncoder().encode(content).length <= MAX_EDIT_BYTES
+        source.disabled = false
+        source.readOnly = !editable
+        $('delete-file').disabled = false
+        say(editable ? '' : 'Read-only here: files over 60 KiB are edited in VS Code or by the assistant.')
+        source.scrollTop = 0
+        refreshEditor()
+        showPosition()
+        renderFiles()
+      } catch (error) { say(error.message, 'bad') }
+    }
+    function closeFile() {
+      state.file = ''
+      state.saved = ''
+      source.value = ''
+      source.disabled = true
+      $('delete-file').disabled = true
+      refreshEditor()
+      showPosition()
+    }
+    async function save() {
+      if (!state.file || source.readOnly || source.value === state.saved) return
+      const content = source.value
+      if (new TextEncoder().encode(content).length > MAX_EDIT_BYTES) return say('Too large to save from here (60 KiB).', 'bad')
+      $('save').disabled = true
+      try {
+        await call('files/write', { project: state.project, path: state.file, content })
+        state.saved = content
+        say('Saved. Reload the plugin under Plugins to run it.', 'ok')
+        refreshEditor()
+        loadFiles()
+      } catch (error) { say(error.message, 'bad'); refreshEditor() }
+    }
+    $('save').addEventListener('click', save)
+    $('delete-file').addEventListener('click', async () => {
+      if (!state.file || !(await ask(`Delete ${state.file}?`, { ok: 'Delete' }))) return
+      try {
+        await call('files/delete', { project: state.project, path: state.file })
+        closeFile()
+        loadFiles()
+      } catch (error) { say(error.message, 'bad') }
+    })
+    $('new-file').addEventListener('click', async () => {
+      if (!state.project) return
+      const path = await ask('New file', { input: true, placeholder: 'lib/helpers.mjs', ok: 'Create' })
+      if (!path) return
+      try {
+        await call('files/write', { project: state.project, path, content: '' })
+        await loadFiles()
+        openFile(path.replace(/^\.?\/+/, ''))
+      } catch (error) { say(error.message, 'bad') }
+    })
+
+    // ---------- Files and projects ----------
+    function renderFiles() {
+      const list = $('files')
+      list.replaceChildren()
+      if (!state.project) return
+      for (const file of state.files) {
+        const button = element('button', `file${file.path === state.file ? ' active' : ''}`)
+        button.type = 'button'
+        button.title = `${file.path} · ${file.size.toLocaleString()} bytes`
+        const slash = file.path.lastIndexOf('/')
+        if (slash >= 0) button.append(element('span', 'dir', file.path.slice(0, slash + 1)))
+        button.append(file.path.slice(slash + 1))
+        button.addEventListener('click', () => openFile(file.path))
+        list.append(button)
+      }
+    }
+    async function loadFiles() {
+      if (!state.project) return
+      try {
+        state.files = (await call('files/list', { project: state.project })).files
+        renderFiles()
+      } catch (error) { say(error.message, 'bad') }
+    }
+    function renderProjects() {
+      const select = $('project')
+      select.replaceChildren()
+      if (!state.projects.length) {
+        const option = element('option', '', 'No plugins yet')
+        option.value = ''
+        select.append(option)
+        select.disabled = true
+        $('files').replaceChildren()
+        const empty = element('div', 'empty')
+        empty.append(element('strong', '', 'Start a plugin'), 'Click “New plugin”, then ask the assistant to build it.')
+        $('files').append(empty)
+        return
+      }
+      select.disabled = false
+      for (const project of state.projects) {
+        const option = element('option', '', project.name === project.id ? project.id : `${project.name} (${project.id})`)
+        option.value = project.id
+        select.append(option)
+      }
+      select.value = state.project
+    }
+    async function chooseProject(id) {
+      if (!(await discard())) { $('project').value = state.project; return }
+      state.project = id
+      try { localStorage.setItem('plugin-studio:project', id) } catch {}
+      closeFile()
+      state.files = []
+      resetChat()
+      await loadFiles()
+      const entry = state.files.find(file => file.path === 'index.mjs') || state.files[0]
+      if (entry) openFile(entry.path, { force: true })
+      pollAgent()
+    }
+    $('project').addEventListener('change', event => chooseProject(event.target.value))
+
+    async function loadOverview(select) {
+      const overview = await call('overview')
+      state.projects = overview.projects
+      state.templates = overview.templates
+      state.defaultModel = overview.model
+      let remembered = ''
+      try { remembered = localStorage.getItem('plugin-studio:project') || '' } catch {}
+      const next = select || (state.projects.some(p => p.id === state.project) ? state.project : state.projects.some(p => p.id === remembered) ? remembered : state.projects[0]?.id || '')
+      renderProjects()
+      if (next && next !== state.project) await chooseProject(next)
+      $('project').value = state.project
+    }
+
+    // ---------- New plugin ----------
+    $('new').addEventListener('click', () => {
+      const templates = $('templates')
+      templates.replaceChildren()
+      state.templates.forEach((template, index) => {
+        const label = element('label')
+        const radio = element('input')
+        radio.type = 'radio'
+        radio.name = 'template'
+        radio.value = template.id
+        radio.checked = index === 0
+        const text = element('span', '', template.label)
+        text.append(element('small', '', template.description))
+        label.append(radio, text)
+        templates.append(label)
+      })
+      $('create-error').textContent = ''
+      $('create-dialog').showModal()
+      $('create-id').focus()
+    })
+    $('create-cancel').addEventListener('click', () => $('create-dialog').close())
+    async function createProject() {
+      const id = $('create-id').value.trim()
+      const template = document.querySelector('input[name="template"]:checked')?.value
+      $('create-submit').disabled = true
+      try {
+        await call('projects', { id, name: $('create-name').value.trim(), template })
+        $('create-dialog').close()
+        $('create-id').value = ''
+        $('create-name').value = ''
+        await loadOverview(id)
+        say('Created. Open Plugins and click Scan to load it.', 'ok')
+      } catch (error) { $('create-error').textContent = error.message }
+      finally { $('create-submit').disabled = false }
+    }
+    $('create-submit').addEventListener('click', createProject)
+    onEnter($('create-form'), createProject)
+
+    // ---------- Assistant ----------
+    const chat = $('chat')
+    function resetChat() {
+      state.since = 0
+      chat.replaceChildren()
+    }
+    function renderText(container, text) {
+      // Fenced code becomes a block; everything else stays plain text.
+      const parts = text.split(/```[\w-]*\n?/)
+      parts.forEach((part, index) => {
+        if (!part.trim()) return
+        if (index % 2) container.append(element('pre', '', part.replace(/\n$/, '')))
+        else for (const paragraph of part.trim().split(/\n{2,}/)) container.append(element('p', '', paragraph))
+      })
+    }
+    function describeCall(call) {
+      let args = {}
+      try { args = JSON.parse(call.function.arguments || '{}') } catch {}
+      const icons = { read_file: '📄', write_file: '✏️', edit_file: '✏️', delete_file: '🗑', list_files: '📁', check_project: '✔︎', read_docs: '📘' }
+      return `${icons[call.function.name] || '•'} ${call.function.name}${args.path ? ` ${args.path}` : args.name ? ` ${args.name}` : ''}`
+    }
+    function appendMessage(message) {
+      if (message.role === 'user') {
+        chat.append(element('div', 'msg user', message.content.replace(/\n\n\(The user has [^)]+ open in the editor\.\)$/, '')))
+      } else if (message.role === 'assistant') {
+        if (message.content) {
+          const bubble = element('div', 'msg assistant')
+          renderText(bubble, message.content)
+          chat.append(bubble)
+        }
+        for (const call of message.tool_calls || []) {
+          const chip = element('div', 'tool', describeCall(call))
+          chip.dataset.call = call.id
+          chat.append(chip)
+        }
+      } else if (message.role === 'tool' && /^Error:|^Problems found/.test(message.content)) {
+        const chip = [...chat.querySelectorAll('.tool')].find(node => node.dataset.call === message.tool_call_id)
+        if (chip) { chip.classList.add('failed'); chip.title = message.content }
+      }
+    }
+    function renderAgent(snapshot) {
+      if (snapshot.start !== state.since) resetChat()
+      chat.querySelector('.thinking')?.remove()
+      chat.querySelector('.notice')?.remove()
+      for (const message of snapshot.messages) appendMessage(message)
+      state.since = snapshot.end
+      if (snapshot.running) chat.append(element('div', 'thinking', 'Working…'))
+      else if (snapshot.error) chat.append(element('div', 'notice', snapshot.error))
+      if (!chat.childElementCount) {
+        const empty = element('div', 'empty')
+        empty.append(element('strong', '', 'Ask for a plugin'), 'For example: “Reject requests whose last message contains a banned word, with the list in settings.”')
+        chat.append(empty)
+      } else chat.querySelector('.empty')?.remove()
+      chat.scrollTop = chat.scrollHeight
+      const wasRunning = state.running
+      state.running = snapshot.running
+      $('send').hidden = snapshot.running
+      $('stop').hidden = !snapshot.running
+      if (wasRunning && (!snapshot.running || snapshot.messages.some(message => message.role === 'tool'))) afterAgentChanges(snapshot)
+    }
+    async function afterAgentChanges(snapshot) {
+      await loadFiles()
+      if (!state.file) {
+        const entry = state.files.find(file => file.path === 'index.mjs') || state.files[0]
+        if (entry) openFile(entry.path, { force: true })
+        return
+      }
+      if (!snapshot.changed.includes(state.file)) return
+      if (source.value === state.saved) openFile(state.file, { force: true })
+      else say(`The assistant changed ${state.file}; you have unsaved edits.`, 'bad')
+    }
+    async function pollAgent() {
+      clearTimeout(state.polling)
+      if (!state.project) return
+      const project = state.project
+      try {
+        const snapshot = await call('agent/status', { project, since: state.since })
+        if (project !== state.project) return
+        renderAgent(snapshot)
+        if (snapshot.running) state.polling = setTimeout(pollAgent, 1200)
+      } catch (error) {
+        say(error.message, 'bad')
+        state.polling = setTimeout(pollAgent, 4000)
+      }
+    }
+    async function send() {
+      const text = $('prompt').value.trim()
+      if (!text || !state.project || state.running) return
+      if (state.file && source.value !== state.saved) await save()
+      $('send').disabled = true
+      try {
+        await call('agent/run', { project: state.project, prompt: text, model: $('model').value, file: state.file || undefined })
+        $('prompt').value = ''
+        state.running = true
+        try { localStorage.setItem('plugin-studio:model', $('model').value) } catch {}
+        pollAgent()
+      } catch (error) { say(error.message, 'bad') }
+      finally { $('send').disabled = false }
+    }
+    $('send').addEventListener('click', send)
+    $('prompt').addEventListener('keydown', event => {
+      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send() }
+    })
+    $('stop').addEventListener('click', () => call('agent/stop', { project: state.project }).catch(error => say(error.message, 'bad')))
+    $('clear').addEventListener('click', async () => {
+      if (!state.project) return
+      try { await call('agent/clear', { project: state.project }); resetChat(); pollAgent() }
+      catch (error) { say(error.message, 'bad') }
+    })
+
+    async function loadModels() {
+      const select = $('model')
+      let remembered = ''
+      try { remembered = localStorage.getItem('plugin-studio:model') || '' } catch {}
+      let models = []
+      try { models = (await call('models')).models } catch (error) { say(`Models: ${error.message}`, 'bad') }
+      const preferred = state.defaultModel || remembered
+      if (preferred && !models.includes(preferred)) models.unshift(preferred)
+      select.replaceChildren()
+      if (!models.length) select.append(element('option', '', 'No models available'))
+      for (const id of models) {
+        const option = element('option', '', id)
+        option.value = id
+        select.append(option)
+      }
+      select.value = remembered && models.includes(remembered) ? remembered : preferred || models[0] || ''
+    }
+
+    // ---------- VS Code ----------
+    function renderVSCode(status) {
+      $('vscode-error').textContent = ''
+      const log = $('vscode-log')
+      log.hidden = !status.output
+      log.textContent = status.output || ''
+      $('vscode-url-row').hidden = !status.running
+      $('vscode-stop').hidden = !status.running
+      $('vscode-start').hidden = status.running || !status.command
+      $('vscode-password').hidden = !status.password
+      $('vscode-password').textContent = status.password ? `Password: ${status.password}` : ''
+      if (status.running) {
+        $('vscode-summary').textContent = `${status.flavor} is serving ${status.folder}.`
+        $('vscode-url').value = status.url
+        $('vscode-open').hidden = !status.url.startsWith('https://')
+      } else if (status.command) {
+        $('vscode-summary').textContent = `Ready to start ${status.command} for ${state.project || 'the plugin folder'}.`
+      } else {
+        $('vscode-summary').textContent = 'No VS Code server was found. Install openvscode-server or code-server on the gateway machine, or set its path in Plugin Studio settings.'
+      }
+      $('vscode').textContent = status.running ? 'VS Code ●' : 'VS Code'
+    }
+    $('vscode').addEventListener('click', async () => {
+      $('vscode-dialog').showModal()
+      try { renderVSCode(await call('vscode')) } catch (error) { $('vscode-error').textContent = error.message }
+    })
+    $('vscode-close').addEventListener('click', () => $('vscode-dialog').close())
+    $('vscode-start').addEventListener('click', async event => {
+      event.target.disabled = true
+      try { renderVSCode({ ...(await call('vscode/start', { project: state.project || undefined })), command: 'started' }) }
+      catch (error) { $('vscode-error').textContent = error.message }
+      finally { event.target.disabled = false }
+    })
+    $('vscode-stop').addEventListener('click', async () => {
+      try { await call('vscode/stop', {}); renderVSCode(await call('vscode')) }
+      catch (error) { $('vscode-error').textContent = error.message }
+    })
+    $('vscode-copy').addEventListener('click', async () => {
+      const input = $('vscode-url')
+      try { await navigator.clipboard.writeText(input.value) }
+      catch { input.select(); document.execCommand('copy') }
+      $('vscode-copy').textContent = 'Copied'
+      setTimeout(() => { $('vscode-copy').textContent = 'Copy' }, 1500)
+    })
+    $('vscode-open').addEventListener('click', () => llmhub.openExternal($('vscode-url').value))
+
+    // ---------- Start ----------
+    refreshEditor()
+    loadOverview().then(loadModels).catch(error => say(error.message, 'bad'))
+    call('vscode').then(status => { $('vscode').textContent = status.running ? 'VS Code ●' : 'VS Code' }).catch(() => {})
+  </script>
+</body>
+</html>

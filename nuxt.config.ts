@@ -25,6 +25,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: { buildInformation }
   },
+  // `plugins/` holds LLMHub's official runtime plugins, not Nuxt app plugins.
+  // Without this, Nuxt would bundle and run each `plugins/*/index.mjs` in the dashboard.
+  dir: { plugins: 'nuxt-plugins' },
   compatibilityDate: '2025-05-15',
   devtools: { enabled: true },
   typescript: {

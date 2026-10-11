@@ -3,6 +3,7 @@ import { resolve, dirname, basename, relative, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { gt, valid } from 'semver'
 import { packageCapabilities, packageUpdates, type PackageExecutor } from './package-operations'
 import { discoverPackages, installProject, runNpm, type NpmRunner } from './npm-project'
@@ -64,6 +65,13 @@ interface InstalledPlugin {
   source?: PluginSource
   isolateModules?: boolean
 }
+const cleanupStorage = new AsyncLocalStorage<{ runtime: Runtime; active: boolean }>()
+
+function canUseStorage(runtime: Runtime): boolean {
+  const cleanup = cleanupStorage.getStore()
+  return runtime.active || (cleanup?.runtime === runtime && cleanup.active)
+}
+
 interface Runtime {
   subscribedEvents: string[]
   recordListeners: Array<(change: PluginRecordValuesChange) => void | Promise<void>>
@@ -629,7 +637,7 @@ export class PluginManager {
         const previous = await this.options.storage.getItem(key)
         if (!rollback.has(key)) rollback.set(key, structuredClone(previous))
       }
-      if (!runtime.active) throw new PluginError('Plugin is inactive')
+      if (!canUseStorage(runtime)) throw new PluginError('Plugin is inactive')
       return mutation()
     }
     const eventRegistry = this.options.eventRegistry ?? systemEvents
@@ -714,7 +722,7 @@ export class PluginManager {
       registerHook: hook => {
         assertRegistration()
         const id = prefix(hook.id)
-        runtime.unregister.push(this.options.hookRegistry.register({ ...hook, id }))
+        runtime.unregister.push(this.options.hookRegistry.register({ ...hook, id }, plugin.manifest.id))
         runtime.hooks.push(id)
       },
       registerRoute: (method, path, handler) => {
@@ -725,14 +733,14 @@ export class PluginManager {
       },
       onConfigChange: listener => { assertRegistration(); if (typeof listener !== 'function') throw new PluginError('Invalid configuration listener'); runtime.listeners.push(listener) },
       storage: {
-        getItem: key => { if (!runtime.active) throw new PluginError('Plugin is inactive'); return this.options.storage.getItem(storageKey(key)) },
+        getItem: key => { if (!canUseStorage(runtime)) throw new PluginError('Plugin is inactive'); return this.options.storage.getItem(storageKey(key)) },
         setItem: (key, value) => {
-          if (!runtime.active) throw new PluginError('Plugin is inactive')
+          if (!canUseStorage(runtime)) throw new PluginError('Plugin is inactive')
           const namespacedKey = storageKey(key)
           return mutateStorage(namespacedKey, () => this.options.storage.setItem(namespacedKey, value))
         },
         removeItem: key => {
-          if (!runtime.active) throw new PluginError('Plugin is inactive')
+          if (!canUseStorage(runtime)) throw new PluginError('Plugin is inactive')
           const namespacedKey = storageKey(key)
           return mutateStorage(namespacedKey, () => this.options.storage.removeItem(namespacedKey))
         }
@@ -791,8 +799,11 @@ export class PluginManager {
     }
     try { this.options.onRegistryChange?.() } catch { plugin.error = 'Plugin registry notification failed' }
     if (runtime.cleanup) {
-      const cleanup = Promise.resolve().then(runtime.cleanup).finally(() => runtime.moduleGeneration?.dispose())
+      const scope = { runtime, active: true }
+      const cleanup = cleanupStorage.run(scope, () => Promise.resolve().then(runtime.cleanup))
+        .finally(() => runtime.moduleGeneration?.dispose())
       try { await this.bounded(cleanup, true) } catch { plugin.error = 'Plugin cleanup failed' }
+      finally { scope.active = false }
     }
     try { await runtime.moduleGeneration?.dispose() } catch { plugin.error = 'Plugin generation cleanup failed' }
   }

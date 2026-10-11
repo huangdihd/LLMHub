@@ -4,6 +4,7 @@
       {{ field.label || field.key }}
       <UToggle v-if="field.type === 'boolean'" size="sm" :model-value="value(field) === true" :aria-label="field.label || field.key" @update:model-value="update(field.key, $event)" />
       <USelect v-else-if="field.type === 'select'" :model-value="selectedOption(field)" :options="selectOptions(field)" size="xs" class="w-28" placeholder="Select" @update:model-value="updateOption(field, $event)" />
+      <UTextarea v-else-if="field.type === 'text' && field.multiline === true" :model-value="String(value(field) ?? '')" size="xs" class="w-32" @update:model-value="updateInput(field, $event)" />
       <UInput v-else :model-value="String(value(field) ?? '')" :type="inputType(field)" size="xs" :class="field.type === 'number' ? 'w-16' : 'w-32'" :ui="field.type === 'number' ? { base: 'text-right tabular-nums' } : undefined" :step="field.type === 'number' ? 'any' : undefined" :autocomplete="field.type === 'secret' ? 'new-password' : undefined" @update:model-value="updateInput(field, $event)" />
     </label>
   </div>
@@ -11,6 +12,7 @@
     <UFormGroup v-for="field in fields" :key="field.key" :label="field.label || field.key" :required="field.required" :error="errors[field.key]" :help="field.type === 'secret' && editing ? 'Leave empty to keep the current secret.' : undefined">
       <UToggle v-if="field.type === 'boolean'" :model-value="value(field) === true" :aria-label="field.label || field.key" @update:model-value="update(field.key, $event)" />
       <USelect v-else-if="field.type === 'select'" :model-value="selectedOption(field)" :options="selectOptions(field)" placeholder="Select an option" @update:model-value="updateOption(field, $event)" />
+      <UTextarea v-else-if="field.type === 'text' && field.multiline === true" :rows="4" autoresize :maxrows="12" :model-value="String(value(field) ?? '')" @update:model-value="updateInput(field, $event)" />
       <UInput v-else :model-value="String(value(field) ?? '')" :type="inputType(field)" :step="field.type === 'number' ? 'any' : undefined" :autocomplete="field.type === 'secret' ? 'new-password' : undefined" @update:model-value="updateInput(field, $event)" />
     </UFormGroup>
   </div>

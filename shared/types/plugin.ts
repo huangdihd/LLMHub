@@ -2,6 +2,7 @@ export interface PluginField {
   key: string
   label?: string
   type: 'text' | 'secret' | 'number' | 'boolean' | 'select'
+  multiline?: boolean
   required?: boolean
   default?: string | number | boolean
   options?: { label: string; value: string | number | boolean }[]

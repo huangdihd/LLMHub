@@ -43,6 +43,17 @@ export class ProviderManager {
     return this.loader.getProvider(providerName)
   }
 
+  getRequestContext(modelId: string) {
+    let providerName: string | undefined
+    try {
+      providerName = this.parseModelId(modelId).provider
+      if (!this.adapters.has(providerName)) providerName = undefined
+    } catch {
+      providerName = this.adapters.keys().next().value
+    }
+    return { providerName, providerConfig: providerName ? this.getProviderConfig(providerName) : undefined }
+  }
+
   getAdapter(providerName: string): ProviderAdapter | undefined {
     return this.adapters.get(providerName)
   }

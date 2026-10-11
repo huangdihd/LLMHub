@@ -44,6 +44,7 @@ function harness(provider: 'openai' | 'openai-responses' | 'codex' | 'claude', s
           return parser
         }
         resolveAdapter() { return { adapter, providerName: 'offline' } }
+        getRequestContext() { return { providerName: 'offline', providerConfig: undefined } }
         getProviderConfig() { return undefined }
         async callLLM(request: any) {
           syncCalls++

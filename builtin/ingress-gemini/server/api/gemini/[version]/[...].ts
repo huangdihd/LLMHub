@@ -107,7 +107,8 @@ export default defineEventHandler(async (event) => {
     }
 
     if (!request.model) request.model = fullModel
-    request = (await pipeline.prepare(request)).request
+    const prepared = await pipeline.prepare(request)
+    request = prepared.request
 
     if (action === 'generateContent') {
       try {
@@ -127,10 +128,10 @@ export default defineEventHandler(async (event) => {
     request.stream = true
     const useSSE = getQuery(event).alt === 'sse'
     try {
-      const resolved = pipeline.resolve(request)
-      if (!resolved) throwFormattedError(manager.buildGatewayError(`No adapter found for model: ${request.model}`, 404))
+      const resolved = pipeline.hasResponse ? undefined : pipeline.resolve(request)
+      if (!resolved && !pipeline.hasResponse) throwFormattedError(manager.buildGatewayError(`No adapter found for model: ${request.model}`, 404))
 
-      const adapter = resolved.adapter
+      const adapter = resolved?.adapter
       const stream = await pipeline.openStream(request, adapter)
 
       let keepAliveTimer: any = null

@@ -61,6 +61,7 @@ export function validateFields(input: unknown): PluginField[] {
       || !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(field.key) || ['__proto__', 'constructor', 'prototype'].includes(field.key)
       || seen.has(field.key) || !['text', 'secret', 'number', 'boolean', 'select'].includes(field.type)
       || (field.label !== undefined && typeof field.label !== 'string')
+      || (field.multiline !== undefined && (field.type !== 'text' || typeof field.multiline !== 'boolean'))
       || (field.required !== undefined && typeof field.required !== 'boolean')) throw new PluginError('Invalid plugin schema')
     seen.add(field.key)
     if (field.type === 'select' && (!Array.isArray(field.options) || !field.options.length

@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
       const resolved = prepared.resolved
       const adapter = resolved?.adapter
 
-      if (request.stream && adapter) {
+      if (request.stream && (adapter || pipeline.hasResponse)) {
         const stream = await pipeline.openStream(request, adapter)
 
         setResponseHeaders(event, {

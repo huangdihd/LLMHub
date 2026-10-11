@@ -102,6 +102,7 @@ function harness(protocol: Protocol, options: HarnessOptions = {}) {
     getParser() { return new (load(`builtin/ingress-${protocol.split('-')[0]}/${protocol}.ts`)[`${definitions[protocol][1]}Parser`])() }
     getSerializer() { return new (load(`builtin/ingress-${protocol.split('-')[0]}/${protocol}-serializer.ts`)[`${definitions[protocol][1]}Serializer`])() }
     resolveAdapter() { return { adapter, providerName: 'offline' } }
+    getRequestContext() { return { providerName: 'offline', providerConfig: undefined } }
     getProviderConfig() { return undefined }
     buildGatewayError(message: string, statusCode: number) { return Object.assign(new Error(message), { statusCode }) }
     async embed(request: any) {

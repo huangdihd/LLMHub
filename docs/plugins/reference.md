@@ -93,6 +93,7 @@ interface PluginField {
   key: string
   label?: string
   type: 'text' | 'secret' | 'number' | 'boolean' | 'select'
+  multiline?: boolean
   required?: boolean
   default?: string | number | boolean
   options?: { label: string; value: string | number | boolean }[]
@@ -102,6 +103,9 @@ interface PluginField {
 - `key` matches `[a-zA-Z][a-zA-Z0-9_]*` and is unique within its list. A list
   holds at most 100 fields.
 - `select` requires `options`. A `secret` cannot have a default.
+- `multiline` is an optional boolean, allowed only for `text` fields. Set it to
+  `true` to render a textarea in both regular and compact forms; omitted or
+  `false` keeps a single-line input. Values remain strings, including newlines.
 - Values are checked against the declared type with no conversion: `"5"` is
   not accepted for a `number`. Unknown keys are rejected.
 - Required fields must be filled in before the plugin can be enabled.
@@ -207,7 +211,7 @@ interface RequestHook {
   onModels?(models: ModelInfo[], context: HookContext): Awaitable<ModelInfo[] | void>
 
   // Generation
-  onRequest?(request: LLMRequest, context: HookContext): Awaitable<LLMRequest | void>
+  onRequest?(request: LLMRequest, context: HookContext): Awaitable<LLMRequest | PluginResponse | void>
   onResponse?(response: LLMResponse, context: HookContext): Awaitable<LLMResponse | void>
   onStreamChunk?(chunk: LLMStreamChunk, context: HookContext):
     Awaitable<LLMStreamChunk | LLMStreamChunk[] | null | void>
@@ -256,7 +260,7 @@ logged and do not fail the refresh.
 
 | Stage | Receives | Return to change it |
 | --- | --- | --- |
-| `onRequest` | The unified request, before it is sent upstream | A new request |
+| `onRequest` | The unified request, after admission and before upstream selection | A new request, or a `PluginResponse` to answer directly |
 | `onResponse` | A non-streaming response | A new response |
 | `onStreamChunk` | Each streamed chunk | A chunk, an array of chunks to expand it, or `null` / `[]` to drop it |
 
@@ -276,6 +280,57 @@ can check it and return early.
 The unified request, response, chunk, message, tool-call and usage types are
 declared in `llmhub-plugin.d.ts`.
 
+#### Answering a request yourself
+
+Since API 1.5.0, `onRequest` can return an answer instead of a request. The
+gateway then sends that answer to the client and never calls an upstream. Use
+it for canned replies, caches, mock models, or limits that should read as a
+reply rather than an error.
+
+```ts
+interface PluginResponse {
+  response: string | LLMResponse
+}
+```
+
+```js
+api.registerHook({
+  id: 'local-answer',
+  onRequest(request) {
+    if (request.messages.at(-1)?.content !== 'ping') return
+    return { response: 'pong' }
+  }
+})
+```
+
+You return unified data and nothing else. The gateway turns it into whatever
+the client asked for: a JSON body or a stream, in the OpenAI, Claude or Gemini
+format. A plugin never writes HTTP or SSE frames.
+
+- **A string** becomes a reply with `finishReason: 'stop'` and zero usage.
+  Return a full `LLMResponse` to set content blocks, `toolCalls`, the finish
+  reason or usage. Text, reasoning and tool calls can be expressed; image and
+  tool-result blocks cannot, because responses have no representation for them.
+- **The first answer wins.** Later `onRequest` hooks do not run, and no
+  upstream is selected.
+- **It is still a response.** A non-streaming answer passes through
+  `onResponse`; a streaming one is split into chunks that pass through
+  `onStreamChunk` (not `onResponse`). `llmhub:request-complete` fires once, with
+  `completion.responseSource` naming the plugin that answered. Usage for the
+  event is taken from your answer before stream hooks run, so a hook that drops
+  or rewrites chunks does not change accounting.
+- **Admission still applies.** A request rejected by an admission hook never
+  reaches `onRequest`, and the requested model must exist as usual.
+- **Generation only.** Embeddings and model lists cannot be answered this way.
+
+`context.providerName` and `context.providerConfig` are still filled in for the
+model the client asked for, so existing hooks keep working; no adapter is
+created for it.
+
+For a complete plugin built on this, see
+[Break Reminder](https://github.com/huangdihd/llmhub-plugin-break-reminder),
+which answers with a reminder once a daily limit is used up.
+
 ### Completion
 
 ```ts
@@ -283,6 +338,7 @@ interface CompletionInfo {
   model?: string
   usage?: Usage
   error?: unknown
+  responseSource?: { pluginId: string; hookId: string }
 }
 ```
 
@@ -294,6 +350,10 @@ unsupported endpoints are not generation or embedding requests.
 `model` is the final selected model, including request-hook rewrites; embeddings
 use the returned model when supplied, qualified with the provider name.
 It can be absent when the request fails before a model is selected.
+`responseSource` is present for plugin-provided answers: `pluginId` is the
+actual owner recorded by the host and `hookId` is the namespaced hook ID
+(for example `example-local:local-answer`). It is not supplied by the response
+or inferred by splitting the hook ID. Upstream answers omit it.
 `usage` is the last observed cumulative usage snapshot, not the sum of stream
 updates. No reported usage means `undefined`. Embeddings expose their total
 reported tokens as `promptTokens`, with `completionTokens: 0`.
@@ -797,11 +857,12 @@ and are not present in a deployed build.
 ## Versioning
 
 The plugin API has its own version, separate from LLMHub's, currently
-**1.4.0**. See the [changelog](changelog.md).
+**1.5.0**. See the [changelog](changelog.md).
 
 Request notifications use `api.onEvent`; request transformations and admission
 use `api.registerHook`. Declare `"llmhub": "^1.4.0"` in `engines` when using
-events.
+events. Declare `"llmhub": "^1.5.0"` when returning `PluginResponse` or reading
+`completion.responseSource`.
 
 | Change | Version bump |
 | --- | --- |
@@ -831,6 +892,10 @@ ranges are matched against and what updates are compared by.
   to finish.
 - **Disable.** Registrations are removed and your cleanup function runs, with
   one second to finish. Requests already in flight are not interrupted.
+  During cleanup, its async execution context may still read/write plugin storage
+  to flush buffered state. Other inactive callbacks cannot use storage; this
+  permission ends when cleanup finishes or times out (it does not cancel a write
+  already issued to the storage backend).
 - **Reload.** Re-reads the manifest and code. A disabled plugin stays
   disabled and its code is not run.
 - **Update.** Keeps settings, storage, contributed values and the enabled

@@ -82,6 +82,7 @@ function harness(protocol: Protocol, failureStage: Failure, properties: object) 
     getParser() { return new (load(`${codecPath}/${protocol}.ts`)[`${definitions[protocol][1]}Parser`])() }
     getSerializer() { return new (load(`${codecPath}/${protocol}-serializer.ts`)[`${definitions[protocol][1]}Serializer`])() }
     resolveAdapter() { return { adapter, providerName: 'offline' } }
+    getRequestContext() { return { providerName: 'offline', providerConfig: undefined } }
     getProviderConfig() { return undefined }
     buildGatewayError(message: string, statusCode: number) { return Object.assign(new Error(message), { _statusCode: statusCode }) }
     async callLLM() { assert.equal(failureStage, 'call'); throw failure }

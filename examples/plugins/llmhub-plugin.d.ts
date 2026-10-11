@@ -31,6 +31,7 @@ export interface PluginField {
   key: string
   label?: string
   type: 'text' | 'secret' | 'number' | 'boolean' | 'select'
+  multiline?: boolean
   required?: boolean
   default?: string | number | boolean
   options?: { label: string; value: string | number | boolean }[]
@@ -599,6 +600,12 @@ export interface CompletionInfo {
   model?: string
   usage?: Usage
   error?: unknown
+  /** Host-recorded owner and namespaced hook ID for a plugin-provided response. */
+  responseSource?: { pluginId: string; hookId: string }
+}
+
+export interface PluginResponse {
+  response: string | LLMResponse
 }
 
 export interface RequestHook {
@@ -609,7 +616,7 @@ export interface RequestHook {
   onAfterIdentity?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
   onModelResolved?: (context: AdmissionContext) => Awaitable<AdmissionRejection | void>
   onModels?: (models: ModelInfo[], context: HookContext) => Awaitable<ModelInfo[] | void>
-  onRequest?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | void>
+  onRequest?: (request: LLMRequest, context: HookContext) => Awaitable<LLMRequest | PluginResponse | void>
   onResponse?: (response: LLMResponse, context: HookContext) => Awaitable<LLMResponse | void>
   /** undefined preserves the chunk, null or [] drops it. */
   onStreamChunk?: (chunk: LLMStreamChunk, context: HookContext) => Awaitable<LLMStreamChunk | LLMStreamChunk[] | null | void>

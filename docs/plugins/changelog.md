@@ -4,6 +4,29 @@ Changes to the API that plugins are written against. This version is separate
 from LLMHub's own: a plugin declares the range it supports in
 `engines.llmhub`. See [Versioning](reference.md#versioning).
 
+## 1.5.0
+
+**Added**
+
+- Optional `PluginField.multiline` for text fields renders a textarea in settings,
+  provider forms and compact dashboard contributions.
+
+- Public `PluginResponse { response: string | LLMResponse }` return option for
+  `RequestHook.onRequest`. The first answer stops later request hooks and skips
+  upstream selection and calls, after admission and for generation only.
+- String answers default to `stop` and zero token usage; full `LLMResponse`
+  answers support content blocks, `toolCalls`, finish reason and usage.
+- Plugin answers retain the existing non-streaming response hooks or streaming
+  chunk hooks and ingress protocol framing. Streaming source usage is recorded
+  before hooks, independently of chunk filtering or rewriting.
+- Optional `CompletionInfo.responseSource: { pluginId: string; hookId: string }`
+  identifies the host-recorded plugin owner and namespaced answering hook.
+
+**Compatibility**
+
+Existing request-transforming hooks remain valid. Declare `"llmhub": "^1.5.0"`
+when returning plugin answers or reading their completion source.
+
 ## 1.4.0
 
 **Added**

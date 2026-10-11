@@ -25,6 +25,7 @@ function harness(hooks = new HookRegistry(), events = new EventRegistry()) {
   }
   const manager = {
     resolveAdapter: (model: string) => ({ adapter, providerName: model.split('/')[0] }),
+    getRequestContext: (model: string) => ({ providerName: model.split('/')[0], providerConfig: configuration }),
     getProviderConfig: () => configuration,
     buildGatewayError: (message: string, status: number) => Object.assign(new Error(message), { _statusCode: status }),
     callLLM: async (value: any) => { calls.push(value); return { content: 'answer', usage: { promptTokens: 2, completionTokens: 3 } } }

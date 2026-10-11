@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import type { ProviderManager } from '../providers/manager'
 import type { EmbeddingRequest, EmbeddingResponse, LLMRequest, LLMResponse, LLMStreamChunk, ProviderAdapter, Usage } from './types'
-import { HookRegistry, requestHooks, type HookContext } from './hooks'
+import { HookRegistry, requestHooks, type HookContext, type CompletionInfo } from './hooks'
 import { EventRegistry, systemEvents } from './events'
 
 // Keep completion work owned by the process rather than the HTTP response lifetime.
@@ -9,6 +9,41 @@ const pendingCompletions = new Set<Promise<void>>()
 
 export async function drainCompletions(): Promise<void> {
   while (pendingCompletions.size) await Promise.all([...pendingCompletions])
+}
+
+function* responseChunks(response: LLMResponse): Generator<LLMStreamChunk> {
+  const blocks = typeof response.content === 'string' ? [{ type: 'text' as const, text: response.content }] : response.content
+  let toolIndex = 0
+  const toolIds = new Set<string>()
+  let logprobs = response.logprobs
+  for (const block of blocks) {
+    if (block.type === 'text') {
+      // Response-level token metadata has no block offsets; emit it only once.
+      yield { type: 'content', delta: block.text, logprobs }
+      logprobs = undefined
+    }
+    if (block.type === 'thinking') {
+      yield { type: 'thinking', delta: block.thinking, reasoningKind: block.reasoningKind }
+      if (block.signature) yield { type: 'thinking', signature: block.signature }
+    }
+    if (block.type === 'redacted_thinking') {
+      yield block.reasoningProvider === 'openai'
+        ? { type: 'thinking', encryptedContent: block.data, reasoningProvider: 'openai' }
+        : { type: 'opaque_reasoning', opaqueData: block.data, reasoningProvider: 'anthropic' }
+    }
+    if (block.type === 'tool_use' && block.toolUse) {
+      toolIds.add(block.toolUse.id)
+      const metadata = response.toolCalls?.find(tool => tool.id === block.toolUse!.id)
+      yield { type: 'tool_call', toolCall: { index: toolIndex++, id: block.toolUse.id, name: block.toolUse.name,
+        inputDelta: JSON.stringify(block.toolUse.input), thoughtSignature: metadata?.thoughtSignature } }
+    }
+  }
+  for (const tool of response.toolCalls ?? []) {
+    if (toolIds.has(tool.id)) continue
+    yield { type: 'tool_call', toolCall: { index: toolIndex++, id: tool.id, name: tool.name,
+      inputDelta: JSON.stringify(tool.input), thoughtSignature: tool.thoughtSignature } }
+  }
+  yield { type: 'done', finishReason: response.finishReason, usage: response.usage }
 }
 
 export interface StreamConsumer {
@@ -23,6 +58,10 @@ export class RequestPipeline {
   private usage?: Usage
   private failure?: unknown
   private completed = false
+  private pluginResponse?: LLMResponse
+  private responseSource?: CompletionInfo['responseSource']
+
+  get hasResponse(): boolean { return this.pluginResponse !== undefined }
   private reportedErrors = new Set<unknown>()
 
   constructor(
@@ -52,16 +91,23 @@ export class RequestPipeline {
   }
 
   async prepare(request: LLMRequest) {
-    let resolved = this.resolve(request)
-    const model = request.model
+    this.model = request.model
+    Object.assign(this.context, this.manager.getRequestContext(request.model || ''))
     try {
-      request = await this.hooks.request(request, this.context)
+      const result = await this.hooks.generation(request, this.context)
+      request = result.request
+      this.pluginResponse = result.response
+      this.responseSource = result.responseSource
+      this.model = request.model
+      if (result.response) {
+        this.usage = result.response.usage
+        return { request, resolved: undefined }
+      }
     } catch (error) {
       throw this.manager.buildGatewayError(error instanceof Error ? error.message : String(error), 500)
     }
-    // A request hook may route to another model; never send it through the old adapter.
-    if (request.model !== model) resolved = this.resolve(request)
-    return { request, resolved }
+    // Only select an upstream once every request hook has declined to answer.
+    return { request, resolved: this.resolve(request) }
   }
 
   async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
@@ -77,18 +123,34 @@ export class RequestPipeline {
 
   async call(request: LLMRequest): Promise<LLMResponse> {
     this.model = request.model
-    const upstream = await this.manager.callLLM(request)
+    const upstream = this.pluginResponse ?? await this.manager.callLLM(request)
     if (upstream.usage) this.usage = upstream.usage
     const response = await this.hooks.response(upstream, this.context)
     if (response.usage) this.usage = response.usage
     return response
   }
 
-  openStream(request: LLMRequest, adapter: ProviderAdapter): ReadableStream | Promise<ReadableStream> {
+  openStream(request: LLMRequest, adapter?: ProviderAdapter): ReadableStream | Promise<ReadableStream> {
+    if (this.pluginResponse) return new ReadableStream({ start(controller) { controller.close() } })
+    if (!adapter) throw this.manager.buildGatewayError('Stream adapter not found', 500)
     return adapter.callStream(adapter.toProviderRequest({ ...request, stream: true }))
   }
 
-  async consumeStream(stream: ReadableStream, adapter: ProviderAdapter, consumer: StreamConsumer): Promise<void> {
+  async consumeStream(stream: ReadableStream, adapter: ProviderAdapter | undefined, consumer: StreamConsumer): Promise<void> {
+    if (this.pluginResponse) {
+      for (const chunk of responseChunks(this.pluginResponse)) {
+        try {
+          if (chunk.usage) this.usage = chunk.usage
+          await consumer.onChunks(await this.hooks.streamChunk(chunk, this.context))
+        } catch (error) {
+          await this.error(error)
+          consumer.onChunkError(error)
+        }
+      }
+      await consumer.onDoneMarker?.()
+      return
+    }
+    if (!adapter) throw this.manager.buildGatewayError('Stream adapter not found', 500)
     const reader = stream.getReader()
     const decoder = new TextDecoder()
     const providerState = {}
@@ -139,7 +201,8 @@ export class RequestPipeline {
     if (this.completed) return
     this.completed = true
     this.event.node?.res.removeListener?.('close', this.onClose)
-    const completion = { model: this.model, usage: this.usage, error: this.failure }
+    const completion = { model: this.model, usage: this.usage, error: this.failure,
+      ...(this.responseSource ? { responseSource: this.responseSource } : {}) }
     const pending = this.events.emit('llmhub:request-complete', { completion, context: this.context }).catch(error => {
       console.error('[LLMHub] Completion failed:', error)
     })

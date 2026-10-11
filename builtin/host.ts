@@ -125,7 +125,7 @@ export class BuiltinPluginHost {
       },
       registerHook: hook => {
         const name = registrationId(hook.id)
-        unregister.push(this.options.hookRegistry.register({ ...hook, id: name }))
+        unregister.push(this.options.hookRegistry.register({ ...hook, id: name }, plugin.manifest.id))
         hooks.push(name)
       },
       registerProvider: definition => {

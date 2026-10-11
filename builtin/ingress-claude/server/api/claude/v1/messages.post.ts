@@ -29,13 +29,13 @@ export default defineEventHandler(async (event) => {
       const resolved = prepared.resolved
       const adapter = resolved?.adapter
 
-      if (!adapter) {
+      if (!adapter && !pipeline.hasResponse) {
         throw new Error(`Adapter not found for model: ${request.model}`)
       }
 
-      console.log(`[LLMHub] ${new Date().toISOString()} key=${event.context._apiKeyRecord?.name || 'unknown'} model=${request.model} provider=${resolved.providerName}(${adapter.name}) stream=${request.stream ?? false}`)
+      console.log(`[LLMHub] ${new Date().toISOString()} key=${event.context._apiKeyRecord?.name || 'unknown'} model=${request.model} provider=${resolved?.providerName ?? 'plugin'}(${adapter?.name ?? 'plugin'}) stream=${request.stream ?? false}`)
 
-      if (request.stream && adapter) {
+      if (request.stream && (adapter || pipeline.hasResponse)) {
         const stream = await pipeline.openStream(request, adapter)
 
         try {

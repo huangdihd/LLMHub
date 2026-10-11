@@ -7,8 +7,14 @@ export default defineEventHandler(async (event: H3Event) => {
   if (event.path.startsWith('/api/auth')) return
 
   const store = getAuthStore()
-  const isSetup = await store.isSetup()
-  if (!isSetup) return
+  // Before a password exists nobody is the administrator yet, so nobody may manage the gateway.
+  if (!(await store.isSetup())) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized',
+      data: { error: { message: 'Set an administrator password first.' } }
+    })
+  }
 
   const token = getCookie(event, 'llmhub_session') || ''
   if (!token || !(await store.validateSession(token))) {

@@ -9,6 +9,10 @@ const gateway = process.env.GATEWAY_URL || 'http://127.0.0.1:3999'
 const key = 'llmhub-e2e-test-key'
 const session = randomUUID()
 const sessionFile = new URL(`../../.data/auth/sessions/${session}`, import.meta.url)
+// The login routes refuse to run before an administrator exists. A fresh checkout (CI) has none,
+// so the suite installs an unusable placeholder and removes it again; an existing one is left alone.
+const passwordFile = new URL('../../.data/auth/password', import.meta.url)
+let placeholderPassword = false
 const installed = []
 const existingEmptyStateDirectories = []
 const providerName = `_e2e-plugin-${session.slice(0, 8)}`
@@ -56,6 +60,12 @@ async function exercise(expectHook) {
 try {
   await mkdir(new URL('../../.data/auth/sessions/', import.meta.url), { recursive: true })
   await writeFile(sessionFile, JSON.stringify({ expires_at: Date.now() + 300_000 }))
+  try {
+    await writeFile(passwordFile, JSON.stringify({ hash: 'e2e-placeholder', salt: 'e2e-placeholder' }), { flag: 'wx' })
+    placeholderPassword = true
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error
+  }
   const before = await management('plugins')
   for (const [id, protocol] of [
     ['provider-openai', 'openai'], ['provider-claude', 'claude'], ['provider-gemini', 'gemini'],
@@ -200,6 +210,7 @@ try {
       await Promise.all(existingEmptyStateDirectories.map(directory => mkdir(directory, { recursive: true })))
     } finally {
       await rm(sessionFile, { force: true })
+      if (placeholderPassword) await rm(passwordFile, { force: true })
     }
   }
 }

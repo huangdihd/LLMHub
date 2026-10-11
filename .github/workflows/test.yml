@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Some characterization tests read earlier revisions of a file with git show.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -41,4 +44,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit -p tsconfig.json
+      # vue-tsc, after Nuxt has generated its types: plain tsc cannot resolve .vue imports.
+      - run: npx nuxt prepare
+      - run: npx vue-tsc --noEmit

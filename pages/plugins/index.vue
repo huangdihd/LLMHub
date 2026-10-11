@@ -143,6 +143,7 @@
 </template>
 
 <script setup lang="ts">
+import { npmUpdateTarget } from '~/shared/dashboard/plugin-updates'
 import type { PluginRecord } from '~/shared/types/plugin'
 import { useRuntimePluginContributions } from '~/composables/useRuntimePluginContributions'
 
@@ -281,8 +282,8 @@ async function checkUpdates(plugin: DashboardPlugin) {
         state = { target: info.trackedRef.ref, summary: `New commits on ${info.trackedRef.ref}` }
       } else state = { summary: 'Up to date.' }
     } else {
-      const target = info.latestMatchingVersion || info.latestVersion
-      state = target && target !== current
+      const target = npmUpdateTarget(info, current)
+      state = target
         ? { target, summary: `v${current} → v${target}`, specification: { name: plugin.source?.packageName || '', version: target } }
         : { summary: 'Up to date.' }
     }

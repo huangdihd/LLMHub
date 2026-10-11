@@ -1,0 +1,60 @@
+name: Release
+
+# Tags each new stable version on main as vX.Y.Z and creates its GitHub release,
+# so releasing is only a version bump in package.json. Run it by hand to tag the
+# current version if a push did not.
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag and release the package version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read the version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Update checks ignore prereleases, so only stable versions are released.
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "$version is not a stable version; nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "v$version already exists; tags are never moved."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.version.outputs.release == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - name: Test the release
+        if: steps.version.outputs.release == 'true'
+        run: npm ci && npm test
+      - name: Tag and create the release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "LLMHub $VERSION" "$GITHUB_SHA"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" --verify-tag --title "LLMHub $VERSION" --generate-notes

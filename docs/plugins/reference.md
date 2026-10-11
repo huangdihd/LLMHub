@@ -11,6 +11,7 @@ Everything a runtime plugin can declare and call. For a guided introduction see
 - [Providers](#providers)
 - [Client protocols and ingress](#client-protocols-and-ingress)
 - [Management routes](#management-routes)
+- [Proxies](#proxies)
 - [Dashboard contributions](#dashboard-contributions)
 - [Panels](#panels)
 - [Depending on other plugins](#depending-on-other-plugins)
@@ -140,6 +141,7 @@ interface PluginAPI {
 
   // Management
   registerRoute(method: string, path: string, handler: (event: H3Event) => Awaitable<unknown>): void
+  registerProxy(id: string, target: () => Awaitable<string | URL | null | undefined>): void
   registerMetric(key: string, getter: PluginMetricGetter): void
 
   // Values attached to models, API keys and providers
@@ -585,6 +587,38 @@ serves `GET /api/hub/plugins/<pluginId>/api/status`.
 - A dashboard session is required. Client API keys are not accepted.
 - Do not return secrets. Responses are not filtered for you.
 
+## Proxies
+
+Since API 1.6.0 a plugin can put a web application it runs, such as an editor
+server, behind the dashboard: same address, same port, same login.
+
+```js
+api.registerProxy('editor', () => running ? 'http://127.0.0.1:3100' : null)
+```
+
+serves `/api/hub/plugins/<pluginId>/proxy/editor/<rest>` from
+`http://127.0.0.1:3100/<rest>`, keeping the query string, over HTTP and
+WebSocket.
+
+- The ID matches `[a-z0-9][a-z0-9-]{0,63}`. Register during `setup`.
+- The target function runs for every request and connection. Return an
+  `http:` or `https:` base URL, or nothing while the application is not running
+  (the client gets 503). Its path is kept: a base of `http://host/app` serves
+  `<rest>` from `http://host/app/<rest>`. Applications that expect to live
+  under a path prefix, such as OpenVSCode Server's `--server-base-path`, can
+  return a base that ends with the public prefix.
+- Only signed-in administrators get through. WebSocket handshakes must also
+  come from the dashboard's own origin.
+- The dashboard session cookie is removed from forwarded requests, and the
+  application cannot set it. Other cookies, headers and bodies pass through;
+  `X-Forwarded-Host` and `X-Forwarded-Proto` describe the original request.
+  WebSocket connections present the target's own origin to it.
+- Redirects are returned to the browser as they are. There is no timeout.
+
+**The proxied application shares the dashboard's origin.** Its pages can call
+the management API as the signed-in administrator. Proxy only applications you
+trust as much as the plugin itself.
+
 ## Dashboard contributions
 
 Declare what you want to add to the dashboard and LLMHub renders it with its
@@ -857,7 +891,7 @@ and are not present in a deployed build.
 ## Versioning
 
 The plugin API has its own version, separate from LLMHub's, currently
-**1.5.0**. See the [changelog](changelog.md).
+**1.6.0**. See the [changelog](changelog.md).
 
 Request notifications use `api.onEvent`; request transformations and admission
 use `api.registerHook`. Declare `"llmhub": "^1.4.0"` in `engines` when using

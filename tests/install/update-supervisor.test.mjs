@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { acquireLock, atomicJSON, remoteCommit, supervise, validateRequest } from '../../scripts/update-supervisor.mjs'
-import { run } from '../../scripts/release-build.mjs'
+import { buildRelease, run } from '../../scripts/release-build.mjs'
+import { chmod, stat } from 'node:fs/promises'
 
 const commit = 'a'.repeat(40)
 test('requests only accept stable tags and full immutable commits', () => {
@@ -80,4 +81,38 @@ test('bounded commands capture output, reject failures and time out', async () =
   assert.equal(await run(process.execPath, ['-e', 'console.log("ok")'], { capture: true }), 'ok')
   await assert.rejects(run(process.execPath, ['-e', 'process.exit(7)'], { capture: true }), /exit 7/)
   await assert.rejects(run(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { timeout: 50, capture: true }), /timed out/)
+})
+
+test('a pruned release keeps only what runs: .output, not node_modules or .nuxt', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'llmhub-prune-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  // A stand-in npm: `ci` fills node_modules, `run build` writes .nuxt and .output like Nuxt does.
+  const bin = join(root, 'bin')
+  await mkdir(bin)
+  await writeFile(join(bin, 'npm'), `#!/bin/sh
+if [ "$1" = ci ]; then mkdir -p node_modules/.cache && echo x > node_modules/.cache/vite; fi
+if [ "$1" = run ]; then mkdir -p .nuxt .output/server/node_modules && echo x > .output/server/index.mjs && echo x > .nuxt/app; fi
+`)
+  await chmod(join(bin, 'npm'), 0o755)
+  const path = process.env.PATH
+  process.env.PATH = `${bin}:${path}`
+  t.after(() => { process.env.PATH = path })
+  const exists = file => stat(file).then(() => true, () => false)
+
+  const kept = join(root, 'kept')
+  await mkdir(kept)
+  await buildRelease(kept)
+  assert.deepEqual([await exists(join(kept, 'node_modules')), await exists(join(kept, '.nuxt'))], [true, true], 'not pruned unless asked')
+
+  const pruned = join(root, 'pruned')
+  await mkdir(pruned)
+  await writeFile(join(pruned, 'package.json'), '{}')
+  const stages = []
+  await buildRelease(pruned, { prune: true, onStage: async stage => stages.push(stage) })
+  assert.deepEqual(stages, ['installing', 'building'])
+  assert.equal(await exists(join(pruned, 'node_modules')), false)
+  assert.equal(await exists(join(pruned, '.nuxt')), false)
+  assert.equal(await exists(join(pruned, '.output/server/index.mjs')), true)
+  assert.equal(await exists(join(pruned, '.output/server/node_modules')), true, 'the build output keeps its own dependencies')
+  assert.equal(await exists(join(pruned, 'package.json')), true)
 })

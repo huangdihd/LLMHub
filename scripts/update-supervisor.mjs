@@ -177,7 +177,7 @@ export async function supervise(root) {
         const currentCommit = await git(current.directory, ['rev-parse', 'HEAD'], cancellation.signal)
         if (current.commit && currentCommit !== current.commit) throw new Error('Active release checkout was changed locally')
         await git(staged, ['merge-base', '--is-ancestor', currentCommit, operation.commit], cancellation.signal)
-        await buildRelease(staged, { signal: cancellation.signal, onStage: status })
+        await buildRelease(staged, { signal: cancellation.signal, onStage: status, prune: true })
         await clean(root)
         if (current.directory !== root) await clean(current.directory)
         await status('switching')

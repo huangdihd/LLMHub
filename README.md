@@ -24,7 +24,7 @@ Install Git, Node (**20.19+ or 22.12+**) and npm first.
 curl -fsSL https://raw.githubusercontent.com/huangdihd/LLMHub/main/install.sh | sh
 ```
 
-Rerun to upgrade; local modifications and non-fast-forward updates are refused, and `.data/` is retained. Back up data first. On Linux with systemd, the installer asks via the terminal before writing `/etc/systemd/system/llmhub.service` and enabling/restarting it; only service operations use sudo. It runs as the invoking user (root only if invoked as root). Without consent, privileges, or systemd (including macOS), it prints a manual startup command instead. Manual processes must be stopped/restarted by you. Builds are in-place, not atomic; schedule downtime for upgrades.
+Rerun to upgrade; local modifications and non-fast-forward updates are refused, and `.data/` is retained. Back up data first. On Linux with systemd, the installer asks via the terminal before writing `/etc/systemd/system/llmhub.service` and enabling/restarting it; only service operations use sudo. It runs as the invoking user (root only if invoked as root). Without consent, privileges, or systemd (including macOS), it prints a manual startup command instead. Manual processes must be stopped/restarted by you. Builds are in-place, not atomic; schedule downtime for upgrades. After a successful build the installer and the update supervisor delete the build-only `node_modules/` (development dependencies, several hundred MB) and `.nuxt/`; the application runs from `.output/`, and the next upgrade reinstalls dependencies.
 
 All configuration uses environment variables **on `sh`, not on `curl`**:
 

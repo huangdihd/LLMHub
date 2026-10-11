@@ -53,11 +53,15 @@
           </template>
         </SettingsCard>
 
-        <SettingsCard title="Check automatically" description="Look for a new release shortly after startup and every six hours. Nothing is installed without you.">
-          <template #control>
-            <UToggle :model-value="system.automatic" :disabled="busy" aria-label="Check automatically" @update:model-value="saveAutomatic" />
-          </template>
-        </SettingsCard>
+        <UCard>
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <h3 class="font-medium text-gray-900 dark:text-white">Check automatically</h3>
+              <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Look for a new release shortly after startup and every six hours. Nothing is installed without you.</p>
+            </div>
+            <UToggle class="mt-0.5 flex-shrink-0" :model-value="system.automatic" :disabled="busy" aria-label="Check automatically" @update:model-value="saveAutomatic" />
+          </div>
+        </UCard>
       </template>
     </div>
 

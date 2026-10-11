@@ -18,9 +18,16 @@
             <UTooltip v-if="authenticated === false" text="Log in">
               <UButton to="/login" variant="ghost" color="gray" icon="i-heroicons-lock-closed" aria-label="Log in" />
             </UTooltip>
-            <UTooltip v-else-if="authenticated" text="Log out">
-              <UButton color="gray" variant="ghost" icon="i-heroicons-arrow-right-on-rectangle" aria-label="Log out" @click="doLogout" />
-            </UTooltip>
+            <template v-else-if="authenticated">
+              <UTooltip :text="updateAvailable ? 'Update available' : 'Updates'">
+                <UChip :show="updateAvailable" color="blue" size="sm" inset>
+                  <UButton to="/updates" color="gray" variant="ghost" icon="i-heroicons-arrow-up-circle" aria-label="Updates" :class="isActive('/updates') ? 'bg-gray-100 dark:bg-gray-800' : ''" />
+                </UChip>
+              </UTooltip>
+              <UTooltip text="Log out">
+                <UButton color="gray" variant="ghost" icon="i-heroicons-arrow-right-on-rectangle" aria-label="Log out" @click="doLogout" />
+              </UTooltip>
+            </template>
             <div v-else class="w-8 h-8" />
             <ClientOnly>
               <UButton
@@ -68,7 +75,11 @@
           <NuxtLink v-if="authenticated === false" to="/login" class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300">
             <UIcon name="i-heroicons-lock-closed" class="w-4 h-4" />Log in
           </NuxtLink>
-          <button v-else-if="authenticated" type="button" class="flex w-full items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300" @click="doLogout">
+          <NuxtLink v-if="authenticated" to="/updates" class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium" :class="isActive('/updates') ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'">
+            <UIcon name="i-heroicons-arrow-up-circle" class="w-4 h-4" />Updates
+            <span v-if="updateAvailable" class="ml-auto h-2 w-2 rounded-full bg-blue-500" aria-label="Update available" />
+          </NuxtLink>
+          <button v-if="authenticated" type="button" class="flex w-full items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300" @click="doLogout">
             <UIcon name="i-heroicons-arrow-right-on-rectangle" class="w-4 h-4" />Log out
           </button>
         </div>
@@ -106,6 +117,8 @@ const isDark = computed({
 // null until the session check returns, so the nav never flashes the wrong state.
 const authenticated = ref<boolean | null>(null)
 
+const updateAvailable = ref(false)
+
 function isActive(to: string) {
   return to === '/' ? route.path === '/' : route.path === to || route.path.startsWith(`${to}/`)
 }
@@ -115,6 +128,12 @@ onMounted(async () => {
     const res = await $fetch('/api/auth/status')
     authenticated.value = !!(res as any).authenticated
   } catch { authenticated.value = false }
+  if (!authenticated.value) return
+  // The update marker is a convenience; the page works the same without it.
+  try {
+    const system = await $fetch<{ check?: { status?: string } }>('/api/hub/system')
+    updateAvailable.value = system.check?.status === 'available'
+  } catch {}
 })
 
 async function doLogout() {

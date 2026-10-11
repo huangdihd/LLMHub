@@ -28,14 +28,13 @@ privileges.** Install only plugins you trust. See
 
 Maintained alongside LLMHub in [`plugins/`](../../plugins) and published to
 npm, so they appear in the market. They are also good reading: each is under a
-hundred lines, except Plugin Studio.
+hundred lines.
 
 | Plugin | Does | Uses |
 | --- | --- | --- |
 | [System Prompt](../../plugins/system-prompt) | Adds a system prompt to every request, globally or per model | A request hook, settings, a field on each model |
 | [Request Log](../../plugins/request-log) | Lists recent requests with model, key, tokens and errors | An event, storage, a route, a page, a home metric |
 | [Webhook Alerts](../../plugins/webhook) | Messages Feishu, DingTalk, WeCom or any webhook when a request fails | An event, a secret setting |
-| [Plugin Studio](../../plugins/plugin-studio) | Writes plugins in VS Code, with the Continue agent set up to use the gateway's models | Routes, a page, background work, child processes |
 
 ## Examples
 

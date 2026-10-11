@@ -35,7 +35,7 @@ hundred lines, except Plugin Studio.
 | [System Prompt](../../plugins/system-prompt) | Adds a system prompt to every request, globally or per model | A request hook, settings, a field on each model |
 | [Request Log](../../plugins/request-log) | Lists recent requests with model, key, tokens and errors | An event, storage, a route, a page, a home metric |
 | [Webhook Alerts](../../plugins/webhook) | Messages Feishu, DingTalk, WeCom or any webhook when a request fails | An event, a secret setting |
-| [Plugin Studio](../../plugins/plugin-studio) | Writes plugins inside LLMHub: an editor, a VS Code server and an assistant that uses the gateway's models | Routes, a page, background work, child processes |
+| [Plugin Studio](../../plugins/plugin-studio) | Writes plugins in VS Code, with the Continue agent set up to use the gateway's models | Routes, a page, background work, child processes |
 
 ## Examples
 

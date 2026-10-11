@@ -1,23 +1,10 @@
-import { readFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-/**
- * Full documentation ships with source installations; Docker images contain only
- * the build. The short guide below is always available.
- */
-export const DOCUMENTS = {
-  reference: 'docs/plugins/reference.md',
-  'getting-started': 'docs/plugins/getting-started.md',
-  types: 'examples/plugins/llmhub-plugin.d.ts'
-}
+/** The Open VSX / Marketplace ID of Continue, the agent extension Plugin Studio sets up. */
+export const CONTINUE_EXTENSION = 'Continue.continue'
 
-export async function readDocument(name, root = process.cwd()) {
-  const path = DOCUMENTS[name]
-  if (!path) throw new Error(`Unknown document. Choose one of: ${Object.keys(DOCUMENTS).join(', ')}`)
-  try { return await readFile(join(root, path), 'utf8') }
-  catch { return `${path} is not available on this installation. Rely on the guide in your instructions.` }
-}
-
+/** Given to Continue as a rule, so its agent knows how LLMHub plugins are written. */
 export const GUIDE = `
 LLMHub runtime plugins are ESM npm packages loaded in-process by the gateway.
 
@@ -57,19 +44,27 @@ Use llmhub.theme and :root[data-theme="dark"] for dark mode. Insert data with te
 Never log or return credentials (hook contexts and provider configurations contain them). Validate route input.
 `.trim()
 
-export function systemPrompt(project, files) {
-  return `You are the assistant inside LLMHub Plugin Studio. You help the user build the LLMHub plugin "${project}",
-whose folder is the plugin directory LLMHub scans. You can only see and change files in this folder, using the tools.
+/**
+ * Continue's configuration, pointing every model at this gateway. JSON strings are
+ * valid YAML scalars, which keeps this free of a YAML dependency.
+ */
+export function continueConfig({ models, apiBase, apiKey }) {
+  const quote = value => JSON.stringify(String(value))
+  const lines = ['name: LLMHub', 'version: 1.0.0', 'schema: v1', 'models:']
+  for (const model of models) {
+    lines.push(
+      `  - name: ${quote(model)}`, '    provider: openai', `    model: ${quote(model)}`,
+      `    apiBase: ${quote(apiBase)}`, `    apiKey: ${quote(apiKey)}`,
+      '    roles: [chat, edit, apply]', '    capabilities: [tool_use]'
+    )
+  }
+  if (!models.length) lines.push('  []')
+  lines.push('rules:', `  - ${quote(GUIDE)}`)
+  return lines.join('\n') + '\n'
+}
 
-Work like a careful engineer: read files before changing them, keep changes focused, prefer edit_file for small
-changes, and finish by running check_project. Explain briefly what you changed and how to try it
-(Plugins → Scan or Reload, then Enable). Reply in the language the user writes in.
-
-Current files:
-${files.map(file => `- ${file.path} (${file.size} bytes)`).join('\n') || '(none)'}
-
-Plugin authoring guide:
-${GUIDE}
-
-For details call read_docs with "reference", "getting-started" or "types".`
+/** Continue reads its configuration from CONTINUE_GLOBAL_DIR, so the user's own ~/.continue is untouched. */
+export async function writeContinueConfig(directory, options) {
+  await mkdir(directory, { recursive: true, mode: 0o700 })
+  await writeFile(join(directory, 'config.yaml'), continueConfig(options), { mode: 0o600 })
 }

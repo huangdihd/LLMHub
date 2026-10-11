@@ -118,7 +118,7 @@ test('actual host handler never fetches for rejected messages and scopes authent
   const context: any = {
     PANEL_CHANNEL, validatePanelMessage, AbortController, setTimeout, clearTimeout,
     defineProps: () => ({ pluginId: 'example', panel: { id: 'status', title: 'Status' } }),
-    ref: (value: unknown) => ({ value }), computed: (getter: () => unknown) => ({ get value() { return getter() } }),
+    ref: (value: unknown) => ({ value }), shallowRef: (value: unknown) => ({ value }), computed: (getter: () => unknown) => ({ get value() { return getter() } }),
     useColorMode: () => ({ value: 'dark' }), watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {},
     $fetch: async (...arguments_: any[]) => { fetched.push(arguments_); return { healthy: true } }
   }
@@ -155,7 +155,7 @@ test('field editor strips secret reads, blocks unresolved catalogs and saves val
     defineProps: () => ({ location: 'apiKeys', recordId: 'key-1' }),
     useRuntimePluginContributions: () => runtime,
     runtimeContributionValuesURL: (id: string, location: string, recordId: string) => `${id}/${location}/${recordId}`,
-    ref: (value: unknown) => ({ value }), computed: (getter: () => unknown) => ({ get value() { return getter() } }),
+    ref: (value: unknown) => ({ value }), shallowRef: (value: unknown) => ({ value }), computed: (getter: () => unknown) => ({ get value() { return getter() } }),
     watch: (_sources: unknown, callback: () => Promise<void>) => { load = callback },
     nextTick: async () => {}, defineExpose: () => {},
     $fetch: async (url: string, options?: unknown) => {
@@ -224,7 +224,26 @@ test('host external link flow requires explicit confirmation, limits pending req
   const component = readFileSync(new URL('../components/RuntimePluginPanel.vue', import.meta.url), 'utf8')
   const script = component.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]!.replace(/^import .*$/gm, '')
   const sent: any[] = [], opened: any[] = []
-  const target = { postMessage: (message: unknown) => sent.push(message) }
+  // Like a cross-origin window: only postMessage may be touched; anything else throws a SecurityError.
+  const crossOrigin = (fields: Record<string, unknown>) => new Proxy(fields, { get(object, key) {
+    if (key in object) return object[key as string]
+    throw new Error(`SecurityError: cross-origin property ${String(key)}`)
+  } })
+  const target = crossOrigin({ postMessage: (message: unknown) => sent.push(message) })
+  // Vue's ref is deep: reading a plain object through it inspects (probes __v_isRef on) its values.
+  const deepRef = (initial: unknown) => {
+    let value = initial
+    return {
+      get value() {
+        // Plain objects only (the component runs in its own realm, so compare constructor names).
+        if (!value || typeof value !== 'object' || Object.getPrototypeOf(value)?.constructor?.name !== 'Object') return value
+        return new Proxy(value as object, { get(object, key) { const field = (object as any)[key]; if (field && typeof field === 'object') void field.__v_isRef; return field } })
+      },
+      set value(next) { value = next }
+    }
+  }
+  // Template refs hold elements, which Vue does not wrap.
+  class Frame { contentWindow: unknown; constructor(contentWindow: unknown) { this.contentWindow = contentWindow } }
   const properties = { pluginId: 'example', panel: { id: 'status', title: 'Status', location: 'provider', providerType: 'example:custom' }, provider: { name: 'account', type: 'example:custom', secret: 'private' } }
   let timeout: () => void = () => {}
   const context: any = {
@@ -232,7 +251,7 @@ test('host external link flow requires explicit confirmation, limits pending req
     setTimeout: (callback: () => void) => { timeout = callback; return 1 }, clearTimeout: () => {},
     window: { open: (...arguments_: unknown[]) => opened.push(arguments_) },
     defineProps: () => properties,
-    ref: (value: unknown) => ({ value }), computed: (getter: () => unknown) => ({ get value() { return getter() } }),
+    ref: deepRef, shallowRef: (value: unknown) => ({ value }), computed: (getter: () => unknown) => ({ get value() { return getter() } }),
     useColorMode: () => ({ value: 'dark' }), watch: () => {}, onMounted: () => {}, onBeforeUnmount: () => {},
     $fetch: () => { throw new Error('External URLs must never be fetched by host') }
   }
@@ -240,7 +259,7 @@ test('host external link flow requires explicit confirmation, limits pending req
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
   }).outputText, context)
   const host = context.host
-  host.frame.value = { contentWindow: target }
+  host.frame.value = new Frame(target)
   const send = (type: string, requestId: string, extra = {}) => host.receive({ source: target, origin: 'null', data: { channel: PANEL_CHANNEL, type, requestId, ...extra } })
   await send('context', 'context')
   assert.deepEqual(sent.at(-1).data, { provider: { name: 'account', type: 'example:custom' } })
@@ -271,7 +290,7 @@ test('host external link flow requires explicit confirmation, limits pending req
   host.finishExternal(true)
   assert.equal(opened.length, 1)
   await send('openExternal', 'stale', { url })
-  host.frame.value = { contentWindow: {} }
+  host.frame.value = new Frame({})
   host.finishExternal(true)
   assert.equal(opened.length, 1)
   assert.ok(component.includes('{{ externalRequest.url }}'))

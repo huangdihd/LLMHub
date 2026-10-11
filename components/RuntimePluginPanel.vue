@@ -35,7 +35,8 @@ const documentHTML = ref('')
 const loadError = ref(false)
 const requests = new Map<string, AbortController>()
 let generation = 0
-const externalRequest = ref<{ requestId: string; url: string; target: Window; generation: number } | null>(null)
+// Shallow: `target` is the panel's cross-origin window, which Vue must never inspect or wrap.
+const externalRequest = shallowRef<{ requestId: string; url: string; target: Window; generation: number } | null>(null)
 let externalTimer: ReturnType<typeof setTimeout> | undefined
 const externalLinkOwner = {}
 

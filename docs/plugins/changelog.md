@@ -4,6 +4,18 @@ Changes to the API that plugins are written against. This version is separate
 from LLMHub's own: a plugin declares the range it supports in
 `engines.llmhub`. See [Versioning](reference.md#versioning).
 
+## 1.6.0
+
+**Added**
+
+- `PluginAPI.registerProxy(id, target)` serves a plugin-run web application
+  at `/api/hub/plugins/<pluginId>/proxy/<id>/`, over HTTP and WebSocket, behind
+  the dashboard login. See [Proxies](reference.md#proxies).
+
+**Compatibility**
+
+- Additive. Plugins using proxies declare `"engines": { "llmhub": "^1.6.0" }`.
+
 ## 1.5.0
 
 **Added**

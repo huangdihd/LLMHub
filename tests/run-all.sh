@@ -22,7 +22,7 @@ npx tsc .nuxt/types/nitro-imports.d.ts \
   server/core/ingress-registry.ts server/services/subscription-usage.ts \
   server/stores/provider.store.ts server/stores/auth.store.ts builtin/assembly.ts builtin/*/plugin.ts \
   server/middleware/ingress-auth.ts \
-  server/plugins-runtime/manager.ts server/plugins-runtime/manifest.ts server/plugins-runtime/market.ts \
+  server/plugins-runtime/manager.ts server/plugins-runtime/manifest.ts server/plugins-runtime/market.ts server/utils/plugin-proxy.ts \
   server/api/hub/plugin-contributions/*.ts \
   server/system/*.ts server/api/hub/system/*.ts server/plugins/system-updates.ts \
   --rootDir . --outDir "$BUILD_DIR" \

@@ -146,6 +146,8 @@ export type EventPayload<Name extends string> = Name extends keyof SystemEventMa
 export type EventListener<Payload = Record<string, unknown>> = (payload: Payload) => void | Promise<void>
 
 type Cleanup = () => void | Promise<void>
+/** Where a plugin proxy forwards to, decided per request; nothing means the target is not running. */
+export type PluginProxyTarget = () => string | URL | null | undefined | Promise<string | URL | null | undefined>
 type RouteHandler = (event: H3Event) => unknown | Promise<unknown>
 export interface PluginAPI {
   getRecordValues(location: PluginRecordLocation, recordId: string): Promise<PluginRecordValues>
@@ -163,6 +165,8 @@ export interface PluginAPI {
   onEvent<Name extends string>(name: Name, listener: EventListener<EventPayload<Name>>, priority?: number): void
   emitEvent(localName: string, payload: Record<string, unknown>): Promise<void>
   registerRoute(method: string, path: string, handler: RouteHandler): void
+  /** Serves `/api/hub/plugins/<pluginId>/proxy/<id>/...` (HTTP and WebSocket) from the URL `target` returns; plugin API 1.6. */
+  registerProxy(id: string, target: PluginProxyTarget): void
   onConfigChange(listener: (configuration: Readonly<Record<string, unknown>>) => void | Promise<void>): void
   storage: PluginStorage
   logger: Pick<Console, 'info' | 'warn' | 'error'>

@@ -28,6 +28,9 @@ export interface PluginStorage {
 }
 type Cleanup = () => void | Promise<void>
 type RouteHandler = (event: H3Event) => unknown | Promise<unknown>
+/** Where a plugin proxy forwards to, decided per request; nothing means the target is not running. */
+export type PluginProxyTarget = () => string | URL | null | undefined | Promise<string | URL | null | undefined>
+const PROXY_ID = /^[a-z0-9][a-z0-9-]{0,63}$/
 export interface PluginAPI {
   onEvent<Name extends keyof SystemEventMap>(name: Name, listener: EventListener<SystemEventMap[Name]>, priority?: number): void
   onEvent<Name extends string>(name: Name, listener: EventListener<EventPayload<Name>>, priority?: number): void
@@ -44,6 +47,7 @@ export interface PluginAPI {
   registerIngress(definition: IngressDefinition): void
   registerHook(hook: RequestHook): void
   registerRoute(method: string, path: string, handler: RouteHandler): void
+  registerProxy(id: string, target: PluginProxyTarget): void
   onConfigChange(listener: (configuration: Readonly<Record<string, unknown>>) => void | Promise<void>): void
   storage: PluginStorage
   logger: Pick<Console, 'info' | 'warn' | 'error'>
@@ -87,6 +91,7 @@ interface Runtime {
   ingresses: string[]
   hooks: string[]
   routes: Map<string, RouteHandler>
+  proxies: Map<string, PluginProxyTarget>
   listeners: Array<(configuration: Readonly<Record<string, unknown>>) => void | Promise<void>>
 }
 export interface PluginManagerOptions {
@@ -617,7 +622,7 @@ export class PluginManager {
     if (cycles.has(plugin.manifest.id)) throw new PluginError(cycles.get(plugin.manifest.id)!)
     const issues = dependencyIssues(plugin.manifest, this.list())
     if (issues.length) throw new PluginError(issues.join('; '))
-    const runtime: Runtime = { subscribedEvents: [], recordListeners: [], metrics: new Map(), accepting: true, active: true, unregister: [], providers: [], protocols: [], ingresses: [], hooks: [], routes: new Map(), listeners: [] }
+    const runtime: Runtime = { subscribedEvents: [], recordListeners: [], metrics: new Map(), accepting: true, active: true, unregister: [], providers: [], protocols: [], ingresses: [], hooks: [], routes: new Map(), proxies: new Map(), listeners: [] }
     plugin.runtime = runtime
     const assertRegistration = () => { if (!runtime.accepting || !runtime.active) throw new PluginError('Plugin registration is closed') }
     const prefix = (id: string) => {
@@ -730,6 +735,11 @@ export class PluginManager {
         const key = `${method.toUpperCase()} ${validatePath(path.replace(/^\//, ''))}`
         if (!/^[A-Z]+ /.test(key) || typeof handler !== 'function' || runtime.routes.has(key)) throw new PluginError('Invalid plugin route')
         runtime.routes.set(key, handler)
+      },
+      registerProxy: (id, target) => {
+        assertRegistration()
+        if (typeof id !== 'string' || !PROXY_ID.test(id) || typeof target !== 'function' || runtime.proxies.has(id)) throw new PluginError('Invalid plugin proxy')
+        runtime.proxies.set(id, target)
       },
       onConfigChange: listener => { assertRegistration(); if (typeof listener !== 'function') throw new PluginError('Invalid configuration listener'); runtime.listeners.push(listener) },
       storage: {
@@ -1037,6 +1047,22 @@ export class PluginManager {
       if (!handler) throw new PluginError('Plugin route not found')
       return this.bounded(Promise.resolve().then(() => handler(event)))
     })
+  }
+
+  /**
+   * The upstream base URL of an enabled plugin's proxy, or null while its target is not running.
+   * Not serialized with the plugin's other operations: proxied traffic is long-lived and concurrent.
+   */
+  async resolveProxy(id: string, proxyId: string): Promise<URL | null> {
+    const plugin = this.get(id)
+    const target = plugin.enabled && plugin.runtime?.active ? plugin.runtime.proxies.get(proxyId) : undefined
+    if (!target) throw new PluginError('Plugin proxy not found')
+    const value = await this.bounded(Promise.resolve().then(target))
+    if (value === null || value === undefined || value === '') return null
+    let url: URL
+    try { url = new URL(String(value)) } catch { throw new PluginError('Invalid plugin proxy target') }
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new PluginError('Invalid plugin proxy target')
+    return url
   }
 
   resolvePage(id: string, path: string): Promise<string> {

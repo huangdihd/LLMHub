@@ -74,6 +74,29 @@ test('runtime namespaces providers, hooks, routes and storage and unloads only i
   } finally { await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
 })
 
+test('proxies resolve per request, only while the plugin is enabled, and only to HTTP targets', async () => {
+  const { root, manager } = await fixture()
+  try {
+    await writePlugin(root, 'proxy-plugin', `
+      let target = 'http://127.0.0.1:4100/base'
+      context.registerRoute('POST', 'target', event => { target = event.target; return true })
+      context.registerProxy('editor', () => target)
+      context.registerProxy('broken', () => 'file:///etc/passwd')
+      for (const invalid of [['Bad', () => ''], ['editor', () => ''], ['other', 'not a function']]) {
+        try { context.registerProxy(...invalid); throw new Error('accepted') } catch (error) { if (error.message === 'accepted') throw error }
+      }`)
+    await manager.scan()
+    await manager.enable('proxy-plugin')
+    assert.equal((await manager.resolveProxy('proxy-plugin', 'editor'))?.href, 'http://127.0.0.1:4100/base')
+    await manager.dispatchRoute('proxy-plugin', 'POST', 'target', { target: null })
+    assert.equal(await manager.resolveProxy('proxy-plugin', 'editor'), null, 'nothing running')
+    await assert.rejects(manager.resolveProxy('proxy-plugin', 'broken'), /Invalid plugin proxy target/)
+    await assert.rejects(manager.resolveProxy('proxy-plugin', 'missing'), /not found/)
+    await manager.disable('proxy-plugin')
+    await assert.rejects(manager.resolveProxy('proxy-plugin', 'editor'), /not found/)
+  } finally { await manager.shutdown(); await rm(root, { recursive: true, force: true }) }
+})
+
 test('config secrets are omitted, retained on masked updates and persisted across managers', async () => {
   const { root, manager, storage, providerRegistry, hookRegistry } = await fixture()
   try {

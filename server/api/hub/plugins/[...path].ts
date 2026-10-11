@@ -2,6 +2,7 @@ import { createError, defineEventHandler, getMethod, getRouterParam, readBody, s
 import { readFile } from 'node:fs/promises'
 import type { H3Event } from 'h3'
 import { getPluginManager, PluginError } from '../../../plugins-runtime'
+import { proxyHttp, proxyWebSocket } from '../../../utils/plugin-proxy'
 
 const CONTENT_TYPES: Record<string, string> = {
   html: 'text/html; charset=utf-8', css: 'text/css', js: 'text/javascript',
@@ -9,16 +10,20 @@ const CONTENT_TYPES: Record<string, string> = {
   json: 'application/json', woff2: 'font/woff2'
 }
 
-export default defineEventHandler(async event => {
-  try {
-    return await handle(event)
-  } catch (error) {
-    // Manager-authored messages are safe for administrators; anything else stays generic.
-    if (error instanceof PluginError) {
-      throw createError({ statusCode: /not found/i.test(error.message) ? 404 : 400, message: error.message })
+export default defineEventHandler({
+  async handler(event) {
+    try {
+      return await handle(event)
+    } catch (error) {
+      // Manager-authored messages are safe for administrators; anything else stays generic.
+      if (error instanceof PluginError) {
+        throw createError({ statusCode: /not found/i.test(error.message) ? 404 : 400, message: error.message })
+      }
+      throw error
     }
-    throw error
-  }
+  },
+  // WebSocket upgrades skip HTTP middleware; the proxy checks the session and origin itself.
+  websocket: proxyWebSocket
 })
 
 async function handle(event: H3Event) {
@@ -43,6 +48,13 @@ async function handle(event: H3Event) {
   if (path.length === 1 && id === 'scan' && method === 'POST') return manager.scan()
   if (!id) throw createError({ statusCode: 404 })
   if (action === 'api') return manager.dispatchRoute(id, method, rest.join('/'), event)
+  if (action === 'proxy' && rest.length) {
+    // The raw path keeps encoding and trailing slashes that the proxied application relies on.
+    const raw = event.path.split('?')[0]!
+    const prefix = `/api/hub/plugins/${id}/proxy/${rest[0]}`
+    if (!raw.startsWith(prefix)) throw createError({ statusCode: 404 })
+    return proxyHttp(event, id, rest[0]!, raw.slice(prefix.length) || '/')
+  }
   if (action === 'page' && method === 'GET') {
     const filename = await manager.resolvePage(id, rest.join('/'))
     const extension = filename.split('.').pop()?.toLowerCase()

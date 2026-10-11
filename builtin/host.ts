@@ -152,6 +152,7 @@ export class BuiltinPluginHost {
         this.routes.set(key, handler)
         unregister.push(() => { this.routes.delete(key) })
       },
+      registerProxy: () => { throw new PluginError('Proxies are available to runtime plugins only') },
       onConfigChange: () => { assertRegistration() },
       storage: {
         getItem: key => this.options.storage.getItem(storageKey(key)),

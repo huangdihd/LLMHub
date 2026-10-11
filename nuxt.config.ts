@@ -48,6 +48,8 @@ export default defineNuxtConfig({
     }
   },
   nitro: {
+    // Plugin proxies relay WebSockets (server/utils/plugin-proxy.ts).
+    experimental: { websocket: true },
     storage: {
       data: {
         driver: 'fs',

@@ -119,7 +119,7 @@ llmhub_install() (
     [ -f scripts/release-build.mjs ] && [ -f scripts/update-supervisor.mjs ] || fail 'Selected release predates supervised installation; select a release containing scripts/release-build.mjs or set LLMHUB_REF=main.'
     LLMHUB_INSTALL_DIR="$directory" node scripts/update-supervisor.mjs --initialize
     progress 'install dependencies and build production application'
-    node scripts/release-build.mjs "$directory"
+    node scripts/release-build.mjs "$directory" --prune
     progress 'configure service or manual startup'
     if [ "$service_ready" = yes ] && consent 'install service file; systemctl daemon-reload; systemctl enable llmhub; systemctl restart llmhub'; then
         case "$node_path:$PATH" in *[!a-zA-Z0-9_./:-]*) fail 'PATH contains unsupported systemd characters; use LLMHUB_SERVICE=no.' ;; esac

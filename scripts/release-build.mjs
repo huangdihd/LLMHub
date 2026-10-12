@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { access } from 'node:fs/promises'
+import { access, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -54,7 +54,13 @@ export async function run(command, arguments_, { directory, timeout = 120000, si
   }
 }
 
-export async function buildRelease(directory, { signal, onStage = async () => {} } = {}) {
+/**
+ * Builds a release in place. With `prune`, removes what only the build needed afterwards: the
+ * development dependencies in node_modules (hundreds of MB) and Nuxt's .nuxt build folder. The
+ * application runs from .output, which carries its own pruned node_modules; a later update or
+ * installer run starts with a fresh `npm ci` anyway. Never prune a development checkout.
+ */
+export async function buildRelease(directory, { signal, onStage = async () => {}, prune = false } = {}) {
   await onStage('installing')
   await run('npm', ['ci', '--include=dev'], { directory, timeout: 900000, signal })
   await onStage('building')
@@ -62,12 +68,16 @@ export async function buildRelease(directory, { signal, onStage = async () => {}
     directory, timeout: 900000, signal, environment: { NITRO_PRESET: 'node-server' },
   })
   await access(resolve(directory, '.output/server/index.mjs'))
+  if (prune) {
+    for (const leftover of ['node_modules', '.nuxt']) await rm(resolve(directory, leftover), { recursive: true, force: true })
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const cancellation = new AbortController()
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => cancellation.abort(new Error(signal)))
-  buildRelease(resolve(process.argv[2] ?? '.'), {
-    signal: cancellation.signal, onStage: async stage => console.log(`==> ${stage}`),
+  const [directory = '.', ...options] = process.argv.slice(2)
+  buildRelease(resolve(directory), {
+    signal: cancellation.signal, onStage: async stage => console.log(`==> ${stage}`), prune: options.includes('--prune'),
   }).catch(error => { console.error(error.message); process.exitCode = 1 })
 }
